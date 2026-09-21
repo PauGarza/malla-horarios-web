@@ -24,9 +24,12 @@ regado por el código del frontend si el día de mañana migramos.
 
 ## Estado actual
 
-Solo existe este README — el scaffold de Vite/React (`package.json`, `src/`, etc.) todavía no se ha
-generado. Siguiente paso concreto: `npm create vite@latest . -- --template react`, luego construir el
-cliente de base de datos (login vía la función del backend, guardar el JWT propio, mandarlo como
+**Scaffold generado 2026-09-21** (`npm create vite@latest . -- --template react`, React 19 + Vite 8):
+`npm install` corrido, `npm run dev` probado y responde 200. `.env.example` incluido con los valores
+reales del proyecto (son públicos por diseño, ver arriba); copiar a `.env` para desarrollo local.
+
+Sigue siendo el scaffold por defecto de Vite (`src/App.jsx` de ejemplo) — falta construir el cliente de
+base de datos real (login vía la función del backend, guardar el JWT propio, mandarlo como
 `Authorization: Bearer` en cada llamada) y el formulario en sí, reusando el contenido/flujo ya
 validado de `../docs/mockup/mockup-cuestionario.html` pero conectado a datos reales en vez de
-`localStorage`.
+`localStorage`. Pendiente también el workflow de GitHub Actions para desplegar a Pages.
