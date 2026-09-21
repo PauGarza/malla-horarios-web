@@ -2,7 +2,7 @@
 -- Autoplanear — triggers de restricciones duras
 -- Requiere haber corrido schema.sql primero.
 --
--- NO EJECUTAR TODAVÍA: pendiente de revisión del usuario.
+-- Corrido contra el proyecto real de base de datos 2026-09-21.
 --
 -- Estas reglas son agregados (dependen de otras filas ya existentes), así que no
 -- caben en un CHECK simple de columna — por eso se aplican como trigger sobre
@@ -49,7 +49,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER trg_no_doble_booking_profesor
     BEFORE INSERT OR UPDATE ON imparte_horario
@@ -92,7 +92,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER trg_no_doble_booking_salon
     BEFORE INSERT OR UPDATE ON imparte_horario
@@ -135,7 +135,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER trg_salon_autorizado_departamento
     BEFORE INSERT OR UPDATE ON imparte_horario
@@ -175,7 +175,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER trg_tipo_salon_requerido
     BEFORE INSERT OR UPDATE ON imparte_horario
@@ -210,7 +210,7 @@ BEGIN
 
     RETURN v_horas_asignadas = v_creditos_esperados;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 COMMENT ON FUNCTION fn_validar_creditos_imparte IS
     'Llamar desde la aplicación antes de marcar un grupo como asignado/publicado. No es un trigger automático — ver comentario arriba.';
