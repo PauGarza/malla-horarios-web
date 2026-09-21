@@ -36,7 +36,7 @@
 -- adicionales más abajo en vez de pestañas ocultas solamente en el frontend
 -- (la UI puede ocultar botones, pero la protección real vive aquí).
 --
--- Corrido contra el proyecto real de base de datos 2026-09-21.
+-- Corrido contra el proyecto real de Supabase (malla-horarios, gvdgbuktokpfbtdhyiuz) 2026-09-21.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION app_profesor_id() RETURNS int AS $$

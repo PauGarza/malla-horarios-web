@@ -29,6 +29,7 @@ export default function FormularioPreferencias({ onVolver }) {
   const [franjas, setFranjas] = useState([]);
   const [materias, setMaterias] = useState([]);
   const [mostrarMaterias, setMostrarMaterias] = useState(true);
+  const [horasMinimasVerde, setHorasMinimasVerde] = useState(10);
 
   const [preferenciaId, setPreferenciaId] = useState(null);
   const [estado, setEstado] = useState('borrador');
@@ -58,19 +59,21 @@ export default function FormularioPreferencias({ onVolver }) {
         setFranjas(franjasData);
 
         // Config del departamento para este semestre — si no existe la fila,
-        // se asume abierto (mostrar_seleccion_materias = true por default).
+        // se asume abierto (mostrar_seleccion_materias = true) y el mínimo de
+        // D18 en GUIA-DECISIONES.md (10 hrs), ambos default de la propia tabla.
         let configDepto = null;
         if (profesor.departamento_id) {
           const config = await apiFetch(
-            `/departamento_semestre_config?select=mostrar_seleccion_materias&departamento_id=eq.${profesor.departamento_id}&semestre_id=eq.${sem.id}`,
+            `/departamento_semestre_config?select=mostrar_seleccion_materias,horas_minimas_verde&departamento_id=eq.${profesor.departamento_id}&semestre_id=eq.${sem.id}`,
             token,
           );
           configDepto = config[0] ?? null;
         }
+        if (cancelado) return;
+        setHorasMinimasVerde(configDepto?.horas_minimas_verde ?? 10);
         const modoOk = profesor.modo_materias_elegibles !== 'ninguna';
         const configOk = configDepto?.mostrar_seleccion_materias !== false;
         const mostrar = modoOk && configOk && Boolean(profesor.departamento_id);
-        if (cancelado) return;
         setMostrarMaterias(mostrar);
 
         if (mostrar) {
@@ -148,6 +151,10 @@ export default function FormularioPreferencias({ onVolver }) {
     () => Object.values(nivelDisponibilidad).filter((n) => n === 'verde').length * 0.5,
     [nivelDisponibilidad],
   );
+  // Sin materia_id en la tabla, no tiene sentido preguntar "¿cuántos cursos
+  // puedes dar?" ni mostrar la sección — se pospone hasta que haya catálogo
+  // real cargado (TODO.md §2).
+  const hayMateriasParaElegir = mostrarMaterias && materias.length > 0;
 
   function alternarMateria(materiaId, nivel) {
     if (soloLectura) return;
@@ -179,9 +186,18 @@ export default function FormularioPreferencias({ onVolver }) {
   // para esta primera versión. Ver docs/mockup/cuestionario-profesores.md §3.6
   // para la ambición original de autosave, todavía no implementada así.
   async function guardar(nuevoEstado) {
-    setGuardando(true);
     setError('');
     setMensaje('');
+    // D18 (GUIA-DECISIONES.md): mínimo de horas en verde por semana,
+    // configurable por departamento/semestre. Solo bloquea el envío final,
+    // nunca guardar borrador — un borrador a medias es válido.
+    if (nuevoEstado === 'enviado' && horasVerdeSemana < horasMinimasVerde) {
+      setError(
+        `Debes marcar mínimo ${horasMinimasVerde} hrs en verde en tu disponibilidad antes de enviar (llevas ${horasVerdeSemana}).`,
+      );
+      return;
+    }
+    setGuardando(true);
     try {
       let id = preferenciaId;
       const payloadPreferencia = {
@@ -276,20 +292,31 @@ export default function FormularioPreferencias({ onVolver }) {
         </p>
       )}
 
-      <section className="formulario-seccion">
-        <label htmlFor="num_cursos_max">¿Cuántos cursos puedes impartir este semestre?</label>
-        <input
-          id="num_cursos_max"
-          type="number"
-          min={1}
-          max={6}
-          value={numCursosMax}
-          disabled={soloLectura}
-          onChange={(e) => setNumCursosMax(Number(e.target.value))}
-        />
-      </section>
+      {hayMateriasParaElegir && (
+        <section className="formulario-seccion">
+          <label htmlFor="num_cursos_max">¿Cuántos cursos puedes impartir este semestre?</label>
+          <input
+            id="num_cursos_max"
+            type="number"
+            min={1}
+            max={6}
+            value={numCursosMax}
+            disabled={soloLectura}
+            onChange={(e) => setNumCursosMax(Number(e.target.value))}
+          />
+        </section>
+      )}
 
-      {mostrarMaterias ? (
+      {!mostrarMaterias && (
+        <section className="formulario-seccion">
+          <p className="formulario-nota">
+            Tu Jefe de Departamento no habilitó selección de materias este semestre — solo declara tu
+            disponibilidad de horario abajo.
+          </p>
+        </section>
+      )}
+
+      {hayMateriasParaElegir && (
         <section className="formulario-seccion">
           <h2>Preferencia de materias</h2>
           <p className="formulario-nota">
@@ -313,21 +340,15 @@ export default function FormularioPreferencias({ onVolver }) {
                 />
               </div>
             ))}
-            {materias.length === 0 && <p className="formulario-nota">No hay materias disponibles.</p>}
           </div>
-        </section>
-      ) : (
-        <section className="formulario-seccion">
-          <p className="formulario-nota">
-            Tu Jefe de Departamento no habilitó selección de materias este semestre — solo declara tu
-            disponibilidad de horario abajo.
-          </p>
         </section>
       )}
 
       <section className="formulario-seccion">
         <h2>Disponibilidad de horarios</h2>
-        <p className="formulario-nota">{horasVerdeSemana} hrs en verde marcadas por semana.</p>
+        <p className={`formulario-nota ${horasVerdeSemana >= horasMinimasVerde ? 'nota-ok' : 'nota-falta'}`}>
+          {horasVerdeSemana} hrs en verde marcadas de {horasMinimasVerde} hrs mínimo para poder enviar.
+        </p>
         <div className="legend">
           <span><i className="legend-verde" /> Seguro disponible</span>
           <span><i className="legend-amarillo" /> Posible pero complicado</span>

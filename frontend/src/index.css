@@ -258,6 +258,29 @@ textarea {
   background: var(--verde-bg);
   color: var(--verde);
 }
+.badge-no_iniciado {
+  background: var(--gray-bg);
+  color: var(--gray-text);
+}
+
+.panel-tabla {
+  border-collapse: collapse;
+  width: 100%;
+  background: white;
+}
+.panel-tabla th,
+.panel-tabla td {
+  border-bottom: 1px solid var(--gray-border);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 14px;
+}
+.panel-tabla th {
+  color: var(--gray-text);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 
 .formulario-error {
   background: var(--rojo-bg);
@@ -308,6 +331,15 @@ textarea {
   color: var(--gray-text);
   font-size: 13px;
   margin: 0;
+}
+
+.formulario-nota.nota-ok {
+  color: var(--verde);
+  font-weight: 600;
+}
+.formulario-nota.nota-falta {
+  color: var(--rojo);
+  font-weight: 600;
 }
 
 .materias-lista {
