@@ -28,7 +28,7 @@ export default function HomePage({ onAbrirFormulario }) {
     <div className="home-screen">
       <header className="home-header">
         <div>
-          <h1>Autoplanear</h1>
+          <h1>Malla Horarios</h1>
           <p className="home-subtitle">
             {profesor.nombre} · {ROL_LABELS[profesor.rol] ?? profesor.rol}
             {profesor.departamento_id && ` · ${nombreDepartamento(profesor.departamento_id)}`}

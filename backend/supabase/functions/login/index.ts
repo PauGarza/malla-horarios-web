@@ -33,11 +33,18 @@
 // nunca). La validación de identidad la hace el propio handler (cu+password).
 //
 // Desplegado 2026-09-21 contra el proyecto real (malla-horarios,
-// gvdgbuktokpfbtdhyiuz), status ACTIVE. Pendiente de que el usuario configure
-// los secrets (DB_URL, DB_ADMIN_KEY, APP_JWT_SECRET) para poder probarlo
-// end-to-end — ver el checklist en ../../bd/diseno-bd.md §4.2. Ya existe una
-// cuenta de prueba (cu='TEST01', password='TEST01', rol=admin) para esa
-// primera prueba.
+// gvdgbuktokpfbtdhyiuz), status ACTIVE. Ya existe una cuenta de prueba
+// (cu='TEST01', password='TEST01', rol=admin) para probarlo end-to-end.
+//
+// CORS (bug encontrado y corregido 2026-09-21): el frontend corre en un
+// origen distinto (localhost en desarrollo, GitHub Pages en producción), así
+// que el navegador manda un preflight OPTIONS antes del POST real — sin
+// manejarlo, y sin el header Access-Control-Allow-Origin en la respuesta, el
+// navegador bloquea la petición aunque la función responda bien ("Failed to
+// fetch" del lado del cliente, no un error real del servidor). Se permite
+// cualquier origen (`*`) a propósito: este endpoint no depende del origen
+// para su seguridad (rate limiting + bcrypt + mensajes genéricos), igual que
+// las claves públicas del proyecto ya son públicas por diseño.
 
 import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 // bcryptjs es CJS — bajo el especificador npm: de Deno no expone `compare`
@@ -99,29 +106,48 @@ function excedeLimite(clave: string): boolean {
   return intentos.length > MAX_INTENTOS;
 }
 
+// --- CORS --------------------------------------------------------------------
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "content-type, authorization, apikey",
+};
+
+function jsonResponse(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
 // --- Handler -----------------------------------------------------------------
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    // Preflight del navegador — sin cuerpo, solo confirma que el POST real
+    // está permitido desde este origen.
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Método no permitido" }), { status: 405 });
+    return jsonResponse({ error: "Método no permitido" }, 405);
   }
 
   let body: { cu?: string; password?: string };
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "JSON inválido" }), { status: 400 });
+    return jsonResponse({ error: "JSON inválido" }, 400);
   }
 
   const { cu, password } = body;
   if (!cu || !password) {
-    return new Response(JSON.stringify({ error: "Faltan credenciales" }), { status: 400 });
+    return jsonResponse({ error: "Faltan credenciales" }, 400);
   }
 
   if (excedeLimite(cu)) {
-    return new Response(JSON.stringify({ error: "Demasiados intentos, espera unos minutos" }), {
-      status: 429,
-    });
+    return jsonResponse({ error: "Demasiados intentos, espera unos minutos" }, 429);
   }
 
   // Login unificado: profesor, Jefe de Departamento, Servicios Escolares,
@@ -134,12 +160,12 @@ Deno.serve(async (req) => {
 
   if (error || !cuenta || cuenta.activo === false) {
     // Mensaje genérico a propósito: no revelar si el cu existe o no.
-    return new Response(JSON.stringify({ error: "Credenciales inválidas" }), { status: 401 });
+    return jsonResponse({ error: "Credenciales inválidas" }, 401);
   }
 
   const valido = await bcrypt.compare(password, cuenta.password_hash);
   if (!valido) {
-    return new Response(JSON.stringify({ error: "Credenciales inválidas" }), { status: 401 });
+    return jsonResponse({ error: "Credenciales inválidas" }, 401);
   }
 
   const claims: Record<string, unknown> = {
@@ -154,10 +180,7 @@ Deno.serve(async (req) => {
   const key = await importJwtKey(JWT_SECRET);
   const jwt = await create({ alg: "HS256", typ: "JWT" }, claims, key);
 
-  return new Response(JSON.stringify({ token: jwt, expira_en: TOKEN_TTL_SECONDS, rol: cuenta.rol }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  return jsonResponse({ token: jwt, expira_en: TOKEN_TTL_SECONDS, rol: cuenta.rol }, 200);
 });
 
 // --- Pendiente, no parte de este primer borrador ----------------------------

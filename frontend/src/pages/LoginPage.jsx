@@ -24,7 +24,7 @@ export default function LoginPage() {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
-        <h1>Autoplanear</h1>
+        <h1>Malla Horarios</h1>
         <p className="login-subtitle">División de Ciencias Exactas — ITAM</p>
 
         <label htmlFor="cu">Clave Única</label>
@@ -54,7 +54,8 @@ export default function LoginPage() {
         </button>
 
         <p className="login-hint">
-          Tu contraseña inicial es tu propia Clave Única, salvo que ya la hayas cambiado.
+          Tu usuario y tu contraseña inicial son tu Clave Única, <strong>sin ceros a la izquierda</strong> —
+          si tu CU real es <code>000188456</code>, aquí escribe <code>188456</code>.
         </p>
       </form>
     </div>
