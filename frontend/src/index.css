@@ -139,6 +139,13 @@ textarea {
   margin-top: 8px;
 }
 
+.login-hint code {
+  background: var(--gray-bg);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
 /* --- Home ------------------------------------------------------------ */
 
 .home-header {
