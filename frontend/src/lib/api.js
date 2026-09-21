@@ -8,6 +8,22 @@ const DB_URL = import.meta.env.VITE_DB_URL;
 const DB_ANON_KEY = import.meta.env.VITE_DB_ANON_KEY;
 const LOGIN_FUNCTION_URL = import.meta.env.VITE_LOGIN_FUNCTION_URL;
 
+/**
+ * Lee el profesor_id del JWT propio, sin verificar la firma (eso ya lo hizo
+ * el servidor al aceptar/rechazar la petición; esto es solo para saber qué
+ * pedir). Necesario porque RLS no siempre acota una consulta a "una sola
+ * fila": un Jefe de Departamento/admin también puede ver el roster completo
+ * de su departamento (roster_departamento_select), así que pedir /profesor
+ * sin filtrar por id puede devolver varias filas — la propia y las de sus
+ * colegas — y no hay garantía de cuál sale primero.
+ */
+export function profesorIdDelToken(token) {
+  const payload = token.split('.')[1];
+  const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+  const json = JSON.parse(atob(base64));
+  return json.profesor_id;
+}
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
