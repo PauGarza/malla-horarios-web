@@ -36,18 +36,18 @@
 -- adicionales más abajo en vez de pestañas ocultas solamente en el frontend
 -- (la UI puede ocultar botones, pero la protección real vive aquí).
 --
--- Todavía no se ha corrido contra ningún proyecto real.
+-- Corrido contra el proyecto real de base de datos 2026-09-21.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION app_profesor_id() RETURNS int AS $$
     SELECT NULLIF(current_setting('request.jwt.claims', true)::json ->> 'profesor_id', '')::int;
-$$ LANGUAGE sql STABLE;
+$$ LANGUAGE sql STABLE SET search_path = public;
 COMMENT ON FUNCTION app_profesor_id IS
     'Lee el claim profesor_id del JWT propio (firmado por la función de login en backend/), NULL si no hay sesión o el token no trae ese claim.';
 
 CREATE OR REPLACE FUNCTION app_rol() RETURNS text AS $$
     SELECT current_setting('request.jwt.claims', true)::json ->> 'rol';
-$$ LANGUAGE sql STABLE;
+$$ LANGUAGE sql STABLE SET search_path = public;
 COMMENT ON FUNCTION app_rol IS
     'Lee el claim rol del JWT propio (profesor.rol al momento del login — se firma directo en el token en vez de consultarse en cada política, por costo: cero queries extra por chequeo de RLS).';
 
@@ -201,7 +201,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER trg_bloquear_automodificacion_modo_materias
     BEFORE UPDATE ON profesor

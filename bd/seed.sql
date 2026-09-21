@@ -2,7 +2,7 @@
 -- Autoplanear — datos semilla
 -- Requiere haber corrido schema.sql y triggers.sql primero.
 --
--- NO EJECUTAR TODAVÍA: pendiente de revisión del usuario.
+-- Corrido contra el proyecto real de base de datos 2026-09-21.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -29,9 +29,11 @@ SELECT
     bloque_inicio + interval '30 minutes',
     row_number() OVER (ORDER BY bloque_inicio)
 FROM (
-    SELECT generate_series('07:00'::time, '13:30'::time, interval '30 minutes') AS bloque_inicio
+    -- generate_series no tiene variante (time, time, interval) — se pasa por
+    -- timestamp (fecha arbitraria, se descarta) y se vuelve a castear a time.
+    SELECT generate_series('2000-01-01 07:00'::timestamp, '2000-01-01 13:30'::timestamp, interval '30 minutes')::time AS bloque_inicio
     UNION ALL
-    SELECT generate_series('16:00'::time, '19:30'::time, interval '30 minutes')
+    SELECT generate_series('2000-01-01 16:00'::timestamp, '2000-01-01 19:30'::timestamp, interval '30 minutes')::time
 ) AS bloques;
 
 -- -----------------------------------------------------------------------------

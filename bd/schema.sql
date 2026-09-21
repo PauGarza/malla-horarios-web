@@ -17,7 +17,7 @@
 -- que determina qué pestañas/vistas adicionales ve. Ver diseno-bd.md §4.
 --
 -- Orden de carga: schema.sql -> triggers.sql -> rls-policies.sql -> seed.sql
--- Todavía no se ha corrido contra ningún proyecto real.
+-- Corrido contra el proyecto real de base de datos 2026-09-21.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -149,9 +149,16 @@ CREATE TABLE semestre (
     id      serial PRIMARY KEY,
     tipo    tipo_semestre_enum NOT NULL,
     anio    int NOT NULL,
-    etiqueta text GENERATED ALWAYS AS (tipo::text || '-' || anio::text) STORED,
+    etiqueta text GENERATED ALWAYS AS (
+        (CASE tipo
+            WHEN 'primavera' THEN 'primavera'
+            WHEN 'verano'    THEN 'verano'
+            WHEN 'otono'     THEN 'otono'
+        END) || '-' || anio::text
+    ) STORED,
     UNIQUE (tipo, anio)
 );
+COMMENT ON COLUMN semestre.etiqueta IS 'CASE en vez de tipo::text: el cast de enum a text no es IMMUTABLE en Postgres, y una columna GENERATED STORED lo exige.';
 
 CREATE TABLE departamento_semestre_config (
     departamento_id             int NOT NULL REFERENCES departamento(id),
