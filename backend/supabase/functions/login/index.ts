@@ -28,11 +28,16 @@
 // dependa de esa plataforma; la lógica de login en sí (bcrypt + JWT) es
 // código estándar, portable a cualquier runtime de JavaScript/Deno/Node.
 //
-// NO PROBADO TODAVÍA — no existe un proyecto real donde desplegarlo. Revisar
-// antes de desplegar, en particular: nombres exactos de las variables de
-// entorno una vez creado el proyecto, y si el rate limiting de abajo es
-// suficiente o hace falta algo más robusto (ver checklist en
-// ../../bd/diseno-bd.md §4.2).
+// verify_jwt = false a propósito en el deploy: este endpoint es el que EMITE
+// el JWT — exigir uno para poder llamarlo sería circular (nadie podría entrar
+// nunca). La validación de identidad la hace el propio handler (cu+password).
+//
+// Desplegado 2026-09-21 contra el proyecto real (malla-horarios,
+// gvdgbuktokpfbtdhyiuz), status ACTIVE. Pendiente de que el usuario configure
+// los secrets (DB_URL, DB_ADMIN_KEY, APP_JWT_SECRET) para poder probarlo
+// end-to-end — ver el checklist en ../../bd/diseno-bd.md §4.2. Ya existe una
+// cuenta de prueba (cu='TEST01', password='TEST01', rol=admin) para esa
+// primera prueba.
 
 import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 import { compare } from "npm:bcryptjs@2.4.3";
