@@ -147,6 +147,17 @@ Principios aplicados en `rls-policies.sql`:
   eso es el motor de asignación en sí (RF06), que no existe todavía más allá del acceso de lectura ya
   resuelto (ver `motor-asignacion.md` en la copia pública del repo del equipo).
 
+**⚠️ Riesgo descubierto 2026-09-21, al crear el proyecto real:** el mecanismo del paso 1 (firmar un JWT
+propio con "el secreto del proyecto") depende de que el proveedor siga aceptando verificación HS256 con
+un secreto compartido. Los proyectos nuevos ya usan llaves de firma asimétricas (ECC P-256) como llave
+"current" por defecto; el secreto HS256 compartido que necesitamos ahora vive marcado como "legacy",
+señalado por el proveedor como algo que empujan a dejar de usar. Mientras esa llave no se revoque
+manualmente, el diseño sigue funcionando — pero es una dependencia frágil de un mecanismo ya etiquetado
+como legacy, no algo estable a largo plazo. **Regla operativa: nunca revocar la llave JWT legacy del
+proyecto** hasta que este mecanismo se rediseñe. Pendiente evaluar a futuro: mover a un enfoque que no
+dependa de un secreto legacy (ej. verificar el JWT propio dentro de cada función/RPC en vez de depender
+de que la capa de API lo valide automáticamente).
+
 ### 4.2 Checklist antes de crear la estructura del proyecto
 
 Checklist de lo que sigue pendiente de resolver sobre el diseño de la base de datos antes
