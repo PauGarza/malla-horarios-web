@@ -48,6 +48,21 @@ COMMENT ON FUNCTION app_profesor_id IS
 CREATE OR REPLACE FUNCTION app_rol() RETURNS text AS $$
     SELECT current_setting('request.jwt.claims', true)::json ->> 'rol';
 $$ LANGUAGE sql STABLE SET search_path = public;
+
+-- SECURITY DEFINER a propósito: varias políticas (empezando por las de
+-- profesor mismo) necesitan el departamento_id del profesor autenticado. Si
+-- se resuelve con un subquery normal sobre profesor DENTRO de una política de
+-- profesor, Postgres evalúa RLS recursivamente sobre sí misma y truena con
+-- "infinite recursion detected in policy for relation profesor" (confirmado
+-- al probar contra el proyecto real, 2026-09-21). SECURITY DEFINER hace que
+-- este SELECT corra con los privilegios del dueño de la función (el rol que
+-- corrió las migraciones, dueño de la tabla), que por default sí puede
+-- saltarse RLS — rompe el ciclo en vez de evitarlo con lógica adicional.
+CREATE OR REPLACE FUNCTION app_departamento_id() RETURNS int AS $$
+    SELECT departamento_id FROM profesor WHERE id = app_profesor_id();
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+COMMENT ON FUNCTION app_departamento_id IS
+    'departamento_id del profesor autenticado. SECURITY DEFINER para evitar recursión de RLS al usarse dentro de políticas sobre la propia tabla profesor — ver comentario arriba.';
 COMMENT ON FUNCTION app_rol IS
     'Lee el claim rol del JWT propio (profesor.rol al momento del login — se firma directo en el token en vez de consultarse en cada política, por costo: cero queries extra por chequeo de RLS).';
 
@@ -117,14 +132,14 @@ CREATE POLICY jefe_elegibilidad_escritura ON profesor_materia_elegible
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento' AND profesor_id IN (
             SELECT id FROM profesor
-            WHERE departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id())
+            WHERE departamento_id = app_departamento_id()
         ))
     )
     WITH CHECK (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento' AND profesor_id IN (
             SELECT id FROM profesor
-            WHERE departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id())
+            WHERE departamento_id = app_departamento_id()
         ))
     );
 
@@ -147,7 +162,7 @@ CREATE POLICY roster_departamento_select ON profesor
     USING (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     );
 COMMENT ON POLICY roster_departamento_select ON profesor IS
     'admin ve el roster completo; jefe_departamento ve solo el roster de su propio departamento (comparado contra su propia fila, no un claim de departamento en el JWT, para no tener que reemitir el token si algún día cambia de departamento).';
@@ -178,12 +193,12 @@ CREATE POLICY jefe_modo_materias_update ON profesor
     USING (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     )
     WITH CHECK (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     );
 COMMENT ON POLICY jefe_modo_materias_update ON profesor IS
     'Permite a Jefe de Departamento/admin editar modo_materias_elegibles de los profesores de su propio departamento (RF15).';
@@ -229,7 +244,7 @@ CREATE POLICY departamento_preferencia_select ON preferencia
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento' AND profesor_id IN (
             SELECT id FROM profesor
-            WHERE departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id())
+            WHERE departamento_id = app_departamento_id()
         ))
     );
 
@@ -254,7 +269,7 @@ CREATE POLICY departamento_preferencia_materia_select ON preferencia_materia
     USING (preferencia_id IN (SELECT id FROM preferencia WHERE profesor_id IN (
         SELECT id FROM profesor WHERE app_rol() = 'admin'
            OR (app_rol() = 'jefe_departamento'
-               AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+               AND departamento_id = app_departamento_id())
     )));
 
 CREATE POLICY propia_disponibilidad ON disponibilidad
@@ -267,7 +282,7 @@ CREATE POLICY departamento_disponibilidad_select ON disponibilidad
     USING (preferencia_id IN (SELECT id FROM preferencia WHERE profesor_id IN (
         SELECT id FROM profesor WHERE app_rol() = 'admin'
            OR (app_rol() = 'jefe_departamento'
-               AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+               AND departamento_id = app_departamento_id())
     )));
 
 -- -----------------------------------------------------------------------------
@@ -284,12 +299,12 @@ CREATE POLICY materia_escritura_departamento ON materia
     USING (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     )
     WITH CHECK (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     );
 COMMENT ON POLICY materia_escritura_departamento ON materia IS
     'Jefe de Departamento solo puede crear/editar materias de SU propio departamento (comparado contra su propia fila de profesor); admin, de cualquiera. Esta política se suma a catalogo_lectura_autenticados (que ya cubre SELECT para todos) — FOR ALL aquí sí incluye INSERT/UPDATE/DELETE.';
@@ -305,14 +320,14 @@ CREATE POLICY estimacion_demanda_departamento ON estimacion_demanda
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento' AND materia_id IN (
             SELECT id FROM materia
-            WHERE departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id())
+            WHERE departamento_id = app_departamento_id()
         ))
     )
     WITH CHECK (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento' AND materia_id IN (
             SELECT id FROM materia
-            WHERE departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id())
+            WHERE departamento_id = app_departamento_id()
         ))
     );
 COMMENT ON POLICY estimacion_demanda_departamento ON estimacion_demanda IS
@@ -323,12 +338,12 @@ CREATE POLICY departamento_config_escritura ON departamento_semestre_config
     USING (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     )
     WITH CHECK (
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento'
-            AND departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id()))
+            AND departamento_id = app_departamento_id())
     );
 COMMENT ON POLICY departamento_config_escritura ON departamento_semestre_config IS
     'Jefe de Departamento configura mostrar_seleccion_materias y horas_minimas_verde de SU departamento; admin, de cualquiera.';
@@ -356,7 +371,7 @@ CREATE POLICY grupo_departamento_select ON grupo
         app_rol() = 'admin'
         OR (app_rol() = 'jefe_departamento' AND materia_id IN (
             SELECT id FROM materia
-            WHERE departamento_id = (SELECT departamento_id FROM profesor WHERE id = app_profesor_id())
+            WHERE departamento_id = app_departamento_id()
         ))
     );
 
