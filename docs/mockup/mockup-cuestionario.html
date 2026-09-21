@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup — Cuestionario de Profesores | Autoplanear</title>
+<style>
+  :root {
+    --navy: #163a5f;
+    --navy-dark: #0e2740;
+    --gray-bg: #f4f6f8;
+    --gray-border: #d7dde3;
+    --gray-text: #55606b;
+    --verde: #2e8b47;
+    --verde-bg: #e3f4e8;
+    --amarillo: #b8860b;
+    --amarillo-bg: #fdf3d9;
+    --rojo: #c0392b;
+    --rojo-bg: #fbe4e1;
+    --white: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: var(--gray-bg);
+    color: #1e2732;
+  }
+  header.app-header {
+    background: var(--navy);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header.app-header h1 {
+    font-size: 17px;
+    margin: 0;
+    font-weight: 600;
+  }
+  header.app-header .badge {
+    font-size: 12px;
+    background: rgba(255,255,255,0.15);
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+  }
+  .mockup-banner {
+    background: #fff3cd;
+    border: 1px solid #e6c667;
+    color: #7a5c00;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  /* ---- Login screen ---- */
+  #login-screen {
+    max-width: 400px;
+    margin: 80px auto;
+    background: white;
+    border: 1px solid var(--gray-border);
+    border-radius: 12px;
+    padding: 32px;
+    text-align: center;
+  }
+  #login-screen h2 { margin-top: 0; font-size: 18px; color: var(--navy-dark); }
+  #login-screen p { color: var(--gray-text); font-size: 13px; }
+  #login-screen input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    border: 1px solid var(--gray-border);
+    border-radius: 6px;
+    margin: 12px 0;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #login-screen button, .btn-primary {
+    background: var(--navy);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #login-screen button:hover, .btn-primary:hover { background: var(--navy-dark); }
+  #login-error { color: var(--rojo); font-size: 13px; min-height: 18px; }
+  .demo-hint {
+    margin-top: 18px;
+    font-size: 12px;
+    color: var(--gray-text);
+    border-top: 1px dashed var(--gray-border);
+    padding-top: 12px;
+  }
+
+  /* ---- Cards / sections ---- */
+  .card {
+    background: white;
+    border: 1px solid var(--gray-border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .card h2 {
+    font-size: 15px;
+    color: var(--navy-dark);
+    margin: 0 0 4px;
+  }
+  .card .subtitle {
+    font-size: 12.5px;
+    color: var(--gray-text);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px 20px;
+  }
+  .profile-field label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--gray-text);
+    margin-bottom: 2px;
+  }
+  .profile-field .value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--navy-dark);
+  }
+  .demo-toggle {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: #fff8e6;
+    border: 1px dashed #e0c063;
+    border-radius: 8px;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .demo-toggle select {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--gray-border);
+  }
+
+  input[type="number"], textarea, input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--gray-border);
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-family: inherit;
+  }
+  textarea { min-height: 60px; resize: vertical; }
+
+  /* ---- Materias ---- */
+  .group-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 18px 0 8px;
+  }
+  .group-heading h3 { font-size: 13.5px; margin: 0; color: var(--navy-dark); }
+  .counter {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--gray-bg);
+    color: var(--gray-text);
+    border: 1px solid var(--gray-border);
+  }
+  .counter.ok { background: var(--verde-bg); color: var(--verde); border-color: var(--verde); }
+  .counter.low { background: var(--rojo-bg); color: var(--rojo); border-color: var(--rojo); }
+
+  .materia-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid #eef1f4;
+    font-size: 13px;
+  }
+  .materia-row:last-child { border-bottom: none; }
+  .materia-nombre { flex: 1; }
+
+  .tri-toggle { display: flex; gap: 4px; flex-shrink: 0; }
+  .tri-toggle button {
+    width: 30px; height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--gray-border);
+    background: white;
+    cursor: pointer;
+    font-size: 12px;
+    color: #99a3ad;
+  }
+  .tri-toggle button.v.active { background: var(--verde); border-color: var(--verde); color: white; }
+  .tri-toggle button.a.active { background: var(--amarillo); border-color: var(--amarillo); color: white; }
+  .tri-toggle button.r.active { background: var(--rojo); border-color: var(--rojo); color: white; }
+
+  /* ---- Grid horarios ---- */
+  .grid-wrap { overflow-x: auto; }
+  table.horario-grid {
+    border-collapse: collapse; width: 100%; font-size: 11.5px;
+    table-layout: fixed;
+    user-select: none; -webkit-user-select: none; -ms-user-select: none;
+  }
+  table.horario-grid th, table.horario-grid td {
+    border: 1px solid var(--gray-border);
+    text-align: center;
+    padding: 0;
+  }
+  /* la columna de horas tiene ancho fijo; con table-layout:fixed, las 5 columnas de
+     días se reparten el resto del ancho en partes iguales */
+  table.horario-grid th:first-child,
+  table.horario-grid td:first-child {
+    width: 86px;
+  }
+  table.horario-grid th {
+    background: var(--gray-bg);
+    padding: 6px 4px;
+    font-weight: 600;
+    color: var(--navy-dark);
+  }
+  table.horario-grid td.time-label {
+    background: var(--gray-bg);
+    font-weight: 600;
+    color: var(--gray-text);
+    padding: 4px 6px;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .slot {
+    width: 100%;
+    height: 26px;
+    display: block;
+    cursor: pointer;
+    background: white;
+  }
+  .slot.verde { background: var(--verde); }
+  .slot.amarillo { background: var(--amarillo); }
+  .slot.rojo { background: var(--rojo); }
+  .comida-row td { background: repeating-linear-gradient(45deg, #eef1f4, #eef1f4 6px, #e4e8ec 6px, #e4e8ec 12px); color: #99a3ad; font-size: 10.5px; }
+
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--gray-text); margin-top: 10px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid var(--gray-border); }
+  .legend i.verde { background: var(--verde); border-color: var(--verde); }
+  .legend i.amarillo { background: var(--amarillo); border-color: var(--amarillo); }
+  .legend i.rojo { background: var(--rojo); border-color: var(--rojo); }
+
+  .field-block { margin-top: 16px; }
+  .field-block label { display: block; font-size: 12.5px; font-weight: 600; color: var(--navy-dark); margin-bottom: 5px; }
+  .field-hint { font-size: 11.5px; color: var(--gray-text); margin-top: 3px; }
+
+  .actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .save-status { font-size: 12px; color: var(--gray-text); }
+
+  .warning-banner {
+    background: var(--rojo-bg);
+    border: 1px solid var(--rojo);
+    color: var(--rojo);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 14px;
+    display: none;
+  }
+
+  #resumen-panel { display: none; }
+  #resumen-panel pre {
+    background: #0e2740;
+    color: #d8e6f2;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  .estado-pill {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--verde-bg);
+    color: var(--verde);
+    border: 1px solid var(--verde);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Autoplanear — Cuestionario de Profesores</h1>
+  <span class="badge" id="header-badge">no autenticado</span>
+</header>
+
+<div class="container">
+  <div class="mockup-banner">
+    🧪 <strong>Mockup para revisión de Jefes de Departamento.</strong> No hay base de datos ni backend
+    todavía — esto corre 100% en el navegador, guarda el borrador en <code>localStorage</code> de tu
+    equipo, y no manda nada a ningún servidor. Sirve para validar contenido y flujo antes de construir
+    la versión real.
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <div id="login-screen">
+    <h2>Iniciar sesión</h2>
+    <p>Ingresa tu Clave Única (CU) para entrar al cuestionario de preferencias del semestre.</p>
+    <input type="text" id="cu-input" placeholder="CU, ej. 188456" maxlength="10" />
+    <div><button onclick="intentarLogin()">Entrar</button></div>
+    <div id="login-error"></div>
+    <div class="demo-hint">
+      Roster de prueba cargado para esta demo: <strong>188456</strong> (Pau Garza — Matemáticas). Usa esa
+      CU para entrar. Una vez adentro hay un control de demo para alternar entre Tiempo Completo y
+      Asignatura sin tener que dar de alta más cuentas.
+    </div>
+  </div>
+
+  <!-- ===================== APP ===================== -->
+  <div id="app-screen" style="display:none;">
+
+    <div class="card">
+      <h2>Tus datos</h2>
+      <div class="subtitle">Precargados desde tu cuenta y el roster del departamento — no se editan aquí.</div>
+      <div class="profile-grid">
+        <div class="profile-field"><label>Nombre</label><div class="value" id="p-nombre"></div></div>
+        <div class="profile-field"><label>CU</label><div class="value" id="p-cu"></div></div>
+        <div class="profile-field"><label>Departamento</label><div class="value" id="p-depto"></div></div>
+        <div class="profile-field"><label>Tipo de contrato</label><div class="value" id="p-contrato"></div></div>
+      </div>
+      <div class="demo-toggle">
+        ⚙️ <strong>Solo para esta demo:</strong> tipo de contrato
+        <select id="contrato-demo-select" onchange="cambiarContratoDemo()">
+          <option value="Tiempo Completo">Tiempo Completo</option>
+          <option value="Asignatura">Asignatura</option>
+        </select>
+        — cambia esto para enseñarle a los Jefes de Departamento las dos variantes del cuestionario sin
+        crear otra cuenta. En el sistema real, el tipo de contrato viene fijo del roster.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>1. Carga del semestre</h2>
+      <div class="subtitle">Otoño 2026.</div>
+      <div class="field-block">
+        <label for="num-cursos">¿Cuántos cursos puede impartir este semestre?</label>
+        <input type="number" id="num-cursos" min="1" max="6" placeholder="ej. 3" oninput="guardarEstado()" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. Preferencia de materias</h2>
+      <div class="subtitle">
+        Marca cada materia según qué tanto te gustaría impartirla:
+        🟢 con gusto / 🟡 podría, no es lo ideal / 🔴 no puedo o no quiero.
+      </div>
+
+      <div id="calc-group-section" style="display:none;">
+        <div class="group-heading">
+          <h3>Cursos de cálculo — cobertura departamental</h3>
+          <span class="counter" id="counter-calc">0 en verde (mínimo 2)</span>
+        </div>
+        <div class="subtitle" style="margin-top:-4px;">
+          Cursos nuevos de cálculo que, por ser departamentales, necesitan que varios profesores de tiempo
+          completo o medio tiempo los impartan.
+        </div>
+        <div id="calc-list"></div>
+      </div>
+
+      <div class="group-heading">
+        <h3 id="catalogo-heading">Catálogo de materias</h3>
+        <span class="counter" id="counter-general">0 en verde (mínimo 5)</span>
+      </div>
+      <div id="general-list"></div>
+
+      <div class="field-block">
+        <label for="otro-curso">Otro (especifica si no está en la lista)</label>
+        <input type="text" id="otro-curso" placeholder="Nombre del curso" oninput="guardarEstado()" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Disponibilidad de horarios</h2>
+      <div class="subtitle">
+        Por cada franja de 30 minutos, marca 🟢 seguro disponible / 🟡 posible pero complicado / 🔴 no
+        disponible. El bloque de 14:00 a 16:00 es horario de comida institucional y no se ofrece.
+      </div>
+      <div class="grid-wrap">
+        <table class="horario-grid" id="horario-grid"></table>
+      </div>
+      <div class="legend">
+        <span><i class="verde"></i> Verde</span>
+        <span><i class="amarillo"></i> Amarillo</span>
+        <span><i class="rojo"></i> Rojo</span>
+        <span id="horas-verdes-total" style="margin-left:auto; font-weight:600; color: var(--navy-dark);"></span>
+      </div>
+
+      <div class="field-block" id="otro-depto-block" style="display:none;">
+        <label for="otro-depto">¿Ya solicitó cursos en otro departamento? ¿En qué horarios?</label>
+        <input type="text" id="otro-depto" placeholder="ej. Martes 10:00–11:30 en Actuaría" oninput="guardarEstado()" />
+        <div class="field-hint">
+          Solo para Asignatura — ayuda a evitar exceder las 10 hrs/semana permitidas sumando entre
+          departamentos.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4. Observaciones</h2>
+      <div class="field-block">
+        <label for="obs-cursos">Sobre la asignación de cursos (restricciones, optativas, coordinación, etc.)</label>
+        <textarea id="obs-cursos" oninput="guardarEstado()"></textarea>
+      </div>
+      <div class="field-block">
+        <label for="obs-horarios">Sobre tu disponibilidad de horarios</label>
+        <textarea id="obs-horarios" oninput="guardarEstado()"></textarea>
+      </div>
+    </div>
+
+    <div class="warning-banner" id="warning-banner"></div>
+
+    <div class="actions-bar">
+      <span class="save-status" id="save-status">Borrador guardado automáticamente.</span>
+      <div>
+        <button class="btn-primary" onclick="cerrarSesion()" style="background:#7a8794; margin-right:8px;">Cerrar sesión</button>
+        <button class="btn-primary" onclick="enviar()">Enviar preferencias</button>
+      </div>
+    </div>
+
+    <div class="card" id="resumen-panel">
+      <h2>Resumen enviado <span class="estado-pill" id="estado-pill">enviado</span></h2>
+      <div class="subtitle">
+        Así se vería el payload que el frontend le mandaría al backend (<code>PUT/POST /api/preferencias</code>).
+        Puedes seguir editando arriba — al modificar algo, vuelve a "Enviar" para actualizar.
+      </div>
+      <pre id="resumen-json"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ Roster de demo ============ */
+const ROSTER = {
+  "188456": { nombre: "Pau Garza", departamento: "Matemáticas", contrato: "Tiempo Completo" },
+};
+
+/* ============ Catálogo de materias (tal cual los Google Forms actuales) ============ */
+const CATALOGO_COMPLETO = [
+  "Álgebra Lineal (2 horas a la semana, es continuación de Principios de álgebra lineal)",
+  "Álgebra Lineal I",
+  "Álgebra Lineal II",
+  "Álgebra Lineal Aplicada (continuación de Cálculo Aplicado)",
+  "Álgebra Matricial",
+  "Análisis Aplicado I",
+  "Análisis Matemático II",
+  "Análisis Numérico I (antes Matemática Computacional)",
+  "Análisis Numérico II (antes Cálculo Numérico I)",
+  "Cálculo Aplicado (Mercadotecnia, Relaciones Internacionales, Ciencia Política)",
+  "Cálculo I",
+  "Cálculo II",
+  "Cálculo III",
+  "Cálculo Diferencial e Integral I",
+  "Cálculo Diferencial e Integral II",
+  "Cálculo Diferencial e Integral III",
+  "Cálculo Una Variable (Economía, Dir. Financiera)",
+  "Cálculo en Varias Variables (Economía, Dir. Financiera)",
+  "Cálculo Univariado (Matemáticas Aplicadas e Ingenierías)",
+  "Cálculo Multivariado (Matemáticas Aplicadas e Ingenierías)",
+  "Cálculo Vectorial (continuación de cálculo Multivariado, sólo para matemáticos)",
+  "Geometría Vectorial (antes Geometría Analítica I)",
+  "Investigación de Operaciones I",
+  "Matemáticas I",
+  "Matemáticas II",
+  "Matemáticas III",
+  "Matemáticas Aplicadas a la Economía / Métodos Dinámicos para la Economía",
+  "Matemáticas Discretas (antes Álgebra Superior II)",
+  "Métodos Cuantitativos para Derecho",
+  "Modelos Matemáticos I",
+  "Optimización Numérica I",
+  "Pensamiento Matemático (antes Álgebra Superior I)",
+  "Principios de Álgebra Lineal (para Economía, 2 horas por semana)",
+  "Principios de Análisis Real (antes Análisis Matemático I)",
+  "Programación Lineal",
+  "Sistemas Dinámicos I",
+  "Sistemas Dinámicos II",
+  "Ecuaciones Diferenciales Parciales",
+];
+
+// Cursos de cálculo con cobertura departamental (bloque aparte, solo Tiempo Completo, min. 2 en verde)
+const GRUPO_CALCULO = [
+  "Cálculo Aplicado (Mercadotecnia, Relaciones Internacionales, Ciencia Política)",
+  "Cálculo Una Variable (Economía, Dir. Financiera)",
+  "Cálculo en Varias Variables (Economía, Dir. Financiera)",
+  "Cálculo Univariado (Matemáticas Aplicadas e Ingenierías)",
+  "Cálculo Multivariado (Matemáticas Aplicadas e Ingenierías)",
+];
+
+function slugify(s) {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+function generarSlots() {
+  const slots = [];
+  let h = 7, m = 0;
+  while (h < 14) {
+    slots.push(fmt(h, m));
+    m += 30; if (m === 60) { m = 0; h++; }
+  }
+  h = 16; m = 0;
+  while (h < 20) {
+    slots.push(fmt(h, m));
+    m += 30; if (m === 60) { m = 0; h++; }
+  }
+  return slots;
+  function fmt(h, m) {
+    const h2 = (m + 30 === 60) ? h : h, m2 = (m + 30) % 60, hEnd = m + 30 === 60 ? h + 1 : h;
+    const pad = n => String(n).padStart(2, "0");
+    return `${pad(h)}:${pad(m)}-${pad(hEnd)}:${pad(m2)}`;
+  }
+}
+const SLOTS = generarSlots();
+
+/* ============ Estado de sesión ============ */
+let currentCU = null;
+const SEMESTRE = "2026-otono";
+
+function stateKey(cu) { return `autoplanear_pref_${cu}_${SEMESTRE}`; }
+
+function materiasPorDefecto() {
+  // Todas las materias arrancan en amarillo — el profesor sube a verde o baja a rojo desde ahí.
+  const materias = {};
+  CATALOGO_COMPLETO.forEach(nombre => { materias[slugify(nombre)] = "amarillo"; });
+  return materias;
+}
+
+function estadoVacio() {
+  return {
+    numCursosMax: "",
+    materias: materiasPorDefecto(),  // slug -> 'verde'|'amarillo'|'rojo'
+    disponibilidad: {},  // "dia|slot" -> 'verde'|'amarillo'|'rojo'
+    otroCurso: "",
+    otroDepto: "",
+    obsCursos: "",
+    obsHorarios: "",
+    estado: "borrador",
+  };
+}
+
+let estado = estadoVacio();
+
+function intentarLogin() {
+  const cu = document.getElementById("cu-input").value.trim();
+  const persona = ROSTER[cu];
+  const errEl = document.getElementById("login-error");
+  if (!persona) {
+    errEl.textContent = "CU no encontrado en el roster del departamento.";
+    return;
+  }
+  errEl.textContent = "";
+  currentCU = cu;
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app-screen").style.display = "block";
+  document.getElementById("header-badge").textContent = `${persona.nombre} — CU ${cu}`;
+
+  const draft = localStorage.getItem(stateKey(cu));
+  estado = draft ? JSON.parse(draft) : estadoVacio();
+  // por si el borrador guardado es de antes de que existiera el default en amarillo, o
+  // le faltan materias nuevas del catálogo:
+  estado.materias = { ...materiasPorDefecto(), ...(estado.materias || {}) };
+
+  cargarPerfil(persona);
+  document.getElementById("contrato-demo-select").value = persona.contrato;
+  render();
+}
+
+function cerrarSesion() {
+  currentCU = null;
+  document.getElementById("login-screen").style.display = "block";
+  document.getElementById("app-screen").style.display = "none";
+  document.getElementById("header-badge").textContent = "no autenticado";
+  document.getElementById("cu-input").value = "";
+}
+
+let perfilActual = null;
+function cargarPerfil(persona) {
+  perfilActual = { ...persona };
+  document.getElementById("p-nombre").textContent = persona.nombre;
+  document.getElementById("p-cu").textContent = currentCU;
+  document.getElementById("p-depto").textContent = persona.departamento;
+  document.getElementById("p-contrato").textContent = persona.contrato;
+}
+
+function cambiarContratoDemo() {
+  perfilActual.contrato = document.getElementById("contrato-demo-select").value;
+  document.getElementById("p-contrato").textContent = perfilActual.contrato;
+  render();
+}
+
+/* ============ Render ============ */
+function render() {
+  renderMaterias();
+  renderHorario();
+  document.getElementById("num-cursos").value = estado.numCursosMax;
+  document.getElementById("otro-curso").value = estado.otroCurso;
+  document.getElementById("otro-depto").value = estado.otroDepto;
+  document.getElementById("obs-cursos").value = estado.obsCursos;
+  document.getElementById("obs-horarios").value = estado.obsHorarios;
+  document.getElementById("otro-depto-block").style.display =
+    perfilActual.contrato === "Asignatura" ? "block" : "none";
+  document.getElementById("resumen-panel").style.display =
+    estado.estado === "enviado" ? "block" : "none";
+  if (estado.estado === "enviado") mostrarResumen();
+}
+
+function triToggle(slug, valor) {
+  return `
+    <div class="tri-toggle" data-materia="${slug}">
+      <button class="v ${valor==='verde'?'active':''}" onclick="setMateria('${slug}','verde')" title="Verde">🟢</button>
+      <button class="a ${valor==='amarillo'?'active':''}" onclick="setMateria('${slug}','amarillo')" title="Amarillo">🟡</button>
+      <button class="r ${valor==='rojo'?'active':''}" onclick="setMateria('${slug}','rojo')" title="Rojo">🔴</button>
+    </div>`;
+}
+
+function renderMaterias() {
+  const esTC = perfilActual.contrato === "Tiempo Completo";
+  const calcSection = document.getElementById("calc-group-section");
+  const calcList = document.getElementById("calc-list");
+  const generalList = document.getElementById("general-list");
+  const heading = document.getElementById("catalogo-heading");
+
+  calcSection.style.display = esTC ? "block" : "none";
+  heading.textContent = esTC ? "Resto del catálogo" : "Catálogo de materias";
+
+  const calcSlugs = new Set(GRUPO_CALCULO.map(slugify));
+
+  if (esTC) {
+    calcList.innerHTML = GRUPO_CALCULO.map(nombre => {
+      const slug = slugify(nombre);
+      return `<div class="materia-row"><div class="materia-nombre">${nombre}</div>${triToggle(slug, estado.materias[slug])}</div>`;
+    }).join("");
+  }
+
+  const listaGeneral = esTC
+    ? CATALOGO_COMPLETO.filter(n => !calcSlugs.has(slugify(n)))
+    : CATALOGO_COMPLETO;
+
+  generalList.innerHTML = listaGeneral.map(nombre => {
+    const slug = slugify(nombre);
+    return `<div class="materia-row"><div class="materia-nombre">${nombre}</div>${triToggle(slug, estado.materias[slug])}</div>`;
+  }).join("");
+
+  actualizarContadoresMaterias();
+}
+
+function setMateria(slug, valor) {
+  estado.materias[slug] = valor;
+  guardarEstado();
+  renderMaterias();
+}
+
+function actualizarContadoresMaterias() {
+  const esTC = perfilActual.contrato === "Tiempo Completo";
+  const calcSlugs = GRUPO_CALCULO.map(slugify);
+  const contarVerdes = slugs => slugs.filter(s => estado.materias[s] === "verde").length;
+
+  if (esTC) {
+    const vCalc = contarVerdes(calcSlugs);
+    const elCalc = document.getElementById("counter-calc");
+    elCalc.textContent = `${vCalc} en verde (mínimo 2)`;
+    elCalc.className = "counter " + (vCalc >= 2 ? "ok" : "low");
+
+    const generalSlugs = CATALOGO_COMPLETO.filter(n => !GRUPO_CALCULO.includes(n)).map(slugify);
+    const vGen = contarVerdes(generalSlugs);
+    const elGen = document.getElementById("counter-general");
+    elGen.textContent = `${vGen} en verde (mínimo 5)`;
+    elGen.className = "counter " + (vGen >= 5 ? "ok" : "low");
+  } else {
+    const allSlugs = CATALOGO_COMPLETO.map(slugify);
+    const v = contarVerdes(allSlugs);
+    const elGen = document.getElementById("counter-general");
+    elGen.textContent = `${v} en verde (mínimo 5)`;
+    elGen.className = "counter " + (v >= 5 ? "ok" : "low");
+  }
+}
+
+function renderHorario() {
+  const tbl = document.getElementById("horario-grid");
+  let html = "<tr><th>Hora</th>" + DIAS.map(d => `<th>${d}</th>`).join("") + "</tr>";
+  SLOTS.forEach(slot => {
+    html += `<tr><td class="time-label">${slot}</td>` +
+      DIAS.map(dia => {
+        const key = `${dia}|${slot}`;
+        const val = estado.disponibilidad[key];
+        return `<td><span class="slot ${val||''}" data-key="${key}"
+          onmousedown="iniciarArrastre(event,'${key}')"
+          onmouseenter="arrastrarSobre('${key}')"
+          ontouchstart="iniciarArrastre(event,'${key}')"
+        ></span></td>`;
+      }).join("") + "</tr>";
+  });
+  tbl.innerHTML = html;
+  actualizarHorasVerdes();
+}
+
+/* Clic-y-arrastre estilo when2meet: el clic inicial avanza esa franja al siguiente color
+   (sin marcar → verde → amarillo → rojo → sin marcar) y ese mismo color se "pinta" sobre
+   cualquier otra franja por la que se arrastre el mouse mientras el botón sigue presionado. */
+let arrastrando = false;
+let valorArrastre = null;
+
+function siguienteValor(actual) {
+  const orden = [undefined, "verde", "amarillo", "rojo"];
+  const idx = orden.indexOf(actual);
+  return orden[(idx + 1) % orden.length];
+}
+
+function aplicarValorSlot(key, valor) {
+  if (valor === undefined) delete estado.disponibilidad[key];
+  else estado.disponibilidad[key] = valor;
+  const el = document.querySelector('.slot[data-key="' + key + '"]');
+  if (el) el.className = "slot " + (valor || "");
+  guardarEstado();
+  actualizarHorasVerdes();
+}
+
+function iniciarArrastre(evt, key) {
+  evt.preventDefault();
+  valorArrastre = siguienteValor(estado.disponibilidad[key]);
+  aplicarValorSlot(key, valorArrastre);
+  arrastrando = true;
+}
+
+function arrastrarSobre(key) {
+  if (!arrastrando) return;
+  aplicarValorSlot(key, valorArrastre);
+}
+
+function finalizarArrastre() {
+  arrastrando = false;
+}
+document.addEventListener("mouseup", finalizarArrastre);
+document.addEventListener("touchend", finalizarArrastre);
+document.addEventListener("touchmove", function (e) {
+  if (!arrastrando) return;
+  const touch = e.touches[0];
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (el && el.classList && el.classList.contains("slot")) {
+    arrastrarSobre(el.getAttribute("data-key"));
+  }
+  e.preventDefault();
+}, { passive: false });
+
+function actualizarHorasVerdes() {
+  const total = Object.values(estado.disponibilidad).filter(v => v === "verde").length * 0.5;
+  document.getElementById("horas-verdes-total").textContent = `${total} hrs en verde esta semana`;
+}
+
+/* ============ Guardado ============ */
+function guardarEstado() {
+  estado.numCursosMax = document.getElementById("num-cursos").value;
+  estado.otroCurso = document.getElementById("otro-curso").value;
+  estado.otroDepto = document.getElementById("otro-depto").value;
+  estado.obsCursos = document.getElementById("obs-cursos").value;
+  estado.obsHorarios = document.getElementById("obs-horarios").value;
+  if (currentCU) localStorage.setItem(stateKey(currentCU), JSON.stringify(estado));
+  const status = document.getElementById("save-status");
+  status.textContent = "Borrador guardado — " + new Date().toLocaleTimeString();
+  actualizarContadoresMaterias();
+  actualizarHorasVerdes();
+}
+
+/* ============ Envío ============ */
+function enviar() {
+  guardarEstado();
+  const esTC = perfilActual.contrato === "Tiempo Completo";
+  const problemas = [];
+  if (!estado.numCursosMax) problemas.push("Indica cuántos cursos puedes impartir este semestre.");
+
+  if (esTC) {
+    const vCalc = GRUPO_CALCULO.map(slugify).filter(s => estado.materias[s] === "verde").length;
+    if (vCalc < 2) problemas.push("Marca al menos 2 cursos de cálculo (cobertura departamental) en verde.");
+    const generalSlugs = CATALOGO_COMPLETO.filter(n => !GRUPO_CALCULO.includes(n)).map(slugify);
+    const vGen = generalSlugs.filter(s => estado.materias[s] === "verde").length;
+    if (vGen < 5) problemas.push("Marca al menos 5 materias del resto del catálogo en verde.");
+  } else {
+    const v = CATALOGO_COMPLETO.map(slugify).filter(s => estado.materias[s] === "verde").length;
+    if (v < 5) problemas.push("Marca al menos 5 materias en verde.");
+  }
+
+  const banner = document.getElementById("warning-banner");
+  if (problemas.length) {
+    banner.style.display = "block";
+    banner.innerHTML = "⚠️ Antes de enviar:<br>" + problemas.map(p => "• " + p).join("<br>");
+    return;
+  }
+  banner.style.display = "none";
+  estado.estado = "enviado";
+  guardarEstado();
+  render();
+  document.getElementById("resumen-panel").scrollIntoView({ behavior: "smooth" });
+}
+
+function mostrarResumen() {
+  const payload = {
+    semestre: SEMESTRE,
+    cu: currentCU,
+    departamento: perfilActual.departamento,
+    tipo_contrato: perfilActual.contrato,
+    num_cursos_max: Number(estado.numCursosMax) || null,
+    materias: Object.entries(estado.materias).map(([materia_id, nivel]) => ({
+      materia_id,
+      nivel,
+      cobertura_departamental: GRUPO_CALCULO.map(slugify).includes(materia_id),
+    })),
+    otro_curso: estado.otroCurso || null,
+    disponibilidad: Object.entries(estado.disponibilidad).map(([key, nivel]) => {
+      const [dia, bloque] = key.split("|");
+      return { dia, bloque, nivel };
+    }),
+    horarios_solicitados_otro_depto: estado.otroDepto || null,
+    observaciones_cursos: estado.obsCursos || null,
+    observaciones_horarios: estado.obsHorarios || null,
+    estado: estado.estado,
+  };
+  document.getElementById("resumen-json").textContent = JSON.stringify(payload, null, 2);
+}
+
+document.getElementById("cu-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") intentarLogin();
+});
+</script>
+</body>
+</html>
