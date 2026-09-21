@@ -40,7 +40,9 @@
 // primera prueba.
 
 import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
-import { compare } from "npm:bcryptjs@2.4.3";
+// bcryptjs es CJS — bajo el especificador npm: de Deno no expone `compare`
+// como export nombrado, solo como método del objeto default.
+import bcrypt from "npm:bcryptjs@2.4.3";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // --- Configuración ---------------------------------------------------------
@@ -135,7 +137,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Credenciales inválidas" }), { status: 401 });
   }
 
-  const valido = await compare(password, cuenta.password_hash);
+  const valido = await bcrypt.compare(password, cuenta.password_hash);
   if (!valido) {
     return new Response(JSON.stringify({ error: "Credenciales inválidas" }), { status: 401 });
   }
