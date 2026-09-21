@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiFetch, login as apiLogin } from '../lib/api';
+import { apiFetch, login as apiLogin, profesorIdDelToken } from '../lib/api';
 
 const STORAGE_KEY = 'autoplanear_session';
 const AuthContext = createContext(null);
@@ -25,8 +25,17 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const cargarPerfil = useCallback(async (tok) => {
+    // Filtrar por id explícitamente (ver profesorIdDelToken): un Jefe de
+    // Departamento/admin puede ver más de una fila de `profesor` por RLS
+    // (el roster de su departamento/de todos), así que sin este filtro
+    // "la primera fila que regrese" podía ser la de un colega, no la propia
+    // — bug real encontrado 2026-09-21 probando con la cuenta de Jefe.
+    const miId = profesorIdDelToken(tok);
     const [perfil, deptos] = await Promise.all([
-      apiFetch('/profesor?select=id,cu,nombre,rol,departamento_id,tipo_contrato,modo_materias_elegibles', tok),
+      apiFetch(
+        `/profesor?select=id,cu,nombre,rol,departamento_id,tipo_contrato,modo_materias_elegibles&id=eq.${miId}`,
+        tok,
+      ),
       apiFetch('/departamento?select=id,nombre', tok),
     ]);
     setProfesor(perfil[0] ?? null);

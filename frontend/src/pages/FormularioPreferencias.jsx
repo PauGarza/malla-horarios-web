@@ -103,9 +103,15 @@ export default function FormularioPreferencias({ onVolver }) {
           if (!cancelado) setMaterias(catalogo);
         }
 
-        // Preferencia ya existente de este profesor para este semestre.
+        // Preferencia ya existente de este profesor para este semestre. Se
+        // filtra por profesor_id explícitamente (no solo por RLS): un Jefe
+        // de Departamento/admin llenando su PROPIO formulario también puede
+        // ver, por RLS, las preferencias de todo su departamento
+        // (departamento_preferencia_select) — sin este filtro se podía
+        // cargar por error la preferencia de un colega. Mismo bug real que
+        // en AuthContext.cargarPerfil, encontrado 2026-09-21.
         const preferencias = await apiFetch(
-          `/preferencia?select=*&semestre_id=eq.${sem.id}`,
+          `/preferencia?select=*&semestre_id=eq.${sem.id}&profesor_id=eq.${profesor.id}`,
           token,
         );
         const pref = preferencias[0];
