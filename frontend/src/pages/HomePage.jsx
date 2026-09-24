@@ -8,7 +8,7 @@ const ROL_LABELS = {
   admin: 'Administrador',
 };
 
-const ROLES_CON_PANEL_PREFERENCIAS = ['jefe_departamento', 'admin'];
+const ROLES_GESTION_DEPARTAMENTO = ['jefe_departamento', 'admin'];
 
 // Vistas "próximamente" por rol — además de Formulario de preferencias y
 // Preferencias recibidas, que se calculan aparte (dependen de tipo_contrato/
@@ -20,11 +20,16 @@ const VISTAS_PENDIENTES_POR_ROL = {
   admin: ['Panel de administración'],
 };
 
-export default function HomePage({ onAbrirFormulario, onAbrirPanelPreferencias }) {
+export default function HomePage({
+  onAbrirFormulario,
+  onAbrirPanelPreferencias,
+  onAbrirConfigCuestionario,
+  onAbrirCatalogoMaterias,
+}) {
   const { profesor, nombreDepartamento, logout } = useAuth();
 
   const daClases = Boolean(profesor.tipo_contrato);
-  const vePanelPreferencias = ROLES_CON_PANEL_PREFERENCIAS.includes(profesor.rol);
+  const gestionaDepartamento = ROLES_GESTION_DEPARTAMENTO.includes(profesor.rol);
   const pendientes = VISTAS_PENDIENTES_POR_ROL[profesor.rol] ?? [];
 
   return (
@@ -52,7 +57,24 @@ export default function HomePage({ onAbrirFormulario, onAbrirPanelPreferencias }
             </button>
           )}
 
-          {vePanelPreferencias && (
+          {gestionaDepartamento && (
+            <button className="opcion-card opcion-activa" onClick={onAbrirCatalogoMaterias}>
+              <strong>Catálogo de materias</strong>
+              <span>
+                Los datos oficiales de las materias de tu departamento: clave, nombre, créditos y
+                si siguen activas.
+              </span>
+            </button>
+          )}
+
+          {gestionaDepartamento && (
+            <button className="opcion-card opcion-activa" onClick={onAbrirConfigCuestionario}>
+              <strong>Configurar el cuestionario</strong>
+              <span>Qué materias ve cada profesor este semestre, y las excepciones por persona.</span>
+            </button>
+          )}
+
+          {gestionaDepartamento && (
             <button className="opcion-card opcion-activa" onClick={onAbrirPanelPreferencias}>
               <strong>Preferencias recibidas</strong>
               <span>
@@ -69,12 +91,17 @@ export default function HomePage({ onAbrirFormulario, onAbrirPanelPreferencias }
             </div>
           ))}
 
-          {!daClases && !vePanelPreferencias && pendientes.length === 0 && (
+          {!daClases && !gestionaDepartamento && pendientes.length === 0 && (
             <p className="home-vacio">
               Tu cuenta no tiene ninguna vista disponible todavía.
             </p>
           )}
         </div>
+
+        <p className="home-contacto">
+          ¿Dudas o comentarios? Escríbeme a{' '}
+          <a href="mailto:paulina.garza@itam.mx">paulina.garza@itam.mx</a>
+        </p>
       </main>
     </div>
   );

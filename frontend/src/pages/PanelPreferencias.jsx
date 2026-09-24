@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../lib/api';
+import { etiquetaSemestre } from '../lib/semestre';
 
 const ESTADO_LABELS = {
   no_iniciado: 'No ha iniciado',
@@ -12,12 +13,13 @@ const ESTADO_LABELS = {
 // §2): quién respondió, quién falta, antes de correr la asignación. No es el
 // panel grande de Jefe de Departamento de RF14 (grupos/asignación/histórico
 // de match) — eso sigue sin construir, ver HomePage.
-export default function PanelPreferencias({ onVolver }) {
+export default function PanelPreferencias({ onVolver, onVerFormulario }) {
   const { token, profesor, nombreDepartamento } = useAuth();
   const esAdmin = profesor.rol === 'admin';
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [semestre, setSemestre] = useState(null);
   const [filas, setFilas] = useState([]);
   const [reabriendoId, setReabriendoId] = useState(null);
 
@@ -27,11 +29,19 @@ export default function PanelPreferencias({ onVolver }) {
     async function cargar() {
       try {
         const [semestres, profesores] = await Promise.all([
-          apiFetch('/semestre?select=id,etiqueta&order=id.desc&limit=1', token),
-          apiFetch('/profesor?select=id,nombre,departamento_id&tipo_contrato=not.is.null&order=nombre.asc', token),
+          apiFetch('/semestre?select=id,tipo,anio,etiqueta&order=id.desc&limit=1', token),
+          // activo=true deja fuera las cuentas de prueba y a quien ya se jubiló:
+          // el panel es "quién falta por contestar", y esa gente no cuenta.
+          // Las columnas extra son las que necesita el formulario en solo
+          // lectura, para no tener que volver a consultar al profesor.
+          apiFetch(
+            '/profesor?select=id,nombre,departamento_id,tipo_contrato,modo_materias_elegibles,estado_especial&tipo_contrato=not.is.null&activo=eq.true&order=nombre.asc',
+            token,
+          ),
         ]);
         const sem = semestres[0];
         if (!sem) throw new Error('No hay ningún semestre configurado todavía.');
+        if (!cancelado) setSemestre(sem);
 
         const preferencias = await apiFetch(
           `/preferencia?select=id,profesor_id,estado,enviado_at&semestre_id=eq.${sem.id}`,
@@ -47,6 +57,16 @@ export default function PanelPreferencias({ onVolver }) {
                 profesorId: p.id,
                 nombre: p.nombre,
                 departamentoId: p.departamento_id,
+                estadoEspecial: p.estado_especial,
+                // El formulario en solo lectura se arma alrededor de este
+                // objeto, así que lleva justo lo que ese componente lee.
+                profesor: {
+                  id: p.id,
+                  nombre: p.nombre,
+                  departamento_id: p.departamento_id,
+                  tipo_contrato: p.tipo_contrato,
+                  modo_materias_elegibles: p.modo_materias_elegibles,
+                },
                 preferenciaId: pref?.id ?? null,
                 estado: pref?.estado ?? 'no_iniciado',
               };
@@ -95,7 +115,10 @@ export default function PanelPreferencias({ onVolver }) {
         <div className="formulario-header-datos">
           <div>
             <strong>Preferencias recibidas</strong>
-            <span>{esAdmin ? 'Todos los departamentos' : nombreDepartamento(profesor.departamento_id)}</span>
+            <span>
+              {esAdmin ? 'Todos los departamentos' : nombreDepartamento(profesor.departamento_id)} ·{' '}
+              {etiquetaSemestre(semestre)}
+            </span>
           </div>
         </div>
       </header>
@@ -115,12 +138,20 @@ export default function PanelPreferencias({ onVolver }) {
           <tbody>
             {filas.map((f) => (
               <tr key={f.profesorId}>
-                <td>{f.nombre}</td>
+                <td>
+                  {f.nombre}
+                  {f.estadoEspecial && <span className="materia-alias"> · {f.estadoEspecial}</span>}
+                </td>
                 {esAdmin && <td>{nombreDepartamento(f.departamentoId) ?? '—'}</td>}
                 <td>
                   <span className={`badge badge-${f.estado}`}>{ESTADO_LABELS[f.estado]}</span>
                 </td>
-                <td>
+                <td className="panel-acciones">
+                  {f.estado !== 'no_iniciado' && (
+                    <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor)}>
+                      Ver formulario
+                    </button>
+                  )}
                   {f.estado === 'enviado' && (
                     <button
                       className="btn-secondary"
