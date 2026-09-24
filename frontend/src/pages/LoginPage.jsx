@@ -53,9 +53,12 @@ export default function LoginPage() {
           {enviando ? 'Entrando…' : 'Entrar'}
         </button>
 
+        {/* El CU del ejemplo es inventado a propósito: como la contraseña
+            inicial ES el CU, poner aquí el de una persona real sería publicar
+            sus credenciales en el código fuente de un repo público. */}
         <p className="login-hint">
           Tu usuario y tu contraseña inicial son tu Clave Única, <strong>sin ceros a la izquierda</strong> —
-          si tu CU real es <code>000188456</code>, aquí escribe <code>188456</code>.
+          si tu CU real es <code>000123456</code>, aquí escribe <code>123456</code>.
         </p>
       </form>
     </div>
