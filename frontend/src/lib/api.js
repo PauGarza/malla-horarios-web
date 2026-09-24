@@ -65,6 +65,13 @@ export async function apiFetch(path, token, options = {}) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(body.message || `Error ${res.status} llamando a ${path}`, res.status);
   }
-  if (res.status === 204) return null;
-  return res.json();
+  // PostgREST no siempre devuelve cuerpo: un DELETE/PATCH responde 204, pero un
+  // POST sin `Prefer: return=representation` responde 201 y el cuerpo VACÍO.
+  // Hacer res.json() sobre eso truena con "Unexpected end of JSON input", que
+  // no se parece en nada al problema real — pasó con el botón de lista
+  // personalizada y afectaba por igual a guardar el cuestionario de un
+  // profesor. Por eso se mira el cuerpo, no el código de estado.
+  const texto = await res.text();
+  if (!texto) return null;
+  return JSON.parse(texto);
 }
