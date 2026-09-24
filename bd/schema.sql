@@ -24,7 +24,15 @@
 -- Tipos (enums)
 -- -----------------------------------------------------------------------------
 
-CREATE TYPE tipo_contrato_enum AS ENUM ('tiempo_completo', 'asignatura');
+-- 'medio_tiempo' se agregó 2026-09-24 al cargar el concentrado real de un
+-- departamento: maneja "1/2 tiempo" como categoría propia, no como un caso de
+-- asignatura. Queda pendiente definir cómo le aplican RN03 (tope de 10
+-- hrs/semana, hoy escrito para asignatura) y RN04.
+-- Va al final y no en orden lógico a propósito: en la base ya existente entró
+-- con ALTER TYPE ... ADD VALUE, que lo pone al final, y el orden del enum es el
+-- que usa cualquier ORDER BY sobre la columna. Correr este archivo desde cero
+-- tiene que producir exactamente la misma base.
+CREATE TYPE tipo_contrato_enum AS ENUM ('tiempo_completo', 'asignatura', 'medio_tiempo');
 
 CREATE TYPE modo_materias_enum AS ENUM ('todas', 'personalizada', 'ninguna');
 
@@ -61,6 +69,7 @@ CREATE TABLE profesor (
     tipo_contrato           tipo_contrato_enum NULL,
     modo_materias_elegibles modo_materias_enum NOT NULL DEFAULT 'todas',
     password_predeterminada boolean NOT NULL DEFAULT true,
+    estado_especial         text NULL,
     activo                  boolean NOT NULL DEFAULT true,
     CHECK (rol IN ('admin', 'servicios_escolares', 'nomina') OR (departamento_id IS NOT NULL AND tipo_contrato IS NOT NULL))
 );
@@ -71,6 +80,7 @@ COMMENT ON COLUMN profesor.departamento_id IS 'NULL solo permitido para rol admi
 COMMENT ON COLUMN profesor.password_hash IS 'Hash (bcrypt) manejado por la aplicación, no por un proveedor de autenticación externo — decisión explícita 2026-09-21 para no acoplar las credenciales al proveedor de base de datos si el proyecto migra de infraestructura en el futuro. Nunca texto plano. Se inicializa como hash(cu). Ver rls-policies.sql para cómo se autentican las peticiones.';
 COMMENT ON COLUMN profesor.password_predeterminada IS 'true = sigue usando la contraseña por defecto (= cu), nunca la cambió. No bloquea nada (cambiarla es opcional, no un requisito), solo permite que la vista de admin/Jefe de Departamento identifique quién no la ha cambiado.';
 COMMENT ON COLUMN profesor.modo_materias_elegibles IS 'todas = ve el catálogo completo de su depto; personalizada = ver profesor_materia_elegible; ninguna = no puede elegir materias este semestre. Solo aplica a quien realmente da clases.';
+COMMENT ON COLUMN profesor.estado_especial IS 'Sabático/licencia/jubilación — motivo por el que no se le debe asignar carga este semestre, aunque siga siendo parte del departamento. NULL = sin novedad. Se separa de `activo` a propósito: `activo` es si la cuenta sirve para entrar al sistema, esto es la situación laboral. Agregada 2026-09-24 al cargar el concentrado real de un departamento, donde 5 de 45 traían este dato.';
 
 CREATE TABLE plan_estudio (
     id      serial PRIMARY KEY,
@@ -170,6 +180,28 @@ CREATE TABLE departamento_semestre_config (
 COMMENT ON TABLE departamento_semestre_config IS 'Configuración por departamento y semestre, editable por admin/Jefe de Departamento. No existía como tabla hasta 2026-09-21.';
 COMMENT ON COLUMN departamento_semestre_config.mostrar_seleccion_materias IS 'false = el cuestionario de ese departamento ese semestre NO muestra selección de materias en absoluto — el profesor solo declara disponibilidad de horario (preferencia_materia queda vacío, disponibilidad se sigue capturando igual).';
 COMMENT ON COLUMN departamento_semestre_config.horas_minimas_verde IS 'Resuelve D18 de GUIA-DECISIONES.md con un valor por defecto (10), configurable por Jefe de Departamento — no hay un valor único institucional, cada departamento puede ajustarlo.';
+
+CREATE TYPE seccion_cuestionario_enum AS ENUM ('cobertura_departamental', 'catalogo_general', 'oculta');
+
+CREATE TABLE materia_cuestionario (
+    materia_id   int NOT NULL REFERENCES materia(id) ON DELETE CASCADE,
+    semestre_id  int NOT NULL REFERENCES semestre(id) ON DELETE CASCADE,
+    seccion      seccion_cuestionario_enum NOT NULL DEFAULT 'catalogo_general',
+    alias_de_id  int NULL REFERENCES materia(id),
+    etiqueta     text NULL,
+    orden        int NULL,
+    revisado     boolean NOT NULL DEFAULT false,
+    PRIMARY KEY (materia_id, semestre_id),
+    CHECK (alias_de_id IS NULL OR alias_de_id <> materia_id),
+    CHECK (alias_de_id IS NULL OR seccion = 'oculta')
+);
+CREATE INDEX idx_materia_cuestionario_semestre ON materia_cuestionario (semestre_id);
+
+COMMENT ON TABLE materia_cuestionario IS 'Qué materias aparecen en el cuestionario de preferencias ese semestre y en qué sección. Mismo grano que estimacion_demanda pero independiente de ella a propósito (2026-09-24): el catálogo del cuestionario lo decide el Jefe de Departamento, no la existencia de una estimación de demanda de Servicios Escolares. Antes de esta tabla el formulario filtraba por estimacion_demanda y, con esa tabla vacía, ningún profesor veía ninguna materia.';
+COMMENT ON COLUMN materia_cuestionario.seccion IS 'cobertura_departamental = el bloque de arriba del cuestionario (mínimo 2 en verde, solo lo ven tiempo completo y medio tiempo); catalogo_general = el resto (mínimo 5 en verde); oculta = no aparece. Una materia SIN fila en esta tabla se trata como catalogo_general (fail-open, igual que la ausencia de departamento_semestre_config): es preferible que sobre una materia a que el profesor se quede sin catálogo.';
+COMMENT ON COLUMN materia_cuestionario.alias_de_id IS 'Esta materia es el nombre viejo de alias_de_id y se muestra como "(antes ...)" en la fila de aquella, en vez de como una fila propia. Se cura a mano: NO se deriva de materia_co_oferta, que significa otra cosa (misma clase impartida en el mismo horario, no materia renombrada) y cuya componente conexa mayor, con datos reales, tuvo 13 materias incluidas las 5 de cobertura departamental — derivarlo de ahí las fusionaría todas y borraría la sección.';
+COMMENT ON COLUMN materia_cuestionario.etiqueta IS 'Nombre a mostrar cuando materia.nombre no sirve tal cual: typos del reporte oficial de Servicios Escolares, o falta la aclaración de carrera. NULL = usar materia.nombre. El sufijo "(antes X)" NO se escribe aquí, se calcula de alias_de_id. materia.nombre no se corrige a propósito: debe seguir cotejando contra el reporte original.';
+COMMENT ON COLUMN materia_cuestionario.revisado IS 'false = la fila la puso un seed automático y el Jefe de Departamento todavía no la confirma. La vista de configuración las ordena primero para que las resuelva. Copiar la config de un semestre a otro lo resetea a false: copiar no es confirmar.';
 
 CREATE TABLE estimacion_demanda (
     id                      serial PRIMARY KEY,
