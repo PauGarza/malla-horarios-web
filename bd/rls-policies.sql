@@ -89,6 +89,7 @@ ALTER TABLE salon_disponibilidad_departamento ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profesor_materia_elegible ENABLE ROW LEVEL SECURITY;
 ALTER TABLE estimacion_demanda ENABLE ROW LEVEL SECURITY;
 ALTER TABLE departamento_semestre_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE materia_cuestionario ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY catalogo_lectura_autenticados ON departamento
     FOR SELECT TO authenticated USING (true);
@@ -115,6 +116,8 @@ CREATE POLICY catalogo_lectura_autenticados ON salon
 CREATE POLICY catalogo_lectura_autenticados ON salon_disponibilidad_departamento
     FOR SELECT TO authenticated USING (true);
 CREATE POLICY catalogo_lectura_autenticados ON departamento_semestre_config
+    FOR SELECT TO authenticated USING (true);
+CREATE POLICY catalogo_lectura_autenticados ON materia_cuestionario
     FOR SELECT TO authenticated USING (true);
 
 -- profesor_materia_elegible: un profesor solo necesita ver SU propia lista
@@ -174,7 +177,7 @@ COMMENT ON POLICY roster_departamento_select ON profesor IS
 -- (nunca expuesto al navegador) la lee, para la función de login.
 REVOKE ALL ON profesor FROM authenticated;
 GRANT SELECT (id, cu, nombre, rol, departamento_id, tipo_contrato, modo_materias_elegibles,
-              password_predeterminada, activo) ON profesor TO authenticated;
+              password_predeterminada, estado_especial, activo) ON profesor TO authenticated;
 GRANT UPDATE (nombre) ON profesor TO authenticated; -- ampliar aquí si se habilitan más campos autoeditables
 
 CREATE POLICY propio_perfil_update ON profesor
@@ -257,7 +260,60 @@ CREATE POLICY propia_preferencia_update ON preferencia
     USING (profesor_id = app_profesor_id() AND estado = 'borrador')
     WITH CHECK (profesor_id = app_profesor_id());
 COMMENT ON POLICY propia_preferencia_update ON preferencia IS
-    'USING exige estado = borrador: una vez en enviado, el profesor ya no puede editar por su cuenta. Reabrirla es tarea de Jefe de Departamento — falta su política de UPDATE (pendiente, no bloquea recolectar preferencias).';
+    'USING exige estado = borrador: una vez en enviado, el profesor ya no puede editar por su cuenta. Reabrirla es tarea de Jefe de Departamento — ver jefe_preferencia_reapertura abajo.';
+
+-- Reapertura: el profesor no puede sacar su propia preferencia de 'enviado'
+-- (la política de arriba se lo impide), así que el Jefe de Departamento necesita
+-- su propio UPDATE para devolvérsela a 'borrador'.
+--
+-- El DROP de aquí arriba no es decorativo: Postgres no tiene
+-- CREATE POLICY IF NOT EXISTS, y sin él este archivo deja de ser re-ejecutable.
+-- Esta política y su trigger se habían aplicado solo en vivo sobre la base y no
+-- estaban en ningún .sql (detectado 2026-09-24 comparando contra pg_policies) —
+-- o sea que correr este archivo desde cero habría dejado sin funcionar el botón
+-- "Activar formulario de nuevo" de PanelPreferencias.
+DROP POLICY IF EXISTS jefe_preferencia_reapertura ON preferencia;
+CREATE POLICY jefe_preferencia_reapertura ON preferencia
+    FOR UPDATE TO authenticated
+    USING (
+        app_rol() = 'admin'
+        OR (app_rol() = 'jefe_departamento' AND profesor_id IN (
+            SELECT id FROM profesor WHERE departamento_id = app_departamento_id()
+        ))
+    )
+    WITH CHECK (
+        app_rol() = 'admin'
+        OR (app_rol() = 'jefe_departamento' AND profesor_id IN (
+            SELECT id FROM profesor WHERE departamento_id = app_departamento_id()
+        ))
+    );
+COMMENT ON POLICY jefe_preferencia_reapertura ON preferencia IS
+    'Deja a Jefe de Departamento/admin hacer UPDATE sobre la preferencia de un profesor de su departamento. La política sola sería demasiado amplia (permitiría editarle las respuestas), por eso va siempre acompañada del trigger trg_limitar_reapertura_jefe, que restringe el UPDATE a estado/enviado_at cuando quien lo hace no es el dueño.';
+
+CREATE OR REPLACE FUNCTION fn_limitar_reapertura_jefe()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+BEGIN
+    IF app_profesor_id() IS DISTINCT FROM NEW.profesor_id THEN
+        IF NEW.num_cursos_max IS DISTINCT FROM OLD.num_cursos_max
+           OR NEW.otro_curso IS DISTINCT FROM OLD.otro_curso
+           OR NEW.horarios_otro_depto IS DISTINCT FROM OLD.horarios_otro_depto
+           OR NEW.observaciones_cursos IS DISTINCT FROM OLD.observaciones_cursos
+           OR NEW.observaciones_horarios IS DISTINCT FROM OLD.observaciones_horarios
+        THEN
+            RAISE EXCEPTION 'Jefe de Departamento/admin solo puede reabrir (cambiar estado/enviado_at), no editar el contenido de la preferencia de otro profesor';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_limitar_reapertura_jefe ON preferencia;
+CREATE TRIGGER trg_limitar_reapertura_jefe
+    BEFORE UPDATE ON preferencia
+    FOR EACH ROW EXECUTE FUNCTION fn_limitar_reapertura_jefe();
 
 CREATE POLICY propia_preferencia_materia ON preferencia_materia
     FOR ALL TO authenticated
@@ -332,6 +388,44 @@ CREATE POLICY estimacion_demanda_departamento ON estimacion_demanda
     );
 COMMENT ON POLICY estimacion_demanda_departamento ON estimacion_demanda IS
     'Jefe de Departamento/admin ven y editan TODAS las filas de su alcance (incluidas Sug = 0 y las ocultas) — esta política es la ruta de carga del catálogo semestral (§10.3 de diseno-bd.md): un Jefe autenticado normal, con su mismo login, puede pegar la tabla del PDF de demanda y hacer upsert directo, sin secreto compartido ni herramienta aparte.';
+
+CREATE POLICY materia_co_oferta_escritura ON materia_co_oferta
+    FOR ALL TO authenticated
+    USING (
+        app_rol() = 'admin'
+        OR (app_rol() = 'jefe_departamento' AND materia_id IN (
+            SELECT id FROM materia
+            WHERE departamento_id = app_departamento_id()
+        ))
+    )
+    WITH CHECK (
+        app_rol() = 'admin'
+        OR (app_rol() = 'jefe_departamento' AND materia_id IN (
+            SELECT id FROM materia
+            WHERE departamento_id = app_departamento_id()
+        ))
+    );
+COMMENT ON POLICY materia_co_oferta_escritura ON materia_co_oferta IS
+    'Jefe de Departamento/admin declaran qué claves son la misma clase, desde la vista de catálogo. Se condiciona solo sobre materia_id (el "dueño" de la fila) y no sobre co_ofertada_id: la relación se guarda en las dos direcciones, así que exigir que ambas materias sean del mismo departamento haría imposible registrar un par que cruza departamentos (existe uno real: MAT-22600 con ACT-11310). Con esta regla cada Jefe escribe su propia dirección del par y ninguno puede alterar cómo se ve la materia del otro.';
+
+CREATE POLICY materia_cuestionario_escritura ON materia_cuestionario
+    FOR ALL TO authenticated
+    USING (
+        app_rol() = 'admin'
+        OR (app_rol() = 'jefe_departamento' AND materia_id IN (
+            SELECT id FROM materia
+            WHERE departamento_id = app_departamento_id()
+        ))
+    )
+    WITH CHECK (
+        app_rol() = 'admin'
+        OR (app_rol() = 'jefe_departamento' AND materia_id IN (
+            SELECT id FROM materia
+            WHERE departamento_id = app_departamento_id()
+        ))
+    );
+COMMENT ON POLICY materia_cuestionario_escritura ON materia_cuestionario IS
+    'Jefe de Departamento/admin arman el cuestionario de su departamento (qué materias aparecen y en qué sección). La lectura la cubre catalogo_lectura_autenticados, abierta a cualquier autenticado a propósito: qué materias están ocultas no es información sensible, y filtrarlo en RLS obligaría a una segunda política para que el propio Jefe pudiera ver justo las ocultas que necesita administrar. El filtro de "oculta" vive en el frontend.';
 
 CREATE POLICY departamento_config_escritura ON departamento_semestre_config
     FOR ALL TO authenticated

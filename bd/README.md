@@ -17,5 +17,19 @@ para quien construya el motor de asignación (profesores–horarios–salones).
 
 ## Estado
 
-Ninguno de los `.sql` se ha corrido todavía contra un proyecto real. El backend de autenticación
-(`../backend/`) tampoco se ha desplegado ni probado.
+Los `.sql` ya corrieron contra la base real y el backend de autenticación (`../backend/`) está
+desplegado y en uso. A partir de 2026-09-24 hay datos reales cargados: un departamento completo
+(catálogo de materias, co-ofertas y roster de profesores) y el cuestionario de preferencias
+configurado para el siguiente semestre.
+
+## Esta es una copia
+
+El original de estos archivos vive fuera de este repo, junto con los `.sql` de datos reales
+(nombres y claves únicas de profesores) que **a propósito no se publican aquí**. Esta copia se
+mantiene para que el equipo pueda leer el diseño y levantar una base propia sin acceso a la
+instancia real.
+
+Si cambias el esquema, hazlo en el original y vuelve a sincronizar aquí — no al revés. Mantener
+dos copias con la misma autoridad ya causó un problema real: la política `jefe_preferencia_reapertura`
+y su trigger existían solo en la base en vivo y no en ningún `.sql`, así que levantar la base desde
+cero dejaba sin funcionar el botón de reabrir formularios. Se detectó y versionó el 2026-09-24.
