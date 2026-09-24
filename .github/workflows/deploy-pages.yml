@@ -1,0 +1,86 @@
+# Despliega frontend/ a GitHub Pages.
+#
+# Por qué CI y no commitear el build: dist/ está en .gitignore y se queda ahí.
+# Comitear artefactos generados obliga a acordarse de reconstruirlos antes de
+# cada push y hace que el repo y lo publicado se desincronicen en silencio.
+#
+# Requisito de una sola vez, que este archivo no puede hacer por sí mismo:
+# en Settings > Pages del repo, poner Source = "GitHub Actions" (NO "Deploy
+# from a branch"). Sin eso el job de deploy falla con un error de Pages no
+# habilitado.
+#
+# Las variables de entorno del build NO están aquí: viven en
+# frontend/.env.production, commiteado, porque son públicas por diseño (la
+# explicación completa está en ese archivo).
+
+name: Desplegar a GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    # Solo cuando cambia el frontend: tocar bd/ o documentación no cambia nada
+    # de lo publicado, y rebuildear por eso solo gastaría minutos de CI.
+    # El propio workflow se incluye para poder probar cambios a este archivo.
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-pages.yml'
+  # Permite redesplegar a mano desde la pestaña Actions sin hacer un commit
+  # vacío — útil para volver a publicar tal cual después de habilitar Pages.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  # Necesario para el despliegue: deploy-pages se autentica ante Pages con un
+  # token OIDC de corta duración, no con un secret guardado en el repo.
+  id-token: write
+
+# Si se hacen dos pushes seguidos, que el segundo espere en vez de pelearse por
+# el despliegue. Sin cancel-in-progress a propósito: cancelar a la mitad puede
+# dejar Pages en un estado raro, y el build tarda poco.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Misma versión mayor que la de desarrollo local (v22.16.0), para que
+          # un build que pasa en la laptop no truene aquí por la versión.
+          node-version: '22'
+          cache: npm
+          # setup-node resuelve esta ruta desde la raíz del repo, no desde
+          # `working-directory` — de ahí el prefijo frontend/.
+          cache-dependency-path: frontend/package-lock.json
+
+      # ci en vez de install: respeta package-lock.json exactamente, así que el
+      # build de producción usa las mismas versiones ya probadas en local.
+      - run: npm ci
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # Esta ruta sí es desde la raíz del repo (working-directory solo
+          # aplica a los pasos `run`, no a las acciones).
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
