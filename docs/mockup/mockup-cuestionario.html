@@ -331,11 +331,11 @@
   <div id="login-screen">
     <h2>Iniciar sesión</h2>
     <p>Ingresa tu Clave Única (CU) para entrar al cuestionario de preferencias del semestre.</p>
-    <input type="text" id="cu-input" placeholder="CU, ej. 188456" maxlength="10" />
+    <input type="text" id="cu-input" placeholder="CU, ej. 123456" maxlength="10" />
     <div><button onclick="intentarLogin()">Entrar</button></div>
     <div id="login-error"></div>
     <div class="demo-hint">
-      Roster de prueba cargado para esta demo: <strong>188456</strong> (Pau Garza — Matemáticas). Usa esa
+      Roster de prueba cargado para esta demo: <strong>123456</strong> (Ana Ejemplo — Matemáticas). Usa esa
       CU para entrar. Una vez adentro hay un control de demo para alternar entre Tiempo Completo y
       Asignatura sin tener que dar de alta más cuentas.
     </div>
@@ -466,7 +466,7 @@
 <script>
 /* ============ Roster de demo ============ */
 const ROSTER = {
-  "188456": { nombre: "Pau Garza", departamento: "Matemáticas", contrato: "Tiempo Completo" },
+  "123456": { nombre: "Ana Ejemplo", departamento: "Matemáticas", contrato: "Tiempo Completo" },
 };
 
 /* ============ Catálogo de materias (tal cual los Google Forms actuales) ============ */
