@@ -1,9 +1,18 @@
 /* Paleta reusada del mockup ya validado con los Jefes de Departamento
    (docs/mockup/mockup-cuestionario.html), para que la app real se sienta
-   igual que lo que ya vieron. */
+   igual que lo que ya vieron — salvo el color institucional, que pasó del
+   azul marino del mockup al verde ITAM el 2026-09-24.
+
+   Ojo al tocar esto: --itam y --verde son dos verdes con trabajos distintos.
+   --itam es el color del sistema (encabezados, botones, ligas) y --verde es
+   semántico: "sí puedo / sí estoy disponible" en las materias y la rejilla.
+   Si se acercan demasiado entre sí, un botón deja de leerse como botón y
+   empieza a leerse como una respuesta en verde. Entre ellos hay apenas 1.6:1
+   de contraste, así que nunca uses uno para marcar algo sobre el otro — por
+   eso el anillo de foco de la rejilla va en casi-negro. */
 :root {
-  --navy: #163a5f;
-  --navy-dark: #0e2740;
+  --itam: #016853;
+  --itam-dark: #014e3e;
   --gray-bg: #f4f6f8;
   --gray-border: #d7dde3;
   --gray-text: #55606b;
@@ -47,6 +56,18 @@ input {
   width: 100%;
 }
 
+/* La regla de arriba está pensada para campos de texto, pero `input` la aplica
+   también a las casillas: una casilla con width:100% y padding se estira y, si
+   está dentro de un flex, cada fila la encoge distinto según lo largo que sea
+   el texto de al lado — así se veían escalonadas las listas de materias. */
+input[type='checkbox'],
+input[type='radio'] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  flex: none;
+}
+
 textarea {
   min-height: 70px;
   resize: vertical;
@@ -63,23 +84,23 @@ textarea {
 }
 
 .btn-primary {
-  background: var(--navy);
+  background: var(--itam);
   color: white;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--navy-dark);
+  background: var(--itam-dark);
 }
 
 .btn-secondary {
   background: white;
   border-color: var(--gray-border);
-  color: var(--navy);
+  color: var(--itam);
 }
 
 .btn-link {
   background: none;
   border: none;
-  color: var(--navy);
+  color: var(--itam);
   padding: 0;
   text-decoration: underline;
 }
@@ -108,7 +129,7 @@ textarea {
 
 .login-card h1 {
   margin: 0;
-  color: var(--navy);
+  color: var(--itam);
 }
 
 .login-subtitle {
@@ -149,7 +170,7 @@ textarea {
 /* --- Home ------------------------------------------------------------ */
 
 .home-header {
-  background: var(--navy);
+  background: var(--itam);
   color: white;
   padding: 20px 24px;
   display: flex;
@@ -195,13 +216,13 @@ textarea {
 
 .opcion-activa {
   background: white;
-  border-color: var(--navy);
+  border-color: var(--itam);
 }
 .opcion-activa:hover {
   background: var(--gray-bg);
 }
 .opcion-activa strong {
-  color: var(--navy);
+  color: var(--itam);
 }
 
 .opcion-pendiente {
@@ -211,6 +232,18 @@ textarea {
 
 .home-vacio {
   color: var(--gray-text);
+}
+
+.home-contacto {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-border);
+  color: var(--gray-text);
+  font-size: 13px;
+}
+.home-contacto a {
+  color: var(--itam);
+  font-weight: 600;
 }
 
 /* --- Formulario -------------------------------------------------------- */
@@ -364,16 +397,296 @@ textarea {
   flex-direction: column;
 }
 
-.materia-info strong {
-  font-size: 14px;
+/* El nombre manda y la clave es la referencia: el profesor reconoce la materia
+   por cómo se llama, no por MAT-12201. */
+.materia-nombre {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
 }
-.materia-info span {
-  font-size: 13px;
+.materia-clave {
+  font-size: 11px;
   color: var(--gray-text);
+  letter-spacing: 0.04em;
 }
+
 .materia-sin-demanda {
   font-size: 11px;
   color: var(--amarillo);
+}
+.materia-alias {
+  font-size: 11px;
+  color: var(--gray-text);
+  font-style: italic;
+}
+
+.pestanas {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--gray-border);
+  margin-bottom: 4px;
+}
+.pestana {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--gray-text);
+  cursor: pointer;
+}
+.pestana.activa {
+  color: var(--itam);
+  border-bottom-color: var(--itam);
+  font-weight: 600;
+}
+
+.aviso-revision {
+  border-left: 3px solid var(--amarillo);
+  background: var(--amarillo-bg);
+}
+
+.fila-por-revisar td {
+  background: var(--amarillo-bg);
+}
+
+.input-inline {
+  width: 100%;
+  min-width: 220px;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.celda-vacia {
+  color: var(--gray-border);
+}
+
+.tabla-catalogo td {
+  padding: 6px 8px;
+  vertical-align: middle;
+}
+.input-clave {
+  min-width: 110px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.input-num {
+  min-width: 70px;
+  width: 70px;
+}
+
+/* Marca las filas tocadas: con ~50 materias en pantalla y guardado por botón,
+   sin esto no hay forma de saber qué se cambió antes de guardar. */
+.fila-editada td {
+  background: var(--amarillo-bg);
+}
+.fila-nueva td {
+  background: var(--verde-bg);
+}
+
+.celda-equivalentes {
+  min-width: 210px;
+  max-width: 260px;
+}
+.equiv-celda {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.equiv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.equiv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 999px;
+  padding: 2px 4px 2px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.equiv-chip button {
+  border: 0;
+  background: none;
+  color: var(--gray-text);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.equiv-chip button:hover {
+  color: var(--rojo);
+}
+.equiv-abrir {
+  font-size: 12px;
+  padding: 0 4px;
+  text-decoration: none;
+}
+
+.barra-filtros {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.nota-pie {
+  padding: 0 4px 12px;
+}
+
+.barra-guardar {
+  position: sticky;
+  bottom: 0;
+  background: var(--gray-bg);
+  border-top: 1px solid var(--gray-border);
+  align-items: center;
+  gap: 12px;
+}
+.barra-guardar .formulario-nota {
+  margin-right: auto;
+}
+
+.check-linea {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.editor-profesor {
+  padding: 12px;
+  background: var(--gray-bg);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Lista de materias elegibles: rejilla de 4 columnas fijas en vez de flex, para
+   que casilla, clave y nombre queden alineados en columna de una fila a otra.
+   Con flex, cada fila repartía el ancho según lo largo que fuera el nombre y
+   las casillas quedaban escalonadas. */
+.elegibles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.elegibles-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.elegibles-acciones {
+  display: flex;
+  gap: 12px;
+}
+.elegibles-acciones .btn-link {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.aviso-compacto {
+  margin: 0;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.elegibles-lista {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  /* 43 materias dentro de una fila de tabla empujarían todo lo demás fuera de
+     la pantalla; se scrollea aquí adentro. */
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+.elegible-fila {
+  display: grid;
+  grid-template-columns: 16px 88px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  border-bottom: 1px solid var(--gray-bg);
+  cursor: pointer;
+}
+.elegible-fila:last-child {
+  border-bottom: 0;
+}
+.elegible-fila:hover {
+  background: var(--gray-bg);
+}
+
+.elegible-clave {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--gray-text);
+  white-space: nowrap;
+}
+.elegible-nombre {
+  min-width: 0;
+}
+.etiqueta-cobertura {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--itam);
+  background: var(--verde-bg);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.panel-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.materias-bloque {
+  margin-top: 18px;
+}
+.materias-bloque-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.materias-bloque-encabezado h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+/* Píldora de "N en verde (mínimo X)": pasa de rojo a verde cuando se cumple,
+   para que el profesor vea si ya puede enviar sin tener que intentarlo. */
+.counter {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.counter.low {
+  background: var(--rojo-bg);
+  color: var(--rojo);
+}
+.counter.ok {
+  background: var(--verde-bg);
+  color: var(--verde);
 }
 
 .tri-toggle {
@@ -388,6 +701,17 @@ textarea {
   font-size: 12px;
   color: var(--gray-text);
 }
+/* Estado activo neutro, para los toggles que NO son verde/amarillo/rojo (las
+   secciones del cuestionario, el modo de materias por profesor). Sin esta
+   regla, "active" a secas no pintaba nada y los tres botones se veían
+   idénticos en gris — o sea, se leían como desactivados aunque sí guardaran.
+   Las reglas de color de abajo le ganan por especificidad donde aplican. */
+.tri-toggle button.active {
+  background: var(--itam);
+  border-color: var(--itam);
+  color: white;
+}
+
 .tri-toggle button.v.active {
   background: var(--verde);
   border-color: var(--verde);
@@ -440,19 +764,40 @@ textarea {
   border-collapse: collapse;
   width: 100%;
   font-size: 12px;
+  /* fixed reparte las 5 columnas de días por igual una vez que la de horas
+     tiene ancho propio */
+  table-layout: fixed;
+  /* arrastrar para pintar no debe seleccionar texto ni hacer scroll */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 .disponibilidad-grid th,
 .disponibilidad-grid td {
   border: 1px solid var(--gray-border);
-  padding: 2px;
+  /* padding 0 es lo que deja que el color llene la celda entera: con padding,
+     el slot se lee como una casilla suelta en vez de como la franja */
+  padding: 0;
   text-align: center;
+}
+
+.disponibilidad-grid th {
+  padding: 6px 4px;
+}
+
+.disponibilidad-grid th:first-child,
+.disponibilidad-grid td:first-child {
+  width: 86px;
 }
 
 .franja-hora {
   white-space: nowrap;
   color: var(--gray-text);
   font-size: 11px;
+  /* la celda ya no trae padding propio */
+  padding: 4px 6px;
+  text-align: right;
 }
 
 .fila-comida td {
@@ -464,12 +809,31 @@ textarea {
 }
 
 .slot {
-  width: 26px;
-  height: 22px;
-  border: 1px solid var(--gray-border);
-  border-radius: 3px;
+  width: 100%;
+  height: 26px;
+  display: block;
+  /* el borde lo pone el <td>, así la rejilla se ve continua */
+  border: 0;
+  border-radius: 0;
   background: white;
   padding: 0;
+  cursor: pointer;
+}
+.slot:focus-visible {
+  /* Sin borde propio, el foco por defecto puede no verse sobre el color.
+     Va en casi-negro y NO en --itam: la celda ya pintada de verde queda a
+     1.6:1 contra el verde institucional, o sea el anillo desaparecería justo
+     para quien navega con teclado. El casi-negro se mantiene arriba de 3:1
+     contra los cuatro estados (blanco, verde, amarillo, rojo). */
+  outline: 2px solid #1c2733;
+  outline-offset: -2px;
+}
+.slot:disabled {
+  /* anula el button:disabled { opacity: .6 } global: el formulario en solo
+     lectura es justo el que revisa el Jefe de Departamento, y una rejilla
+     lavada al 60% se lee mal */
+  cursor: default;
+  opacity: 1;
 }
 .slot.verde {
   background: var(--verde);
