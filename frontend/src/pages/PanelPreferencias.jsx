@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../lib/api';
+import { panel as cargarPanel, reabrirPreferencia } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
 
 const ESTADO_LABELS = {
@@ -14,12 +14,14 @@ const ESTADO_LABELS = {
 // panel grande de Jefe de Departamento de RF14 (grupos/asignación/histórico
 // de match) — eso sigue sin construir, ver HomePage.
 export default function PanelPreferencias({ onVolver, onVerFormulario }) {
-  const { token, profesor, nombreDepartamento } = useAuth();
-  const esAdmin = profesor.rol === 'admin';
+  const { token, profesor, semestre, nombreDepartamento } = useAuth();
+  // Quién ve los 3 departamentos y no solo el suyo. Se pregunta por
+  // comportamiento y no contra un rol concreto: jefe_division y admin tienen el
+  // mismo alcance por motivos distintos.
+  const veTodos = ['admin', 'jefe_division'].includes(profesor.rol);
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [semestre, setSemestre] = useState(null);
   const [filas, setFilas] = useState([]);
   const [reabriendoId, setReabriendoId] = useState(null);
 
@@ -28,51 +30,13 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
 
     async function cargar() {
       try {
-        const [semestres, profesores] = await Promise.all([
-          apiFetch('/semestre?select=id,tipo,anio,etiqueta&order=id.desc&limit=1', token),
-          // activo=true deja fuera las cuentas de prueba y a quien ya se jubiló:
-          // el panel es "quién falta por contestar", y esa gente no cuenta.
-          // Las columnas extra son las que necesita el formulario en solo
-          // lectura, para no tener que volver a consultar al profesor.
-          apiFetch(
-            '/profesor?select=id,nombre,departamento_id,tipo_contrato,modo_materias_elegibles,estado_especial&tipo_contrato=not.is.null&activo=eq.true&order=nombre.asc',
-            token,
-          ),
-        ]);
-        const sem = semestres[0];
-        if (!sem) throw new Error('No hay ningún semestre configurado todavía.');
-        if (!cancelado) setSemestre(sem);
-
-        const preferencias = await apiFetch(
-          `/preferencia?select=id,profesor_id,estado,enviado_at&semestre_id=eq.${sem.id}`,
-          token,
-        );
-        const porProfesor = new Map(preferencias.map((p) => [p.profesor_id, p]));
-
-        if (!cancelado) {
-          setFilas(
-            profesores.map((p) => {
-              const pref = porProfesor.get(p.id);
-              return {
-                profesorId: p.id,
-                nombre: p.nombre,
-                departamentoId: p.departamento_id,
-                estadoEspecial: p.estado_especial,
-                // El formulario en solo lectura se arma alrededor de este
-                // objeto, así que lleva justo lo que ese componente lee.
-                profesor: {
-                  id: p.id,
-                  nombre: p.nombre,
-                  departamento_id: p.departamento_id,
-                  tipo_contrato: p.tipo_contrato,
-                  modo_materias_elegibles: p.modo_materias_elegibles,
-                },
-                preferenciaId: pref?.id ?? null,
-                estado: pref?.estado ?? 'no_iniciado',
-              };
-            }),
-          );
-        }
+        if (!semestre) throw new Error('No hay ningún semestre configurado todavía.');
+        // Una petición: panel.php ya trae el roster unido a la preferencia de
+        // cada quien. Antes eran tres (/semestre, /profesor, /preferencia) más
+        // un Map en el cliente para juntarlas, y el filtro por departamento lo
+        // ponía RLS en vez de un WHERE.
+        const datos = await cargarPanel(token, semestre.id);
+        if (!cancelado) setFilas(datos.filas);
       } catch (err) {
         if (!cancelado) setError(err.message);
       } finally {
@@ -84,16 +48,13 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
     return () => {
       cancelado = true;
     };
-  }, [token]);
+  }, [token, semestre]);
 
   async function reabrir(fila) {
     setReabriendoId(fila.profesorId);
     setError('');
     try {
-      await apiFetch(`/preferencia?id=eq.${fila.preferenciaId}`, token, {
-        method: 'PATCH',
-        body: JSON.stringify({ estado: 'borrador', enviado_at: null }),
-      });
+      await reabrirPreferencia(token, fila.preferenciaId);
       setFilas((prev) =>
         prev.map((f) => (f.profesorId === fila.profesorId ? { ...f, estado: 'borrador' } : f)),
       );
@@ -116,7 +77,7 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
           <div>
             <strong>Preferencias recibidas</strong>
             <span>
-              {esAdmin ? 'Todos los departamentos' : nombreDepartamento(profesor.departamento_id)} ·{' '}
+              {veTodos ? 'Todos los departamentos' : nombreDepartamento(profesor.departamento_id)} ·{' '}
               {etiquetaSemestre(semestre)}
             </span>
           </div>
@@ -130,7 +91,7 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
           <thead>
             <tr>
               <th>Profesor</th>
-              {esAdmin && <th>Departamento</th>}
+              {veTodos && <th>Departamento</th>}
               <th>Estado</th>
               <th></th>
             </tr>
@@ -142,7 +103,7 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
                   {f.nombre}
                   {f.estadoEspecial && <span className="materia-alias"> · {f.estadoEspecial}</span>}
                 </td>
-                {esAdmin && <td>{nombreDepartamento(f.departamentoId) ?? '—'}</td>}
+                {veTodos && <td>{nombreDepartamento(f.departamentoId) ?? '—'}</td>}
                 <td>
                   <span className={`badge badge-${f.estado}`}>{ESTADO_LABELS[f.estado]}</span>
                 </td>
@@ -166,7 +127,7 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
             ))}
             {filas.length === 0 && (
               <tr>
-                <td colSpan={esAdmin ? 4 : 3}>No hay profesores con tipo de contrato configurado.</td>
+                <td colSpan={veTodos ? 4 : 3}>No hay profesores con tipo de contrato configurado.</td>
               </tr>
             )}
           </tbody>

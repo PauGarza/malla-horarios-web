@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 .env
+# Credenciales SFTP del servidor institucional (ver .env.deploy.example). El
+# patrón .env de arriba NO cubre este nombre, y estas credenciales sí son
+# secretas — a diferencia de las de .env.production, que se commitean a
+# propósito.
+.env.deploy
 
 # Editor directories and files
 .vscode/*

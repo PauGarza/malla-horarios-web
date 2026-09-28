@@ -2,3 +2,7 @@ graphify-out/
 _legacy/
 node_modules/
 dist/
+
+# Credenciales de MySQL y el secreto del JWT. La plantilla commiteada es
+# api/lib/config.example.php — mismo patrón que frontend/.env.deploy.
+api/lib/config.php

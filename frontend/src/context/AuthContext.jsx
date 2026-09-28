@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiFetch, login as apiLogin, profesorIdDelToken } from '../lib/api';
+import { catalogos, login as apiLogin } from '../lib/api';
 
 const STORAGE_KEY = 'autoplanear_session';
 const AuthContext = createContext(null);
@@ -22,24 +22,24 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [profesor, setProfesor] = useState(null);
   const [departamentos, setDepartamentos] = useState([]);
+  // El semestre actual y las franjas se cargan aquí y no en cada pantalla:
+  // antes tres pantallas pedían /semestre?order=id.desc&limit=1 por separado.
+  const [semestre, setSemestre] = useState(null);
+  const [franjas, setFranjas] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const cargarPerfil = useCallback(async (tok) => {
-    // Filtrar por id explícitamente (ver profesorIdDelToken): un Jefe de
-    // Departamento/admin puede ver más de una fila de `profesor` por RLS
-    // (el roster de su departamento/de todos), así que sin este filtro
-    // "la primera fila que regrese" podía ser la de un colega, no la propia
-    // — bug real encontrado 2026-09-21 probando con la cuenta de Jefe.
-    const miId = profesorIdDelToken(tok);
-    const [perfil, deptos] = await Promise.all([
-      apiFetch(
-        `/profesor?select=id,cu,nombre,rol,departamento_id,tipo_contrato,modo_materias_elegibles&id=eq.${miId}`,
-        tok,
-      ),
-      apiFetch('/departamento?select=id,nombre', tok),
-    ]);
-    setProfesor(perfil[0] ?? null);
-    setDepartamentos(deptos ?? []);
+  // Una sola petición. Antes eran dos, y la del perfil tenía que filtrar por
+  // el propio id porque RLS dejaba pasar también el roster del departamento
+  // cuando quien entraba era Jefe — sin ese filtro, "la primera fila que
+  // regrese" podía ser la de un colega (bug real del 2026-09-21). Ahora
+  // catalogos.php devuelve el perfil de quien manda el token y de nadie más,
+  // así que no hay nada que filtrar ni ningún id que leer del JWT.
+  const cargarCatalogos = useCallback(async (tok) => {
+    const datos = await catalogos(tok);
+    setProfesor(datos.perfil ?? null);
+    setDepartamentos(datos.departamentos ?? []);
+    setSemestre(datos.semestre ?? null);
+    setFranjas(datos.franjas ?? []);
   }, []);
 
   useEffect(() => {
@@ -49,13 +49,13 @@ export function AuthProvider({ children }) {
       return;
     }
     setToken(session.token);
-    cargarPerfil(session.token)
+    cargarCatalogos(session.token)
       .catch(() => {
         localStorage.removeItem(STORAGE_KEY);
         setToken(null);
       })
       .finally(() => setLoading(false));
-  }, [cargarPerfil]);
+  }, [cargarCatalogos]);
 
   const login = useCallback(
     async (cu, password) => {
@@ -67,9 +67,9 @@ export function AuthProvider({ children }) {
         // sin persistencia local sigue funcionando para esta pestaña
       }
       setToken(tok);
-      await cargarPerfil(tok);
+      await cargarCatalogos(tok);
     },
-    [cargarPerfil],
+    [cargarCatalogos],
   );
 
   const logout = useCallback(() => {
@@ -81,6 +81,8 @@ export function AuthProvider({ children }) {
     setToken(null);
     setProfesor(null);
     setDepartamentos([]);
+    setSemestre(null);
+    setFranjas([]);
   }, []);
 
   const nombreDepartamento = useCallback(
@@ -90,7 +92,17 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, profesor, departamentos, nombreDepartamento, loading, login, logout }}
+      value={{
+        token,
+        profesor,
+        departamentos,
+        semestre,
+        franjas,
+        nombreDepartamento,
+        loading,
+        login,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

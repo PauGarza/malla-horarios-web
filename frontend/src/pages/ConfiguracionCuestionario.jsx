@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../lib/api';
+import {
+  cambiarModoMaterias,
+  guardarConfigDepartamento,
+  guardarElegibles,
+  guardarFilasCuestionario,
+  leerConfiguracion,
+} from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
 
 const SECCIONES = [
@@ -20,15 +26,19 @@ const MODO_LABELS = {
 const MIN_GENERAL = 5;
 
 export default function ConfiguracionCuestionario({ onVolver }) {
-  const { token, profesor, nombreDepartamento } = useAuth();
+  const { token, profesor, semestre, nombreDepartamento } = useAuth();
   const [pestana, setPestana] = useState('departamento');
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [semestre, setSemestre] = useState(null);
   const [materias, setMaterias] = useState([]);
   const [config, setConfig] = useState({});
   const [guardandoId, setGuardandoId] = useState(null);
+  // El roster y las listas personalizadas llegan en la misma petición que todo
+  // lo demás y bajan como props a <PorProfesor>, que antes los pedía por su
+  // cuenta al montarse.
+  const [profesores, setProfesores] = useState([]);
+  const [elegibles, setElegibles] = useState({});
 
   const [mostrarSeleccion, setMostrarSeleccion] = useState(true);
   const [horasMinimas, setHorasMinimas] = useState(10);
@@ -40,33 +50,19 @@ export default function ConfiguracionCuestionario({ onVolver }) {
 
     async function cargar() {
       try {
-        const [semestres, materiasDepto] = await Promise.all([
-          apiFetch('/semestre?select=id,tipo,anio,etiqueta&order=id.desc&limit=1', token),
-          apiFetch(
-            `/materia?select=id,clave,nombre&departamento_id=eq.${departamentoId}&activa=eq.true&order=clave.asc`,
-            token,
-          ),
-        ]);
-        const sem = semestres[0];
-        if (!sem) throw new Error('No hay ningún semestre configurado todavía.');
-
-        const [filasConfig, configDepto] = await Promise.all([
-          apiFetch(
-            `/materia_cuestionario?select=materia_id,seccion,alias_de_id,etiqueta,orden,revisado&semestre_id=eq.${sem.id}`,
-            token,
-          ),
-          apiFetch(
-            `/departamento_semestre_config?select=mostrar_seleccion_materias,horas_minimas_verde&departamento_id=eq.${departamentoId}&semestre_id=eq.${sem.id}`,
-            token,
-          ),
-        ]);
-
+        if (!semestre) throw new Error('No hay ningún semestre configurado todavía.');
+        // Las 4 peticiones del arranque (más las 2 de <PorProfesor>) son una.
+        const datos = await leerConfiguracion(token, semestre.id);
         if (cancelado) return;
-        setSemestre(sem);
-        setMaterias(materiasDepto);
-        setConfig(Object.fromEntries(filasConfig.map((c) => [c.materia_id, c])));
-        setMostrarSeleccion(configDepto[0]?.mostrar_seleccion_materias ?? true);
-        setHorasMinimas(configDepto[0]?.horas_minimas_verde ?? 10);
+        setMaterias(datos.materias);
+        setConfig(datos.cuestionario);
+        setMostrarSeleccion(datos.config.mostrar_seleccion_materias);
+        setHorasMinimas(datos.config.horas_minimas_verde);
+        setProfesores(datos.profesores);
+        // Los conjuntos se arman aquí y no en el servidor: el JSON no tiene Set.
+        setElegibles(
+          Object.fromEntries(Object.entries(datos.elegibles).map(([id, ids]) => [id, new Set(ids)])),
+        );
       } catch (err) {
         if (!cancelado) setError(err.message);
       } finally {
@@ -78,7 +74,7 @@ export default function ConfiguracionCuestionario({ onVolver }) {
     return () => {
       cancelado = true;
     };
-  }, [token, departamentoId]);
+  }, [token, semestre]);
 
   // Una materia sin fila se comporta como catálogo general (igual que en el
   // formulario del profesor), y cuenta como "por revisar".
@@ -123,11 +119,7 @@ export default function ConfiguracionCuestionario({ onVolver }) {
 
     setConfig((prev) => ({ ...prev, [materiaId]: fila }));
     try {
-      await apiFetch('/materia_cuestionario', token, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify(fila),
-      });
+      await guardarFilasCuestionario(token, semestre.id, [fila]);
     } catch (err) {
       setError(err.message);
       // Revertir: dejar la pantalla mostrando algo que no se guardó es peor
@@ -161,11 +153,9 @@ export default function ConfiguracionCuestionario({ onVolver }) {
       revisado: true,
     }));
     try {
-      await apiFetch('/materia_cuestionario', token, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify(filas),
-      });
+      // Las N filas van en una transacción: antes era un POST masivo que podía
+      // dejar la mitad marcada si algo fallaba a medio camino.
+      await guardarFilasCuestionario(token, semestre.id, filas);
       setConfig((prev) => {
         const siguiente = { ...prev };
         for (const f of filas) siguiente[f.materia_id] = f;
@@ -179,8 +169,6 @@ export default function ConfiguracionCuestionario({ onVolver }) {
   async function guardarConfigDepto(cambios) {
     setError('');
     const siguiente = {
-      departamento_id: departamentoId,
-      semestre_id: semestre.id,
       mostrar_seleccion_materias: mostrarSeleccion,
       horas_minimas_verde: horasMinimas,
       ...cambios,
@@ -190,11 +178,9 @@ export default function ConfiguracionCuestionario({ onVolver }) {
     }
     if (cambios.horas_minimas_verde !== undefined) setHorasMinimas(cambios.horas_minimas_verde);
     try {
-      await apiFetch('/departamento_semestre_config', token, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify(siguiente),
-      });
+      // departamento_id ya no viaja en el cuerpo: el endpoint usa el del
+      // departamento sobre el que quien llama tiene permiso.
+      await guardarConfigDepartamento(token, semestre.id, siguiente);
     } catch (err) {
       setError(err.message);
     }
@@ -369,7 +355,9 @@ export default function ConfiguracionCuestionario({ onVolver }) {
       ) : (
         <PorProfesor
           token={token}
-          departamentoId={departamentoId}
+          semestreId={semestre.id}
+          profesoresIniciales={profesores}
+          elegiblesIniciales={elegibles}
           materiasVisibles={visibles}
           filaDe={filaDe}
           onError={setError}
@@ -382,83 +370,44 @@ export default function ConfiguracionCuestionario({ onVolver }) {
 // Excepciones por profesor (RF15). El modelo mental es "override sobre el
 // default del departamento": casi todos se quedan en `todas`, y solo se abre a
 // quien de verdad necesita una lista distinta.
-function PorProfesor({ token, departamentoId, materiasVisibles, filaDe, onError }) {
-  const [cargando, setCargando] = useState(true);
-  const [profesores, setProfesores] = useState([]);
-  const [elegibles, setElegibles] = useState({});
+function PorProfesor({
+  token,
+  semestreId,
+  profesoresIniciales,
+  elegiblesIniciales,
+  materiasVisibles,
+  filaDe,
+  onError,
+}) {
+  // El roster y las listas ya vinieron con el resto de la configuración, así
+  // que este componente ya no pide nada al montarse. Antes hacía dos
+  // peticiones, y la de profesor_materia_elegible traía la tabla COMPLETA (no
+  // tiene columna de departamento por la que filtrar) confiando en que RLS la
+  // acotara; ahora el JOIN por departamento lo hace el endpoint.
+  const [profesores, setProfesores] = useState(profesoresIniciales);
+  const [elegibles, setElegibles] = useState(elegiblesIniciales);
   const [abierto, setAbierto] = useState(null);
   // Por profesor y no global: con un solo booleano, guardar a uno deshabilitaba
   // los botones de las 44 filas y parecía que la pantalla se había trabado.
   const [guardandoId, setGuardandoId] = useState(null);
   const [confirmacion, setConfirmacion] = useState('');
 
-  useEffect(() => {
-    let cancelado = false;
-    async function cargar() {
-      try {
-        const roster = await apiFetch(
-          `/profesor?select=id,nombre,tipo_contrato,modo_materias_elegibles,estado_especial&departamento_id=eq.${departamentoId}&tipo_contrato=not.is.null&activo=eq.true&order=nombre.asc`,
-          token,
-        );
-        const listas = await apiFetch(
-          `/profesor_materia_elegible?select=profesor_id,materia_id`,
-          token,
-        );
-        if (cancelado) return;
-        const porProfesor = {};
-        for (const e of listas) {
-          (porProfesor[e.profesor_id] ??= new Set()).add(e.materia_id);
-        }
-        setProfesores(roster);
-        setElegibles(porProfesor);
-      } catch (err) {
-        if (!cancelado) onError(err.message);
-      } finally {
-        if (!cancelado) setCargando(false);
-      }
-    }
-    cargar();
-    return () => {
-      cancelado = true;
-    };
-  }, [token, departamentoId, onError]);
-
+  // Cambiar el modo y dejar la lista coherente es UNA petición y una
+  // transacción. Antes eran dos o tres seguidas sin nada que las uniera: si la
+  // segunda fallaba, el modo quedaba cambiado y la lista no.
+  //
+  // El endpoint hace lo mismo que hacía este código: al poner 'personalizada'
+  // siembra con TODO el cuestionario (si se dejara vacía, esa persona abriría
+  // el formulario sin una sola materia y sin ninguna pista de por qué), y al
+  // salir de 'personalizada' borra la lista (si solo cambiara el modo,
+  // quedaría latente y reaparecería la próxima vez).
   async function cambiarModo(p, modo) {
     setGuardandoId(p.id);
     setConfirmacion('');
     onError('');
     try {
-      await apiFetch(`/profesor?id=eq.${p.id}`, token, {
-        method: 'PATCH',
-        body: JSON.stringify({ modo_materias_elegibles: modo }),
-      });
-
-      if (modo === 'personalizada') {
-        // Se siembra con TODO el cuestionario: si se dejara vacía, esa persona
-        // abriría el formulario sin una sola materia y sin ninguna pista de por
-        // qué. Personalizar es "empieza con todo y quita".
-        const actuales = elegibles[p.id];
-        if (!actuales || actuales.size === 0) {
-          const filas = materiasVisibles.map((m) => ({ profesor_id: p.id, materia_id: m.id }));
-          if (filas.length > 0) {
-            await apiFetch('/profesor_materia_elegible', token, {
-              method: 'POST',
-              headers: { Prefer: 'resolution=merge-duplicates' },
-              body: JSON.stringify(filas),
-            });
-          }
-          setElegibles((prev) => ({ ...prev, [p.id]: new Set(materiasVisibles.map((m) => m.id)) }));
-        }
-      } else {
-        // Volver al default borra la excepción: si solo cambiáramos el modo,
-        // la lista quedaría latente y reaparecería la próxima vez que alguien
-        // pusiera "personalizada".
-        await apiFetch(`/profesor_materia_elegible?profesor_id=eq.${p.id}`, token, {
-          method: 'DELETE',
-        });
-        setElegibles((prev) => ({ ...prev, [p.id]: new Set() }));
-      }
-
+      const { elegibles: resultado } = await cambiarModoMaterias(token, semestreId, p.id, modo);
+      setElegibles((prev) => ({ ...prev, [p.id]: new Set(resultado) }));
       setProfesores((prev) =>
         prev.map((x) => (x.id === p.id ? { ...x, modo_materias_elegibles: modo } : x)),
       );
@@ -470,55 +419,33 @@ function PorProfesor({ token, departamentoId, materiasVisibles, filaDe, onError 
     }
   }
 
-  async function alternarMateria(p, materiaId, incluir) {
-    onError('');
-    const actuales = new Set(elegibles[p.id] ?? []);
-    if (incluir) actuales.add(materiaId);
-    else actuales.delete(materiaId);
-    setElegibles((prev) => ({ ...prev, [p.id]: actuales }));
+  // Un PUT con el conjunto final, en vez de un POST por materia marcada y un
+  // DELETE por materia desmarcada. La pantalla ya tiene el conjunto completo.
+  async function guardarLista(p, siguiente) {
+    const anterior = elegibles[p.id];
+    setElegibles((prev) => ({ ...prev, [p.id]: siguiente }));
     try {
-      if (incluir) {
-        await apiFetch('/profesor_materia_elegible', token, {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates' },
-          body: JSON.stringify({ profesor_id: p.id, materia_id: materiaId }),
-        });
-      } else {
-        await apiFetch(
-          `/profesor_materia_elegible?profesor_id=eq.${p.id}&materia_id=eq.${materiaId}`,
-          token,
-          { method: 'DELETE' },
-        );
-      }
+      await guardarElegibles(token, p.id, [...siguiente]);
     } catch (err) {
       onError(err.message);
+      // Revertir: dejar la pantalla mostrando algo que no se guardó es peor
+      // que el error mismo.
+      setElegibles((prev) => ({ ...prev, [p.id]: anterior ?? new Set() }));
     }
   }
 
-  async function alternarTodas(p, incluir) {
+  function alternarMateria(p, materiaId, incluir) {
     onError('');
-    setElegibles((prev) => ({
-      ...prev,
-      [p.id]: incluir ? new Set(materiasVisibles.map((m) => m.id)) : new Set(),
-    }));
-    try {
-      if (incluir) {
-        await apiFetch('/profesor_materia_elegible', token, {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates' },
-          body: JSON.stringify(materiasVisibles.map((m) => ({ profesor_id: p.id, materia_id: m.id }))),
-        });
-      } else {
-        await apiFetch(`/profesor_materia_elegible?profesor_id=eq.${p.id}`, token, {
-          method: 'DELETE',
-        });
-      }
-    } catch (err) {
-      onError(err.message);
-    }
+    const siguiente = new Set(elegibles[p.id] ?? []);
+    if (incluir) siguiente.add(materiaId);
+    else siguiente.delete(materiaId);
+    return guardarLista(p, siguiente);
   }
 
-  if (cargando) return <div className="formulario-cargando">Cargando…</div>;
+  function alternarTodas(p, incluir) {
+    onError('');
+    return guardarLista(p, incluir ? new Set(materiasVisibles.map((m) => m.id)) : new Set());
+  }
 
   return (
     <section className="formulario-seccion">

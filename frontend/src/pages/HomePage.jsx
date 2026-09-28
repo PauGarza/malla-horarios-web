@@ -3,18 +3,23 @@ import { useAuth } from '../context/AuthContext';
 const ROL_LABELS = {
   profesor: 'Profesor',
   jefe_departamento: 'Jefe de Departamento',
+  jefe_division: 'Jefe de División',
   servicios_escolares: 'Servicios Escolares',
   nomina: 'Nómina',
   admin: 'Administrador',
 };
 
-const ROLES_GESTION_DEPARTAMENTO = ['jefe_departamento', 'admin'];
+// jefe_division va aquí porque la división académica está arriba de los
+// departamentos: su alcance son los 3 de DACE. Espejo de ROLES_GESTION en
+// api/lib/auth.php — si se agrega un rol, se agrega en los dos lados.
+const ROLES_GESTION_DEPARTAMENTO = ['jefe_departamento', 'jefe_division', 'admin'];
 
 // Vistas "próximamente" por rol — además de Formulario de preferencias y
 // Preferencias recibidas, que se calculan aparte (dependen de tipo_contrato/
 // rol específico, no de una lista fija).
 const VISTAS_PENDIENTES_POR_ROL = {
   jefe_departamento: ['Panel de Jefe de Departamento (grupos y asignación de tu departamento)'],
+  jefe_division: ['Panel de División (grupos y asignación de los 3 departamentos)'],
   servicios_escolares: ['Panel de Servicios Escolares'],
   nomina: ['Reporte de horas para Nómina'],
   admin: ['Panel de administración'],
