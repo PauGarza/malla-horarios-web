@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../lib/api';
+import { crearMateria, editarMateria, guardarCoOferta, listarMaterias } from '../lib/api';
 
 // Campos editables de `materia`. departamento_id queda fuera a propósito:
 // moverla a otro departamento la sacaría del alcance que le permite RLS al
@@ -16,17 +16,22 @@ const CREDITOS_NUEVA = 6; // el valor más común del catálogo, para no arranca
 
 // materia.clave es única en TODO el sistema, no solo dentro del departamento,
 // así que la validación local (que solo ve las materias de este depto) no puede
-// atrapar el choque contra una clave de Actuaría o Estadística. Cuando pasa,
-// Postgres responde con su propio texto y hay que volverlo legible.
+// atrapar el choque contra una clave de Actuaría o Estadística.
+//
+// Antes esto buscaba el nombre de la constraint de Postgres dentro del texto
+// del error ('materia_clave_key'). MySQL nombra sus errores de otra forma, así
+// que el endpoint manda un `codigo` estable y aquí se traduce ese: atar la UX
+// al texto de error de un motor concreto es justo lo que no sobrevive una
+// migración.
 function mensajeLegible(err, fila) {
-  const texto = err?.message ?? '';
-  if (texto.includes('materia_clave_key')) {
-    return `la clave ${fila.clave.trim()} ya existe en el sistema (puede ser de otro departamento). Usa otra.`;
+  const clave = fila.clave.trim();
+  if (err?.codigo === 'clave_duplicada') {
+    return `la clave ${clave} ya existe en el sistema (puede ser de otro departamento). Usa otra.`;
   }
-  if (texto.includes('materia_creditos_check')) {
-    return `los créditos de ${fila.clave.trim()} deben ser mayores que 0.`;
+  if (err?.codigo === 'creditos_invalidos') {
+    return `los créditos de ${clave} deben ser mayores que 0.`;
   }
-  return texto;
+  return err?.message ?? '';
 }
 
 function normalizar(m) {
@@ -91,21 +96,11 @@ export default function CatalogoMaterias({ onVolver }) {
     let cancelado = false;
     async function cargar() {
       try {
-        const materias = await apiFetch(
-          `/materia?select=id,clave,nombre,creditos,anual,tipo_salon_requerido,activa&departamento_id=eq.${departamentoId}&order=clave.asc`,
-          token,
-        );
-        // Las equivalencias se guardan en las dos direcciones, así que basta
-        // con las filas cuyo materia_id es el de esta materia.
-        const pares = await apiFetch('/materia_co_oferta?select=materia_id,co_ofertada_id', token);
+        // Una petición para las dos cosas. La co-oferta ya viene acotada al
+        // departamento: antes se pedía la tabla completa y el filtro por
+        // departamento lo hacía este mismo archivo, en JS.
+        const { materias, co_oferta: porMateria } = await listarMaterias(token);
         if (cancelado) return;
-
-        const delDepto = new Set(materias.map((m) => m.id));
-        const porMateria = {};
-        for (const p of pares) {
-          if (!delDepto.has(p.materia_id)) continue;
-          (porMateria[p.materia_id] ??= []).push(p.co_ofertada_id);
-        }
 
         const normalizadas = materias.map(normalizar);
         setFilas(normalizadas);
@@ -182,21 +177,17 @@ export default function CatalogoMaterias({ onVolver }) {
     });
   }
 
+  // Un solo PUT con altas y bajas, en una transacción del servidor. Antes era
+  // un DELETE por par quitado más un POST masivo, sin nada que los uniera.
+  //
+  // Devuelve `omitidos`: las materias cuya dirección del par pertenece a otro
+  // departamento. Cada Jefe solo puede escribir SU dirección (la relación se
+  // guarda en las dos), porque existe un par real que cruza departamentos
+  // (MAT-22600 con ACT-11310) y exigir que ambas fueran del mismo lo haría
+  // imposible de registrar.
   async function guardarEquivalentes() {
-    for (const [a, b] of cambiosEquiv.quitar) {
-      await apiFetch(`/materia_co_oferta?materia_id=eq.${a}&co_ofertada_id=eq.${b}`, token, {
-        method: 'DELETE',
-      });
-    }
-    if (cambiosEquiv.agregar.length > 0) {
-      await apiFetch('/materia_co_oferta', token, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify(
-          cambiosEquiv.agregar.map(([a, b]) => ({ materia_id: a, co_ofertada_id: b })),
-        ),
-      });
-    }
+    const { omitidos } = await guardarCoOferta(token, cambiosEquiv.agregar, cambiosEquiv.quitar);
+    return omitidos ?? [];
   }
 
   // Avisa antes de cerrar la pestaña con cambios sin guardar: esta vista
@@ -298,20 +289,16 @@ export default function CatalogoMaterias({ onVolver }) {
       for (const f of pendientes) {
         fallo = f;
         if (f.esNueva) {
-          const [creada] = await apiFetch('/materia', token, {
-            method: 'POST',
-            headers: { Prefer: 'return=representation' },
-            body: JSON.stringify({ ...limpiar(f), departamento_id: departamentoId }),
+          const { materia } = await crearMateria(token, {
+            ...limpiar(f),
+            departamento_id: departamentoId,
           });
-          const fila = normalizar(creada);
+          const fila = normalizar(materia);
           reemplazos.set(f.id, fila);
           nuevosOriginales[fila.id] = { ...fila };
           creadas += 1;
         } else {
-          await apiFetch(`/materia?id=eq.${f.id}`, token, {
-            method: 'PATCH',
-            body: JSON.stringify(cambiosDe(f, originales[f.id])),
-          });
+          await editarMateria(token, f.id, cambiosDe(f, originales[f.id]));
           nuevosOriginales[f.id] = { ...f, ...limpiar(f) };
           actualizadas += 1;
         }
@@ -319,14 +306,19 @@ export default function CatalogoMaterias({ onVolver }) {
       // Las equivalencias van al final: dependen de que las materias nuevas ya
       // tengan id, y si algo falló arriba es mejor no tocarlas.
       fallo = null;
-      if (hayCambiosEquiv) await guardarEquivalentes();
+      let omitidos = [];
+      if (hayCambiosEquiv) omitidos = await guardarEquivalentes();
       equivGuardadas = hayCambiosEquiv;
 
       const partes = [];
       if (creadas > 0) partes.push(`${creadas} ${creadas === 1 ? 'materia creada' : 'materias creadas'}`);
       if (actualizadas > 0) partes.push(`${actualizadas} ${actualizadas === 1 ? 'actualizada' : 'actualizadas'}`);
       if (equivGuardadas) partes.push('equivalencias actualizadas');
-      setMensaje(`${partes.join(', ')}.`);
+      const aviso =
+        omitidos.length > 0
+          ? ` La otra mitad de ${omitidos.length === 1 ? 'una equivalencia' : `${omitidos.length} equivalencias`} es de otro departamento y la tiene que declarar su Jefe.`
+          : '';
+      setMensaje(`${partes.join(', ')}.${aviso}`);
     } catch (err) {
       const hechas = creadas + actualizadas;
       const detalle = fallo

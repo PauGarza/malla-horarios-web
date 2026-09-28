@@ -1,6 +1,11 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../lib/api';
+import {
+  cuestionario as cargarCuestionario,
+  guardarPreferencia,
+  leerPreferencia,
+  preferenciaDeProfesor,
+} from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
 
 const NIVELES = ['verde', 'amarillo', 'rojo'];
@@ -45,7 +50,7 @@ export default function FormularioPreferencias({
   profesorObjetivo = null,
   soloLecturaForzada = false,
 }) {
-  const { token, profesor, nombreDepartamento } = useAuth();
+  const { token, profesor, semestre, franjas, nombreDepartamento } = useAuth();
   // Un Jefe de Departamento puede abrir el formulario YA CONTESTADO de otro
   // profesor desde el panel; en ese caso todo se arma alrededor de esa persona,
   // no de quien tiene la sesión abierta.
@@ -56,13 +61,16 @@ export default function FormularioPreferencias({
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
 
-  const [semestre, setSemestre] = useState(null);
-  const [franjas, setFranjas] = useState([]);
+  // semestre y franjas ya vienen del contexto (los trae catalogos.php al
+  // arrancar la sesión), así que esta pantalla ya no los pide.
   const [materias, setMaterias] = useState([]);
   const [mostrarMaterias, setMostrarMaterias] = useState(true);
   const [horasMinimasVerde, setHorasMinimasVerde] = useState(10);
 
-  const [preferenciaId, setPreferenciaId] = useState(null);
+  // Solo se escribe: la preferencia se identifica por profesor + semestre en el
+  // servidor, así que el id ya no hace falta para guardar. Se conserva porque
+  // es lo que el endpoint devuelve y sirve para depurar.
+  const [, setPreferenciaId] = useState(null);
   const [estado, setEstado] = useState('borrador');
   const [numCursosMax, setNumCursosMax] = useState(1);
   const [horariosOtroDepto, setHorariosOtroDepto] = useState('');
@@ -79,115 +87,42 @@ export default function FormularioPreferencias({
   // profesorObjetivo en cada render, depender del objeto reinicia el efecto en
   // bucle y dispara fetches sin parar.
   const profesorId = profesorForm.id;
-  const profesorDepartamentoId = profesorForm.departamento_id;
-  const profesorModoMaterias = profesorForm.modo_materias_elegibles;
+  // El departamento y el modo de materias ya no se leen aquí: el servidor los
+  // toma de la fila del profesor al armar el cuestionario.
+  const esDeOtro = Boolean(profesorObjetivo);
 
   useEffect(() => {
     let cancelado = false;
 
     async function cargar() {
       try {
-        const [semestres, franjasData] = await Promise.all([
-          apiFetch('/semestre?select=id,tipo,anio,etiqueta&order=id.desc&limit=1', token),
-          apiFetch('/franja_horaria?select=id,hora_inicio,hora_fin,orden&order=orden.asc', token),
-        ]);
-        const sem = semestres[0];
-        if (!sem) throw new Error('No hay ningún semestre configurado todavía.');
+        if (!semestre) throw new Error('No hay ningún semestre configurado todavía.');
+
+        // Dos peticiones donde antes había hasta nueve, y todo el armado del
+        // catálogo (secciones, alias, lista personalizada, orden) lo hace el
+        // servidor: es el mismo código para el formulario del profesor y para
+        // la vista de solo lectura del Jefe, así que las dos no se pueden
+        // desincronizar.
+        //
+        // Cuando el Jefe abre el formulario de OTRA persona, todo viene de
+        // panel.php?profesor_id=N: el catálogo que se muestra es el que vio
+        // quien lo llenó, no el de quien lo consulta.
+        const [cuest, prefDatos] = esDeOtro
+          ? await preferenciaDeProfesor(token, semestre.id, profesorId).then((d) => [
+              d.cuestionario,
+              d,
+            ])
+          : await Promise.all([
+              cargarCuestionario(token, semestre.id),
+              leerPreferencia(token, semestre.id),
+            ]);
+
         if (cancelado) return;
-        setSemestre(sem);
-        setFranjas(franjasData);
 
-        // Config del departamento para este semestre — si no existe la fila,
-        // se asume abierto (mostrar_seleccion_materias = true) y el mínimo de
-        // D18 en GUIA-DECISIONES.md (10 hrs), ambos default de la propia tabla.
-        let configDepto = null;
-        if (profesorDepartamentoId) {
-          const config = await apiFetch(
-            `/departamento_semestre_config?select=mostrar_seleccion_materias,horas_minimas_verde&departamento_id=eq.${profesorDepartamentoId}&semestre_id=eq.${sem.id}`,
-            token,
-          );
-          configDepto = config[0] ?? null;
-        }
-        if (cancelado) return;
-        setHorasMinimasVerde(configDepto?.horas_minimas_verde ?? 10);
-        const modoOk = profesorModoMaterias !== 'ninguna';
-        const configOk = configDepto?.mostrar_seleccion_materias !== false;
-        const mostrar = modoOk && configOk && Boolean(profesorDepartamentoId);
-        setMostrarMaterias(mostrar);
-
-        let catalogo = [];
-        if (mostrar) {
-          // El catálogo sale de materia_cuestionario, NO de estimacion_demanda:
-          // qué materias se ofrecen en el cuestionario lo decide el Jefe de
-          // Departamento y no puede depender de que Servicios Escolares ya haya
-          // publicado su estimación de demanda del semestre (que para un
-          // semestre próximo todavía no existe).
-          const [materiasDepto, config] = await Promise.all([
-            apiFetch(
-              `/materia?select=id,clave,nombre&departamento_id=eq.${profesorDepartamentoId}&activa=eq.true`,
-              token,
-            ),
-            apiFetch(
-              `/materia_cuestionario?select=materia_id,seccion,alias_de_id,etiqueta,orden&semestre_id=eq.${sem.id}`,
-              token,
-            ),
-          ]);
-
-          const configPorMateria = new Map(config.map((c) => [c.materia_id, c]));
-          const nombrePorId = new Map(materiasDepto.map((m) => [m.id, m.nombre]));
-          // Una materia sin fila de config se trata como catálogo general
-          // (fail-open): es preferible que sobre una materia a que el profesor
-          // se quede con el cuestionario vacío.
-          const seccionDe = (id) => configPorMateria.get(id)?.seccion ?? 'catalogo_general';
-
-          // Las materias ocultas que son el nombre viejo de otra se muestran
-          // como "(antes ...)" en la fila de esa otra, no como fila propia.
-          const aliasPorVisible = new Map();
-          for (const c of config) {
-            if (c.seccion !== 'oculta' || !c.alias_de_id) continue;
-            const nombre = c.etiqueta ?? nombrePorId.get(c.materia_id);
-            if (!nombre) continue;
-            const lista = aliasPorVisible.get(c.alias_de_id) ?? [];
-            lista.push(nombre);
-            aliasPorVisible.set(c.alias_de_id, lista);
-          }
-
-          catalogo = materiasDepto
-            .filter((m) => seccionDe(m.id) !== 'oculta')
-            .map((m) => {
-              const c = configPorMateria.get(m.id);
-              return {
-                ...m,
-                seccion: seccionDe(m.id),
-                nombreMostrado: c?.etiqueta ?? m.nombre,
-                alias: aliasPorVisible.get(m.id) ?? [],
-                orden: c?.orden ?? null,
-              };
-            });
-
-          // El filtro por lista personalizada va DESPUÉS de descartar las
-          // ocultas: profesor_materia_elegible no tiene semestre, así que una
-          // materia que el Jefe ocultó este semestre podría reaparecer por
-          // seguir en la lista personalizada de alguien.
-          if (profesorModoMaterias === 'personalizada') {
-            const elegibles = await apiFetch(
-              `/profesor_materia_elegible?select=materia_id&profesor_id=eq.${profesorId}`,
-              token,
-            );
-            const idsElegibles = new Set(elegibles.map((e) => e.materia_id));
-            catalogo = catalogo.filter((m) => idsElegibles.has(m.id));
-          }
-
-          catalogo.sort((a, b) => {
-            if (a.orden !== b.orden) {
-              if (a.orden === null) return 1;
-              if (b.orden === null) return -1;
-              return a.orden - b.orden;
-            }
-            return a.nombreMostrado.localeCompare(b.nombreMostrado, 'es');
-          });
-          if (!cancelado) setMaterias(catalogo);
-        }
+        setHorasMinimasVerde(cuest.horas_minimas_verde);
+        setMostrarMaterias(cuest.mostrar_materias);
+        const catalogo = cuest.materias;
+        setMaterias(catalogo);
 
         // Todas las materias arrancan en amarillo, igual que el mockup que los
         // profesores ya revisaron: "la puedo dar si hace falta" es el default
@@ -195,19 +130,8 @@ export default function FormularioPreferencias({
         // que alguien alcanzó a tocar.
         const nivelesPorDefecto = Object.fromEntries(catalogo.map((m) => [m.id, 'amarillo']));
 
-        // Preferencia ya existente de este profesor para este semestre. Se
-        // filtra por profesor_id explícitamente (no solo por RLS): un Jefe
-        // de Departamento/admin llenando su PROPIO formulario también puede
-        // ver, por RLS, las preferencias de todo su departamento
-        // (departamento_preferencia_select) — sin este filtro se podía
-        // cargar por error la preferencia de un colega. Mismo bug real que
-        // en AuthContext.cargarPerfil, encontrado 2026-09-21.
-        const preferencias = await apiFetch(
-          `/preferencia?select=*&semestre_id=eq.${sem.id}&profesor_id=eq.${profesorId}`,
-          token,
-        );
-        const pref = preferencias[0];
-        if (pref && !cancelado) {
+        const pref = prefDatos.preferencia;
+        if (pref) {
           setPreferenciaId(pref.id);
           setEstado(pref.estado);
           setNumCursosMax(pref.num_cursos_max);
@@ -215,24 +139,21 @@ export default function FormularioPreferencias({
           setObservacionesCursos(pref.observaciones_cursos ?? '');
           setObservacionesHorarios(pref.observaciones_horarios ?? '');
 
-          const [prefMaterias, disponibilidad] = await Promise.all([
-            apiFetch(`/preferencia_materia?select=materia_id,nivel&preferencia_id=eq.${pref.id}`, token),
-            apiFetch(`/disponibilidad?select=dia,franja_id,nivel&preferencia_id=eq.${pref.id}`, token),
-          ]);
-          if (!cancelado) {
-            // El merge deja en amarillo cualquier materia que el Jefe haya
-            // agregado al cuestionario después de que se guardó el borrador.
-            setNivelMaterias({
-              ...nivelesPorDefecto,
-              ...Object.fromEntries(prefMaterias.map((m) => [m.materia_id, m.nivel])),
-            });
-            setNivelDisponibilidad(
-              Object.fromEntries(
-                disponibilidad.map((d) => [claveDisponibilidad(d.dia, d.franja_id), d.nivel]),
-              ),
-            );
-          }
-        } else if (!cancelado) {
+          // El merge deja en amarillo cualquier materia que el Jefe haya
+          // agregado al cuestionario después de que se guardó el borrador.
+          setNivelMaterias({
+            ...nivelesPorDefecto,
+            ...Object.fromEntries(prefDatos.materias.map((m) => [m.materia_id, m.nivel])),
+          });
+          setNivelDisponibilidad(
+            Object.fromEntries(
+              prefDatos.disponibilidad.map((d) => [
+                claveDisponibilidad(d.dia, d.franja_id),
+                d.nivel,
+              ]),
+            ),
+          );
+        } else {
           setNivelMaterias(nivelesPorDefecto);
         }
       } catch (err) {
@@ -246,7 +167,7 @@ export default function FormularioPreferencias({
     return () => {
       cancelado = true;
     };
-  }, [token, profesorId, profesorDepartamentoId, profesorModoMaterias]);
+  }, [token, semestre, profesorId, esDeOtro]);
 
   const materiasCobertura = useMemo(
     () => (veCobertura ? materias.filter((m) => m.seccion === 'cobertura_departamental') : []),
@@ -350,12 +271,18 @@ export default function FormularioPreferencias({
     if (clave) continuarPintado(clave);
   }
 
-  // Guarda por "reemplazo completo": borra las filas de esta preferencia y
-  // vuelve a insertar el estado actual del formulario. Más simple y menos
-  // propenso a errores que diffear cambio por cambio — el volumen de datos
-  // (decenas de filas) no justifica la complejidad de un autosave granular
-  // para esta primera versión. Ver docs/mockup/cuestionario-profesores.md §3.6
-  // para la ambición original de autosave, todavía no implementada así.
+  // Guarda por "reemplazo completo": el servidor borra las filas de esta
+  // preferencia y vuelve a insertar el estado actual del formulario. Más simple
+  // y menos propenso a errores que diffear cambio por cambio — el volumen de
+  // datos (decenas de filas) no justifica la complejidad de un autosave
+  // granular para esta primera versión. Ver
+  // docs/mockup/cuestionario-profesores.md §3.6 para la ambición original.
+  //
+  // Lo que cambió al migrar: esto eran SEIS peticiones HTTP (PATCH/POST de la
+  // preferencia, DELETE + POST de materias, DELETE + POST de disponibilidad).
+  // Si la segunda de cada par fallaba, el profesor se quedaba con sus
+  // respuestas borradas y sin nada que las restituyera. Ahora es un PUT y el
+  // endpoint lo hace todo en una transacción.
   async function guardar(nuevoEstado) {
     setError('');
     setMensaje('');
@@ -384,41 +311,12 @@ export default function FormularioPreferencias({
     }
     setGuardando(true);
     try {
-      let id = preferenciaId;
-      const payloadPreferencia = {
-        profesor_id: profesorId,
-        semestre_id: semestre.id,
-        num_cursos_max: numCursosMax,
-        horarios_otro_depto: esAsignatura ? horariosOtroDepto || null : null,
-        observaciones_cursos: observacionesCursos || null,
-        observaciones_horarios: observacionesHorarios || null,
-        estado: nuevoEstado,
-        ...(nuevoEstado === 'enviado' ? { enviado_at: new Date().toISOString() } : {}),
-      };
-
-      if (id) {
-        await apiFetch(`/preferencia?id=eq.${id}`, token, {
-          method: 'PATCH',
-          body: JSON.stringify(payloadPreferencia),
-        });
-      } else {
-        const creada = await apiFetch('/preferencia', token, {
-          method: 'POST',
-          headers: { Prefer: 'return=representation' },
-          body: JSON.stringify(payloadPreferencia),
-        });
-        id = creada[0].id;
-        setPreferenciaId(id);
-      }
-
-      await apiFetch(`/preferencia_materia?preferencia_id=eq.${id}`, token, { method: 'DELETE' });
       const seccionPorMateria = new Map(materias.map((m) => [m.id, m.seccion]));
       const filasMaterias = Object.entries(nivelMaterias)
         // Un borrador viejo puede traer materias que ya salieron del
-        // cuestionario; insertarlas rompería el FK o ensuciaría el dato.
+        // cuestionario; mandarlas rompería el FK o ensuciaría el dato.
         .filter(([materiaId]) => seccionPorMateria.has(Number(materiaId)))
         .map(([materiaId, nivel]) => ({
-          preferencia_id: id,
           materia_id: Number(materiaId),
           nivel,
           // Se deriva de la configuración del semestre, no de en qué lista se
@@ -427,25 +325,25 @@ export default function FormularioPreferencias({
           cobertura_departamental:
             seccionPorMateria.get(Number(materiaId)) === 'cobertura_departamental',
         }));
-      if (filasMaterias.length > 0) {
-        await apiFetch('/preferencia_materia', token, {
-          method: 'POST',
-          body: JSON.stringify(filasMaterias),
-        });
-      }
 
-      await apiFetch(`/disponibilidad?preferencia_id=eq.${id}`, token, { method: 'DELETE' });
       const filasDisponibilidad = Object.entries(nivelDisponibilidad).map(([clave, nivel]) => {
         const [dia, franjaId] = clave.split('-');
-        return { preferencia_id: id, dia, franja_id: Number(franjaId), nivel };
+        return { dia, franja_id: Number(franjaId), nivel };
       });
-      if (filasDisponibilidad.length > 0) {
-        await apiFetch('/disponibilidad', token, {
-          method: 'POST',
-          body: JSON.stringify(filasDisponibilidad),
-        });
-      }
 
+      // profesor_id ya no viaja: el endpoint usa el del token y solo el del
+      // token. enviado_at tampoco: lo pone el servidor, en UTC.
+      const { id } = await guardarPreferencia(token, semestre.id, {
+        num_cursos_max: numCursosMax,
+        horarios_otro_depto: esAsignatura ? horariosOtroDepto || null : null,
+        observaciones_cursos: observacionesCursos || null,
+        observaciones_horarios: observacionesHorarios || null,
+        estado: nuevoEstado,
+        materias: filasMaterias,
+        disponibilidad: filasDisponibilidad,
+      });
+
+      setPreferenciaId(id);
       setEstado(nuevoEstado);
       setMensaje(nuevoEstado === 'enviado' ? 'Preferencias enviadas.' : 'Borrador guardado.');
     } catch (err) {

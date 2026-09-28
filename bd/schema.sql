@@ -36,7 +36,11 @@ CREATE TYPE tipo_contrato_enum AS ENUM ('tiempo_completo', 'asignatura', 'medio_
 
 CREATE TYPE modo_materias_enum AS ENUM ('todas', 'personalizada', 'ninguna');
 
-CREATE TYPE rol_enum AS ENUM ('profesor', 'jefe_departamento', 'servicios_escolares', 'nomina', 'admin');
+-- 'jefe_division' se agrego 2026-09-25: la division academica (DACE) esta
+-- arriba de los departamentos y su alcance son los 3. No es lo mismo que admin,
+-- que queda para quien administre el sistema. Ver bd/mysql/schema-mysql.sql, que
+-- es el esquema vivo desde la migracion a MySQL.
+CREATE TYPE rol_enum AS ENUM ('profesor', 'jefe_departamento', 'jefe_division', 'servicios_escolares', 'nomina', 'admin');
 
 CREATE TYPE tipo_semestre_enum AS ENUM ('primavera', 'verano', 'otono');
 
