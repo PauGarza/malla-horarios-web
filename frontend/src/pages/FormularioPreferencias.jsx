@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   cuestionario as cargarCuestionario,
@@ -7,44 +7,26 @@ import {
   preferenciaDeProfesor,
 } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
+import { TIPO_CONTRATO_LABELS } from '../lib/roles';
+import { claveDisponibilidad, faltantesParaEnviar, minimoEfectivo } from '../lib/formulario';
+import {
+  LeyendaDisponibilidad,
+  MateriaInfo,
+  RejillaDisponibilidad,
+  TriToggle,
+} from '../components/FormularioPiezas';
 
 const NIVELES = ['verde', 'amarillo', 'rojo'];
-const TIPO_CONTRATO_LABELS = {
-  tiempo_completo: 'Tiempo Completo',
-  medio_tiempo: 'Medio Tiempo',
-  asignatura: 'Asignatura',
-};
-
-// Quiénes ven el bloque de cobertura departamental. Medio tiempo va aquí junto
-// con tiempo completo: son justo los cursos que "necesitan que varios profesores
-// de tiempo completo o medio tiempo los impartan" (BITACORA 2026-08-21).
-// Asignatura no lo ve — esas materias le aparecen mezcladas en el catálogo.
-const CONTRATOS_COBERTURA = ['tiempo_completo', 'medio_tiempo'];
-
-// Mínimos de verdes que exigen los formularios actuales, ahora expresados como
-// "en verde" en vez de checkboxes. Son constantes del archivo y no config de
-// base porque hoy son iguales en los 3 departamentos; si eso cambia, el lugar
-// natural es departamento_semestre_config, junto a horas_minimas_verde.
-const MIN_COBERTURA = 2;
-const MIN_GENERAL = 5;
-
-function claveDisponibilidad(dia, franjaId) {
-  return `${dia}-${franjaId}`;
-}
-
-const DIAS = [
-  { valor: 'lunes', etiqueta: 'Lun' },
-  { valor: 'martes', etiqueta: 'Mar' },
-  { valor: 'miercoles', etiqueta: 'Mié' },
-  { valor: 'jueves', etiqueta: 'Jue' },
-  { valor: 'viernes', etiqueta: 'Vie' },
-];
 
 function siguienteNivel(actual) {
   const idx = actual ? NIVELES.indexOf(actual) : -1;
   return idx === NIVELES.length - 1 ? undefined : NIVELES[idx + 1];
 }
 
+// Desde 2026-09-28 el formulario no está escrito aquí: lo arma la jefatura en
+// su editor (secciones de materias, preguntas abiertas, textos y mínimos) y el
+// servidor lo manda ya resuelto para el contrato de esta persona. Esta pantalla
+// solo recorre `secciones` y dibuja cada una según su tipo.
 export default function FormularioPreferencias({
   onVolver,
   profesorObjetivo = null,
@@ -63,32 +45,23 @@ export default function FormularioPreferencias({
 
   // semestre y franjas ya vienen del contexto (los trae catalogos.php al
   // arrancar la sesión), así que esta pantalla ya no los pide.
-  const [materias, setMaterias] = useState([]);
-  const [mostrarMaterias, setMostrarMaterias] = useState(true);
+  const [publicado, setPublicado] = useState(true);
+  const [secciones, setSecciones] = useState([]);
+  const [textoIntroduccion, setTextoIntroduccion] = useState('');
   const [horasMinimasVerde, setHorasMinimasVerde] = useState(10);
 
-  // Solo se escribe: la preferencia se identifica por profesor + semestre en el
-  // servidor, así que el id ya no hace falta para guardar. Se conserva porque
-  // es lo que el endpoint devuelve y sirve para depurar.
-  const [, setPreferenciaId] = useState(null);
   const [estado, setEstado] = useState('borrador');
   const [numCursosMax, setNumCursosMax] = useState(1);
-  const [horariosOtroDepto, setHorariosOtroDepto] = useState('');
-  const [observacionesCursos, setObservacionesCursos] = useState('');
-  const [observacionesHorarios, setObservacionesHorarios] = useState('');
   const [nivelMaterias, setNivelMaterias] = useState({});
   const [nivelDisponibilidad, setNivelDisponibilidad] = useState({});
+  const [respuestas, setRespuestas] = useState({});
 
-  const esAsignatura = profesorForm.tipo_contrato === 'asignatura';
-  const veCobertura = CONTRATOS_COBERTURA.includes(profesorForm.tipo_contrato);
   const soloLectura = soloLecturaForzada || estado === 'enviado';
 
   // Dependencias primitivas, no el objeto: si el padre construye
   // profesorObjetivo en cada render, depender del objeto reinicia el efecto en
   // bucle y dispara fetches sin parar.
   const profesorId = profesorForm.id;
-  // El departamento y el modo de materias ya no se leen aquí: el servidor los
-  // toma de la fila del profesor al armar el cuestionario.
   const esDeOtro = Boolean(profesorObjetivo);
 
   useEffect(() => {
@@ -98,14 +71,8 @@ export default function FormularioPreferencias({
       try {
         if (!semestre) throw new Error('No hay ningún semestre configurado todavía.');
 
-        // Dos peticiones donde antes había hasta nueve, y todo el armado del
-        // catálogo (secciones, alias, lista personalizada, orden) lo hace el
-        // servidor: es el mismo código para el formulario del profesor y para
-        // la vista de solo lectura del Jefe, así que las dos no se pueden
-        // desincronizar.
-        //
         // Cuando el Jefe abre el formulario de OTRA persona, todo viene de
-        // panel.php?profesor_id=N: el catálogo que se muestra es el que vio
+        // panel.php?profesor_id=N: el formulario que se muestra es el que vio
         // quien lo llenó, no el de quien lo consulta.
         const [cuest, prefDatos] = esDeOtro
           ? await preferenciaDeProfesor(token, semestre.id, profesorId).then((d) => [
@@ -119,39 +86,35 @@ export default function FormularioPreferencias({
 
         if (cancelado) return;
 
-        setHorasMinimasVerde(cuest.horas_minimas_verde);
-        setMostrarMaterias(cuest.mostrar_materias);
-        const catalogo = cuest.materias;
-        setMaterias(catalogo);
+        // La vista de solo lectura del jefe no depende de que esté publicado.
+        setPublicado(esDeOtro || cuest.publicado);
+        setSecciones(cuest.secciones ?? []);
+        setTextoIntroduccion(cuest.texto_introduccion ?? '');
+        setHorasMinimasVerde(cuest.horas_minimas_verde ?? 10);
 
-        // Todas las materias arrancan en amarillo, igual que el mockup que los
-        // profesores ya revisaron: "la puedo dar si hace falta" es el default
-        // honesto, y así el motor recibe una señal de todas y no solo de las
-        // que alguien alcanzó a tocar.
-        const nivelesPorDefecto = Object.fromEntries(catalogo.map((m) => [m.id, 'amarillo']));
+        // Todas las materias arrancan en amarillo: "la puedo dar si hace
+        // falta" es el default honesto, y así el motor recibe una señal de
+        // todas y no solo de las que alguien alcanzó a tocar.
+        const materias = (cuest.secciones ?? []).flatMap((s) => s.materias ?? []);
+        const nivelesPorDefecto = Object.fromEntries(materias.map((m) => [m.id, 'amarillo']));
 
         const pref = prefDatos.preferencia;
         if (pref) {
-          setPreferenciaId(pref.id);
           setEstado(pref.estado);
           setNumCursosMax(pref.num_cursos_max);
-          setHorariosOtroDepto(pref.horarios_otro_depto ?? '');
-          setObservacionesCursos(pref.observaciones_cursos ?? '');
-          setObservacionesHorarios(pref.observaciones_horarios ?? '');
-
-          // El merge deja en amarillo cualquier materia que el Jefe haya
-          // agregado al cuestionario después de que se guardó el borrador.
+          // El merge deja en amarillo cualquier materia que la jefatura haya
+          // agregado al formulario después de que se guardó el borrador.
           setNivelMaterias({
             ...nivelesPorDefecto,
             ...Object.fromEntries(prefDatos.materias.map((m) => [m.materia_id, m.nivel])),
           });
           setNivelDisponibilidad(
             Object.fromEntries(
-              prefDatos.disponibilidad.map((d) => [
-                claveDisponibilidad(d.dia, d.franja_id),
-                d.nivel,
-              ]),
+              prefDatos.disponibilidad.map((d) => [claveDisponibilidad(d.dia, d.franja_id), d.nivel]),
             ),
+          );
+          setRespuestas(
+            Object.fromEntries((prefDatos.respuestas ?? []).map((r) => [r.seccion_id, r.texto])),
           );
         } else {
           setNivelMaterias(nivelesPorDefecto);
@@ -169,31 +132,12 @@ export default function FormularioPreferencias({
     };
   }, [token, semestre, profesorId, esDeOtro]);
 
-  const materiasCobertura = useMemo(
-    () => (veCobertura ? materias.filter((m) => m.seccion === 'cobertura_departamental') : []),
-    [materias, veCobertura],
-  );
-  // Un profesor de asignatura ve las de cobertura mezcladas al final del
-  // catálogo general, como en el mockup, y le cuentan para el mínimo de 5.
-  const materiasGenerales = useMemo(
-    () => (veCobertura ? materias.filter((m) => m.seccion !== 'cobertura_departamental') : materias),
-    [materias, veCobertura],
-  );
-
-  const contarVerdes = (lista) => lista.filter((m) => nivelMaterias[m.id] === 'verde').length;
-  const verdesCobertura = contarVerdes(materiasCobertura);
-  const verdesGenerales = contarVerdes(materiasGenerales);
-
-  // Los mínimos se acotan al tamaño real de cada lista: un profesor con lista
-  // personalizada de 3 materias nunca podría enviar si le exigiéramos 5.
-  const minCobertura = Math.min(MIN_COBERTURA, materiasCobertura.length);
-  const minGeneral = Math.min(MIN_GENERAL, materiasGenerales.length);
+  const hayMaterias = secciones.some((s) => s.tipo === 'materias');
 
   const horasVerdeSemana = useMemo(
     () => Object.values(nivelDisponibilidad).filter((n) => n === 'verde').length * 0.5,
     [nivelDisponibilidad],
   );
-  const hayMateriasParaElegir = mostrarMaterias && materias.length > 0;
 
   function alternarMateria(materiaId, nivel) {
     if (soloLectura) return;
@@ -272,78 +216,57 @@ export default function FormularioPreferencias({
   }
 
   // Guarda por "reemplazo completo": el servidor borra las filas de esta
-  // preferencia y vuelve a insertar el estado actual del formulario. Más simple
-  // y menos propenso a errores que diffear cambio por cambio — el volumen de
-  // datos (decenas de filas) no justifica la complejidad de un autosave
-  // granular para esta primera versión. Ver
-  // docs/mockup/cuestionario-profesores.md §3.6 para la ambición original.
-  //
-  // Lo que cambió al migrar: esto eran SEIS peticiones HTTP (PATCH/POST de la
-  // preferencia, DELETE + POST de materias, DELETE + POST de disponibilidad).
-  // Si la segunda de cada par fallaba, el profesor se quedaba con sus
-  // respuestas borradas y sin nada que las restituyera. Ahora es un PUT y el
-  // endpoint lo hace todo en una transacción.
+  // preferencia y vuelve a insertar el estado actual del formulario, todo en
+  // una transacción.
   async function guardar(nuevoEstado) {
     setError('');
     setMensaje('');
     if (nuevoEstado === 'enviado') {
-      // Se juntan los tres faltantes en un solo mensaje: ir descubriéndolos de
-      // uno en uno, reintento tras reintento, es la peor versión de esto.
-      const faltantes = [];
-      if (veCobertura && minCobertura > 0 && verdesCobertura < minCobertura) {
-        faltantes.push(
-          `${minCobertura} materias en verde en cobertura departamental (llevas ${verdesCobertura})`,
-        );
-      }
-      if (minGeneral > 0 && verdesGenerales < minGeneral) {
-        faltantes.push(`${minGeneral} materias en verde en el catálogo (llevas ${verdesGenerales})`);
-      }
-      // D18 (GUIA-DECISIONES.md): mínimo de horas en verde por semana,
-      // configurable por departamento/semestre.
-      if (horasVerdeSemana < horasMinimasVerde) {
-        faltantes.push(`${horasMinimasVerde} hrs en verde de disponibilidad (llevas ${horasVerdeSemana})`);
-      }
+      // Se juntan todos los faltantes en un solo mensaje: ir descubriéndolos
+      // de uno en uno, reintento tras reintento, es la peor versión de esto.
+      const faltantes = faltantesParaEnviar({
+        secciones,
+        horasMinimasVerde,
+        niveles: nivelMaterias,
+        respuestas,
+        horasVerde: horasVerdeSemana,
+      });
       // Nada de esto bloquea guardar borrador: un borrador a medias es válido.
       if (faltantes.length > 0) {
-        setError(`Antes de enviar te falta marcar: ${faltantes.join('; ')}.`);
+        setError(`Antes de enviar te falta: ${faltantes.join('; ')}.`);
         return;
       }
     }
     setGuardando(true);
     try {
-      const seccionPorMateria = new Map(materias.map((m) => [m.id, m.seccion]));
-      const filasMaterias = Object.entries(nivelMaterias)
-        // Un borrador viejo puede traer materias que ya salieron del
-        // cuestionario; mandarlas rompería el FK o ensuciaría el dato.
-        .filter(([materiaId]) => seccionPorMateria.has(Number(materiaId)))
-        .map(([materiaId, nivel]) => ({
-          materia_id: Number(materiaId),
-          nivel,
-          // Se deriva de la configuración del semestre, no de en qué lista se
-          // pintó la fila: un profesor de asignatura ve estas materias
-          // mezcladas en el catálogo y aun así son de cobertura departamental.
-          cobertura_departamental:
-            seccionPorMateria.get(Number(materiaId)) === 'cobertura_departamental',
-        }));
+      // Solo las materias que están en el formulario: un borrador viejo puede
+      // traer materias que la jefatura ya quitó.
+      const materias = secciones.flatMap((s) => s.materias ?? []);
+      const filasMaterias = materias
+        .filter((m) => nivelMaterias[m.id])
+        .map((m) => ({ materia_id: m.id, nivel: nivelMaterias[m.id] }));
 
       const filasDisponibilidad = Object.entries(nivelDisponibilidad).map(([clave, nivel]) => {
         const [dia, franjaId] = clave.split('-');
         return { dia, franja_id: Number(franjaId), nivel };
       });
 
-      // profesor_id ya no viaja: el endpoint usa el del token y solo el del
+      const filasRespuestas = secciones
+        .filter((s) => s.tipo === 'abierta' && (respuestas[s.id] ?? '').trim())
+        .map((s) => ({ seccion_id: s.id, texto: respuestas[s.id] }));
+
+      // profesor_id no viaja: el endpoint usa el del token y solo el del
       // token. enviado_at tampoco: lo pone el servidor, en UTC.
-      const { id } = await guardarPreferencia(token, semestre.id, {
+      // cobertura_departamental tampoco: sale de la sección donde la jefatura
+      // puso cada materia.
+      await guardarPreferencia(token, semestre.id, {
         num_cursos_max: numCursosMax,
-        horarios_otro_depto: esAsignatura ? horariosOtroDepto || null : null,
-        observaciones_cursos: observacionesCursos || null,
-        observaciones_horarios: observacionesHorarios || null,
         estado: nuevoEstado,
         materias: filasMaterias,
         disponibilidad: filasDisponibilidad,
+        respuestas: filasRespuestas,
       });
 
-      setPreferenciaId(id);
       setEstado(nuevoEstado);
       setMensaje(nuevoEstado === 'enviado' ? 'Preferencias enviadas.' : 'Borrador guardado.');
     } catch (err) {
@@ -355,45 +278,149 @@ export default function FormularioPreferencias({
 
   if (cargando) return <div className="formulario-cargando">Cargando…</div>;
 
-  const listaMaterias = (lista) => (
-    <div className="materias-lista">
-      {lista.map((m) => (
-        <div className="materia-fila" key={m.id}>
-          <div className="materia-info">
-            <span className="materia-nombre">{m.nombreMostrado}</span>
-            {m.alias.length > 0 && <span className="materia-alias">(antes {m.alias.join(', ')})</span>}
-            <span className="materia-clave">{m.clave}</span>
-          </div>
-          <TriToggle
-            valor={nivelMaterias[m.id]}
-            disabled={soloLectura}
-            onCambiar={(nivel) => alternarMateria(m.id, nivel)}
-          />
+  const encabezado = (
+    <header className="formulario-header">
+      <button className="btn-link" onClick={onVolver}>
+        ← Volver
+      </button>
+      <div className="formulario-header-datos">
+        <div>
+          <strong>{profesorForm.nombre}</strong>
+          <span>
+            {nombreDepartamento(profesorForm.departamento_id)} ·{' '}
+            {TIPO_CONTRATO_LABELS[profesorForm.tipo_contrato] ?? profesorForm.tipo_contrato} ·{' '}
+            {etiquetaSemestre(semestre)}
+          </span>
         </div>
-      ))}
-    </div>
-  );
-
-  return (
-    <div className="formulario-screen">
-      <header className="formulario-header">
-        <button className="btn-link" onClick={onVolver}>
-          ← Volver
-        </button>
-        <div className="formulario-header-datos">
-          <div>
-            <strong>{profesorForm.nombre}</strong>
-            <span>
-              {nombreDepartamento(profesorForm.departamento_id)} ·{' '}
-              {TIPO_CONTRATO_LABELS[profesorForm.tipo_contrato] ?? profesorForm.tipo_contrato} ·{' '}
-              {etiquetaSemestre(semestre)}
-            </span>
-          </div>
+        {publicado && (
           <span className={`badge badge-${estado}`}>
             {estado === 'enviado' ? 'Enviado' : 'Borrador'}
           </span>
-        </div>
-      </header>
+        )}
+      </div>
+    </header>
+  );
+
+  if (!publicado) {
+    return (
+      <div className="formulario-screen">
+        {encabezado}
+        {error && <p className="formulario-error">{error}</p>}
+        <section className="formulario-seccion">
+          <h2>Todavía no está disponible</h2>
+          <p className="formulario-nota">
+            El formulario de preferencias de {etiquetaSemestre(semestre)} todavía no está abierto.
+            Tu Jefe de Departamento te avisará cuando puedas contestarlo.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  function renderSeccion(s) {
+    if (s.tipo === 'num_cursos') {
+      // Sin materias que elegir, la pregunta no tiene sentido.
+      if (!hayMaterias) return null;
+      return (
+        <section className="formulario-seccion" key={s.id}>
+          <label htmlFor="num_cursos_max">{s.titulo}</label>
+          {s.descripcion && <p className="formulario-nota texto-libre">{s.descripcion}</p>}
+          <input
+            id="num_cursos_max"
+            type="number"
+            min={1}
+            max={6}
+            value={numCursosMax}
+            disabled={soloLectura}
+            onChange={(e) => setNumCursosMax(Number(e.target.value))}
+          />
+        </section>
+      );
+    }
+
+    if (s.tipo === 'materias') {
+      const minimo = minimoEfectivo(s);
+      const verdes = s.materias.filter((m) => nivelMaterias[m.id] === 'verde').length;
+      return (
+        <section className="formulario-seccion" key={s.id}>
+          <div className="materias-bloque-encabezado">
+            <h2>{s.titulo}</h2>
+            {minimo > 0 && (
+              <span className={`counter ${verdes >= minimo ? 'ok' : 'low'}`}>
+                {verdes} en verde (mínimo {minimo})
+              </span>
+            )}
+          </div>
+          {s.descripcion && <p className="formulario-nota texto-libre">{s.descripcion}</p>}
+          <div className="materias-lista">
+            {s.materias.map((m) => (
+              <div className="materia-fila" key={m.id}>
+                <MateriaInfo materia={m} />
+                <TriToggle
+                  valor={nivelMaterias[m.id]}
+                  disabled={soloLectura}
+                  onCambiar={(nivel) => alternarMateria(m.id, nivel)}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (s.tipo === 'disponibilidad') {
+      return (
+        <section className="formulario-seccion" key={s.id}>
+          <h2>{s.titulo}</h2>
+          <p
+            className={`formulario-nota ${horasVerdeSemana >= horasMinimasVerde ? 'nota-ok' : 'nota-falta'}`}
+          >
+            {horasVerdeSemana} hrs en verde marcadas de {horasMinimasVerde} hrs mínimo para poder
+            enviar.
+          </p>
+          <LeyendaDisponibilidad />
+          {!soloLectura && s.descripcion && (
+            <p className="formulario-nota texto-libre" id="ayuda-rejilla">
+              {s.descripcion}
+            </p>
+          )}
+          <RejillaDisponibilidad
+            franjas={franjas}
+            niveles={nivelDisponibilidad}
+            disabled={soloLectura}
+            ayudaId="ayuda-rejilla"
+            onIniciar={iniciarPintado}
+            onContinuar={continuarPintado}
+            onTeclado={ciclarConTeclado}
+            onPointerMove={moverSobreRejilla}
+          />
+        </section>
+      );
+    }
+
+    // abierta
+    const idCampo = `respuesta-${s.id}`;
+    return (
+      <section className="formulario-seccion" key={s.id}>
+        <label htmlFor={idCampo}>
+          {s.titulo}
+          {s.obligatoria && <span className="obligatoria"> *</span>}
+        </label>
+        {s.descripcion && <p className="formulario-nota texto-libre">{s.descripcion}</p>}
+        <textarea
+          id={idCampo}
+          value={respuestas[s.id] ?? ''}
+          disabled={soloLectura}
+          required={s.obligatoria}
+          onChange={(e) => setRespuestas((prev) => ({ ...prev, [s.id]: e.target.value }))}
+        />
+      </section>
+    );
+  }
+
+  return (
+    <div className="formulario-screen">
+      {encabezado}
 
       {error && <p className="formulario-error">{error}</p>}
       {mensaje && <p className="formulario-mensaje">{mensaje}</p>}
@@ -410,166 +437,21 @@ export default function FormularioPreferencias({
         )
       )}
 
-      {hayMateriasParaElegir && (
+      {hayMaterias && textoIntroduccion && (
         <section className="formulario-seccion">
-          <label htmlFor="num_cursos_max">¿Cuántos cursos puedes impartir este semestre?</label>
-          <input
-            id="num_cursos_max"
-            type="number"
-            min={1}
-            max={6}
-            value={numCursosMax}
-            disabled={soloLectura}
-            onChange={(e) => setNumCursosMax(Number(e.target.value))}
-          />
+          <p className="formulario-nota texto-libre">{textoIntroduccion}</p>
         </section>
       )}
 
-      {!mostrarMaterias && (
+      {!hayMaterias && (
         <section className="formulario-seccion">
           <p className="formulario-nota">
-            Tu Jefe de Departamento no habilitó selección de materias este semestre — solo declara tu
-            disponibilidad de horario abajo.
+            Este semestre no se eligen materias: solo declara tu disponibilidad de horario.
           </p>
         </section>
       )}
 
-      {hayMateriasParaElegir && (
-        <section className="formulario-seccion">
-          <h2>Preferencia de materias</h2>
-          <p className="formulario-nota">
-            Marca cada materia según <strong>si puedes impartirla</strong>: verde (sí, con gusto),
-            amarillo (sí puedo, aunque no es mi primera opción), rojo (no puedo — por ejemplo, no
-            podría preparar el material).
-          </p>
-          <p className="formulario-nota">
-            El rojo es para cuando realmente <strong>no puedes</strong>, no para lo que preferirías no
-            dar: entre más materias queden en rojo, más difícil es armar la malla del departamento.
-            Todas empiezan en amarillo.
-          </p>
-
-          {materiasCobertura.length > 0 && (
-            <div className="materias-bloque">
-              <div className="materias-bloque-encabezado">
-                <h3>Cursos de cálculo — cobertura departamental</h3>
-                <span className={`counter ${verdesCobertura >= minCobertura ? 'ok' : 'low'}`}>
-                  {verdesCobertura} en verde (mínimo {minCobertura})
-                </span>
-              </div>
-              <p className="formulario-nota">
-                Cursos de cálculo que, por ser departamentales, necesitan que varios profesores de
-                tiempo completo o medio tiempo los impartan.
-              </p>
-              {listaMaterias(materiasCobertura)}
-            </div>
-          )}
-
-          <div className="materias-bloque">
-            <div className="materias-bloque-encabezado">
-              <h3>{veCobertura ? 'Resto del catálogo' : 'Catálogo de materias'}</h3>
-              <span className={`counter ${verdesGenerales >= minGeneral ? 'ok' : 'low'}`}>
-                {verdesGenerales} en verde (mínimo {minGeneral})
-              </span>
-            </div>
-            {listaMaterias(materiasGenerales)}
-          </div>
-        </section>
-      )}
-
-      <section className="formulario-seccion">
-        <h2>Disponibilidad de horarios</h2>
-        <p className={`formulario-nota ${horasVerdeSemana >= horasMinimasVerde ? 'nota-ok' : 'nota-falta'}`}>
-          {horasVerdeSemana} hrs en verde marcadas de {horasMinimasVerde} hrs mínimo para poder enviar.
-        </p>
-        <div className="legend">
-          <span><i className="legend-verde" /> Seguro disponible</span>
-          <span><i className="legend-amarillo" /> Posible pero complicado</span>
-          <span><i className="legend-rojo" /> No disponible</span>
-        </div>
-        {!soloLectura && (
-          <p className="formulario-nota" id="ayuda-rejilla">
-            Haz clic para cambiar el color de una franja, o mantén presionado y arrastra para pintar
-            varias de un jalón.
-          </p>
-        )}
-        <div className="disponibilidad-grid-wrap">
-          <table className="disponibilidad-grid" onPointerMove={moverSobreRejilla}>
-            <thead>
-              <tr>
-                <th>Hora</th>
-                {DIAS.map((d) => (
-                  <th key={d.valor}>{d.etiqueta}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {franjas.map((f, i) => {
-                const filaAnterior = franjas[i - 1];
-                const saltoComida = filaAnterior && f.hora_inicio !== filaAnterior.hora_fin;
-                return (
-                  <Fragment key={f.id}>
-                    {saltoComida && (
-                      <tr className="fila-comida">
-                        <td colSpan={DIAS.length + 1}>comida</td>
-                      </tr>
-                    )}
-                    <tr>
-                      <td className="franja-hora">{f.hora_inicio.slice(0, 5)}</td>
-                      {DIAS.map((d) => {
-                        const clave = claveDisponibilidad(d.valor, f.id);
-                        return (
-                          <SlotCelda
-                            key={d.valor}
-                            clave={clave}
-                            nivel={nivelDisponibilidad[clave]}
-                            etiqueta={`${d.etiqueta} ${f.hora_inicio.slice(0, 5)}`}
-                            disabled={soloLectura}
-                            onIniciar={iniciarPintado}
-                            onContinuar={continuarPintado}
-                            onTeclado={ciclarConTeclado}
-                          />
-                        );
-                      })}
-                    </tr>
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {esAsignatura && (
-        <section className="formulario-seccion">
-          <label htmlFor="horarios_otro_depto">
-            ¿Ya solicitaste cursos en otro departamento? ¿En qué horarios?
-          </label>
-          <textarea
-            id="horarios_otro_depto"
-            value={horariosOtroDepto}
-            disabled={soloLectura}
-            onChange={(e) => setHorariosOtroDepto(e.target.value)}
-            placeholder="Ej. Martes 10:00-11:30 en Actuaría"
-          />
-        </section>
-      )}
-
-      <section className="formulario-seccion">
-        <label htmlFor="observaciones_cursos">Observaciones sobre la asignación de cursos</label>
-        <textarea
-          id="observaciones_cursos"
-          value={observacionesCursos}
-          disabled={soloLectura}
-          onChange={(e) => setObservacionesCursos(e.target.value)}
-        />
-        <label htmlFor="observaciones_horarios">Observaciones sobre disponibilidad de horarios</label>
-        <textarea
-          id="observaciones_horarios"
-          value={observacionesHorarios}
-          disabled={soloLectura}
-          onChange={(e) => setObservacionesHorarios(e.target.value)}
-        />
-      </section>
+      {secciones.map(renderSeccion)}
 
       {!soloLectura && (
         <footer className="formulario-acciones">
@@ -589,90 +471,6 @@ export default function FormularioPreferencias({
           </button>
         </footer>
       )}
-    </div>
-  );
-}
-
-// memo + handlers estables: al arrastrar se repinta solo la celda que cambió,
-// no las 110 de la rejilla.
-const SlotCelda = memo(function SlotCelda({
-  clave,
-  nivel,
-  etiqueta,
-  disabled,
-  onIniciar,
-  onContinuar,
-  onTeclado,
-}) {
-  return (
-    <td>
-      <button
-        type="button"
-        className={`slot ${nivel ?? ''}`}
-        data-clave={clave}
-        disabled={disabled}
-        aria-label={`${etiqueta}: ${nivel ?? 'sin marcar'}`}
-        aria-describedby="ayuda-rejilla"
-        onPointerDown={(e) => {
-          if (disabled) return;
-          e.preventDefault();
-          // Sin liberar la captura, en touch todos los eventos siguen yendo a
-          // la celda donde empezó el gesto y arrastrar no pintaría nada más.
-          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          }
-          onIniciar(clave);
-        }}
-        onPointerEnter={() => {
-          if (!disabled) onContinuar(clave);
-        }}
-        onKeyDown={(e) => {
-          // El clic sintético que el navegador genera con Enter sobre un
-          // <button> se perdió al quitar onClick, así que el teclado se maneja
-          // aquí o la rejilla deja de ser usable sin mouse. No arma arrastre:
-          // sin pointerup que lo cierre, se quedaría activo para siempre.
-          if (disabled) return;
-          if (e.key !== 'Enter' && e.key !== ' ') return;
-          e.preventDefault();
-          onTeclado(clave);
-        }}
-      />
-    </td>
-  );
-});
-
-// El texto del botón es el color, pero lo que se está respondiendo es si puede
-// dar la materia; el title lo deja claro justo donde se toma la decisión.
-function TriToggle({ valor, disabled, onCambiar }) {
-  return (
-    <div className="tri-toggle">
-      <button
-        type="button"
-        className={`v ${valor === 'verde' ? 'active' : ''}`}
-        disabled={disabled}
-        title="Sí puedo darla, con gusto"
-        onClick={() => onCambiar('verde')}
-      >
-        Verde
-      </button>
-      <button
-        type="button"
-        className={`a ${valor === 'amarillo' ? 'active' : ''}`}
-        disabled={disabled}
-        title="Sí puedo darla, aunque no es mi primera opción"
-        onClick={() => onCambiar('amarillo')}
-      >
-        Amarillo
-      </button>
-      <button
-        type="button"
-        className={`r ${valor === 'rojo' ? 'active' : ''}`}
-        disabled={disabled}
-        title="No puedo darla — por ejemplo, no podría preparar el material"
-        onClick={() => onCambiar('rojo')}
-      >
-        Rojo
-      </button>
     </div>
   );
 }

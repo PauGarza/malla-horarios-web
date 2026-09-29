@@ -52,9 +52,11 @@ malla-horarios-web/
 │                                           backend ni base de datos, con login simulado y borrador
 │                                           guardado en el navegador) — ya reemplazado por `frontend/`
 │                                           como la app real; se conserva como referencia de contenido
-├── frontend/                            — app real (React), la que se publica en el sitio del proyecto
-├── backend/                             — funciones del lado del servidor (autenticación, etc.);
-│                                           ver el README de esa carpeta para el detalle del proveedor
+├── frontend/                            — app real (React), servida desde horariosdace.itam.mx
+├── api/                                 — API en PHP 7.4: login, formulario, respuestas, demanda,
+│                                           semestres; la autorización vive aquí (ver su README)
+├── backend/                             — backend ANTERIOR (funciones de Supabase), ya reemplazado
+│                                           por api/; se conserva como referencia
 └── bd/                                  — diseño de base de datos: esquema, diagrama, decisiones de
                                             negocio, y una guía específica para quien construya el
                                             motor de asignación (qué leer/escribir en qué tablas)
@@ -82,11 +84,21 @@ datos):
 
 ## Estado actual
 
-Ya existe un mockup del cuestionario de profesores (`docs/mockup/mockup-cuestionario.html`) usado
-para validar contenido/flujo con los Jefes de Departamento, y ya arrancó la app real en `frontend/`
-(scaffold pendiente) conectada a una base de datos administrada, con autenticación propia vía
-`backend/` (ver los README de cada carpeta). Pendiente: cargar el catálogo real de materias y el
-roster de profesores por departamento.
+La app corre en **https://horariosdace.itam.mx/**: frontend en React (`frontend/`), API propio en
+PHP (`api/`) y MySQL del ITAM (`bd/mysql/`). Está cargado Matemáticas (materias, co-oferta y 45
+profesores). Lo que ya funciona:
+
+- Login con clave única, perfil y cambio de contraseña.
+- **Ciclo de semestres**: un semestre activo; abrir el siguiente copia el formulario anterior.
+- **Formulario editable por jefatura**, "como un Google Forms" (secciones de materias, preguntas
+  abiertas, textos, mínimos), que se publica cuando está listo. Todos los profesores de un
+  departamento ven el mismo formulario.
+- **Respuestas y bloqueos**: matriz profesores × materias; la jefatura bloquea pares antes de
+  correr el algoritmo, sin que el profesor lo vea.
+- **Carga de la estimación de demanda** subiendo el PDF de Servicios Escolares.
+
+Pendiente: el motor de asignación (`bd/motor-asignacion.md`), las cartas de asignación, y cargar
+Actuaría y Estadística. `backend/` es el backend anterior (Supabase), ya reemplazado por `api/`.
 
 ## Cómo contribuir
 

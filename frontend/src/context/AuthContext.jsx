@@ -26,6 +26,9 @@ export function AuthProvider({ children }) {
   // antes tres pantallas pedían /semestre?order=id.desc&limit=1 por separado.
   const [semestre, setSemestre] = useState(null);
   const [franjas, setFranjas] = useState([]);
+  // Si el formulario del propio departamento ya está abierto, para la tarjeta
+  // del inicio. El formulario mismo lo vuelve a preguntar al abrirse.
+  const [formularioPublicado, setFormularioPublicado] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Una sola petición. Antes eran dos, y la del perfil tenía que filtrar por
@@ -40,6 +43,7 @@ export function AuthProvider({ children }) {
     setDepartamentos(datos.departamentos ?? []);
     setSemestre(datos.semestre ?? null);
     setFranjas(datos.franjas ?? []);
+    setFormularioPublicado(Boolean(datos.formulario_publicado));
   }, []);
 
   useEffect(() => {
@@ -83,7 +87,12 @@ export function AuthProvider({ children }) {
     setDepartamentos([]);
     setSemestre(null);
     setFranjas([]);
+    setFormularioPublicado(false);
   }, []);
+
+  // Vuelve a leer el perfil sin cerrar la sesión (p. ej. después de cambiar la
+  // contraseña, que apaga password_predeterminada).
+  const recargarPerfil = useCallback(() => cargarCatalogos(token), [cargarCatalogos, token]);
 
   const nombreDepartamento = useCallback(
     (id) => departamentos.find((d) => d.id === id)?.nombre ?? null,
@@ -98,10 +107,12 @@ export function AuthProvider({ children }) {
         departamentos,
         semestre,
         franjas,
+        formularioPublicado,
         nombreDepartamento,
         loading,
         login,
         logout,
+        recargarPerfil,
       }}
     >
       {children}

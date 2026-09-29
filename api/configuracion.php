@@ -1,69 +1,79 @@
 <?php
 // =============================================================================
-// Configuración del cuestionario (vista de Jefe de Departamento/admin).
+// El editor del formulario (jefatura).
 //
-//   GET ?semestre_id=N
-//       -> { materias[], cuestionario{}, config, profesores[], elegibles{} }
+//   GET  ?semestre_id=N[&departamento_id=D]
+//        -> { publicado, publicado_at, texto_introduccion, horas_minimas_verde,
+//             secciones[], ocultas[], enviadas }
 //
-//   PUT ?recurso=cuestionario&semestre_id=N   { filas:[...] }
-//   PUT ?recurso=departamento&semestre_id=N   { mostrar_seleccion_materias, horas_minimas_verde }
-//   PUT ?recurso=modo_materias&semestre_id=N  { profesor_id, modo }
-//   PUT ?recurso=elegibles                    { profesor_id, materia_ids:[...] }
+//   PUT  ?recurso=formulario&semestre_id=N[&departamento_id=D]
+//        { texto_introduccion, horas_minimas_verde, secciones:[...], materias:[...] }
+//        -> lo mismo que el GET, ya guardado
+//
+//   POST ?recurso=publicar&semestre_id=N[&departamento_id=D]   { publicado: bool }
+//        -> { publicado, publicado_at }
+//
+// Desde 2026-09-28 el formulario es una lista ordenada de secciones que la
+// jefatura edita en la misma vista que ve el profesor, y lo PUBLICA cuando está
+// listo. El guardado es UN PUT con el formulario completo, en una transacción:
+// la pantalla ya tiene todo en memoria y así nunca queda a medias.
+//
+// Ya no existen los recursos modo_materias / elegibles (lista personalizada por
+// profesor): todos los de un departamento ven el mismo formulario. Tampoco
+// cuestionario / departamento, que este PUT reemplaza.
 //
 // Políticas que reemplaza:
-//   materia_cuestionario_escritura  -> exigir_jefe_de(depto de cada materia)
-//   departamento_config_escritura   -> exigir_jefe_de($departamento_id)
-//   jefe_modo_materias_update       -> exigir_jefe_de(depto del profesor objetivo)
-//   jefe_elegibilidad_escritura     -> igual
-//   roster_departamento_select      -> el roster se filtra por departamento
-//
-// Aquí mueren dos triggers de rls-policies.sql:
-//   trg_bloquear_automodificacion_modo_materias — existía porque
-//   GRANT UPDATE (modo_materias_elegibles) es necesariamente amplio (Postgres
-//   no permite atar una columna a una sola política) y un profesor podía
-//   cambiarse el suyo aprovechando propio_perfil_update. Este endpoint es el
-//   único que escribe esa columna y exige ser Jefe del departamento del
-//   profesor objetivo, así que no hay nada que bloquear.
+//   materia_cuestionario_escritura  -> exigir_jefe_de(departamento objetivo), y
+//                                      cada materia tiene que ser de ese depto
+//   departamento_config_escritura   -> exigir_jefe_de(departamento objetivo)
 // =============================================================================
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib/db.php';
 require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/catalogo.php';
+require_once __DIR__ . '/lib/semestre.php';
 
-exigir_metodo('GET', 'PUT');
+exigir_metodo('GET', 'PUT', 'POST');
 exigir_rol(...ROLES_GESTION);
 
-$pdo     = db();
-$metodo  = metodo_http();
-$deptoId = departamento_objetivo();
+$pdo        = db();
+$metodo     = metodo_http();
+$deptoId    = departamento_objetivo();   // ya corrió exigir_jefe_de()
+$semestreId = param_id('semestre_id');
 
-/** Materias activas del departamento que el cuestionario sí muestra. */
-function materias_visibles(PDO $pdo, int $deptoId, int $semestreId): array
+/** El formulario completo más lo que el editor necesita para avisar. */
+function vista_editor(PDO $pdo, int $deptoId, int $semestreId): array
 {
     $st = $pdo->prepare(
-        'SELECT m.id
-           FROM materia m
-           LEFT JOIN materia_cuestionario mc
-                  ON mc.materia_id = m.id AND mc.semestre_id = ?
-          WHERE m.departamento_id = ? AND m.activa = 1
-            AND (mc.seccion IS NULL OR mc.seccion <> \'oculta\')'
+        'SELECT COUNT(*) FROM preferencia pref
+           JOIN profesor p ON p.id = pref.profesor_id
+          WHERE pref.semestre_id = ? AND p.departamento_id = ? AND pref.estado = \'enviado\''
     );
     $st->execute([$semestreId, $deptoId]);
-    return array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+
+    return array_merge(formulario_completo($pdo, $deptoId, $semestreId), [
+        'enviadas' => (int) $st->fetchColumn(),
+    ]);
 }
 
-/** Corta con 403 si el profesor no es del departamento sobre el que se trabaja. */
-function exigir_profesor_del_departamento(PDO $pdo, int $profesorId): int
-{
-    $st = $pdo->prepare('SELECT departamento_id FROM profesor WHERE id = ?');
-    $st->execute([$profesorId]);
-    $depto = $st->fetchColumn();
-    if ($depto === false) {
-        error_json('No existe ese profesor', 404);
+// Escribir solo en el semestre activo; un semestre cerrado se puede ver en el
+// editor pero no cambiar.
+if ($metodo !== 'GET') {
+    exigir_semestre_activo($pdo, $semestreId);
+}
+
+// Sembrar el formulario solo en el semestre activo: abrir el editor sobre uno
+// cerrado es consulta y no debe crear nada.
+$st = $pdo->prepare('SELECT estado FROM semestre WHERE id = ?');
+$st->execute([$semestreId]);
+if ($st->fetchColumn() === 'activo') {
+    try {
+        asegurar_formulario($pdo, $deptoId, $semestreId);
+    } catch (Throwable $e) {
+        fallo_interno('configuracion.php asegurar_formulario', $e, 'No se pudo preparar el formulario');
     }
-    exigir_jefe_de($depto === null ? null : (int) $depto);
-    return $depto === null ? 0 : (int) $depto;
 }
 
 // -----------------------------------------------------------------------------
@@ -71,314 +81,303 @@ function exigir_profesor_del_departamento(PDO $pdo, int $profesorId): int
 // -----------------------------------------------------------------------------
 
 if ($metodo === 'GET') {
-    $semestreId = param_id('semestre_id');
-
-    $st = $pdo->prepare(
-        'SELECT id, clave, nombre FROM materia
-          WHERE departamento_id = ? AND activa = 1 ORDER BY clave'
-    );
-    $st->execute([$deptoId]);
-    $materias = $st->fetchAll();
-
-    // Solo las filas de materias de este departamento. La lectura de
-    // materia_cuestionario estaba abierta a cualquier autenticado en RLS (qué
-    // materias están ocultas no es información sensible), pero esta pantalla
-    // solo administra las propias y devolver de más no aporta nada.
-    $st = $pdo->prepare(
-        'SELECT mc.materia_id, mc.seccion, mc.alias_de_id, mc.etiqueta, mc.orden, mc.revisado
-           FROM materia_cuestionario mc
-           JOIN materia m ON m.id = mc.materia_id
-          WHERE mc.semestre_id = ? AND m.departamento_id = ?'
-    );
-    $st->execute([$semestreId, $deptoId]);
-    $cuestionario = [];
-    foreach ($st->fetchAll() as $c) {
-        $cuestionario[(string) (int) $c['materia_id']] = [
-            'materia_id'  => (int) $c['materia_id'],
-            'seccion'     => $c['seccion'],
-            'alias_de_id' => $c['alias_de_id'] === null ? null : (int) $c['alias_de_id'],
-            'etiqueta'    => $c['etiqueta'],
-            'orden'       => $c['orden'] === null ? null : (int) $c['orden'],
-            'revisado'    => (int) $c['revisado'] === 1,
-        ];
-    }
-
-    $st = $pdo->prepare(
-        'SELECT mostrar_seleccion_materias, horas_minimas_verde
-           FROM departamento_semestre_config WHERE departamento_id = ? AND semestre_id = ?'
-    );
-    $st->execute([$deptoId, $semestreId]);
-    $cfg = $st->fetch();
-
-    // Mismo criterio que PanelPreferencias: quien no da clases no aparece.
-    $st = $pdo->prepare(
-        'SELECT id, nombre, tipo_contrato, modo_materias_elegibles, estado_especial
-           FROM profesor
-          WHERE departamento_id = ? AND tipo_contrato IS NOT NULL AND activo = 1
-          ORDER BY nombre'
-    );
-    $st->execute([$deptoId]);
-    $profesores = $st->fetchAll();
-
-    // Hoy el frontend pide TODA la tabla profesor_materia_elegible y la agrupa
-    // en JS. Aquí el JOIN la acota al departamento.
-    $st = $pdo->prepare(
-        'SELECT pme.profesor_id, pme.materia_id
-           FROM profesor_materia_elegible pme
-           JOIN profesor p ON p.id = pme.profesor_id
-          WHERE p.departamento_id = ?'
-    );
-    $st->execute([$deptoId]);
-    $elegibles = [];
-    foreach ($st->fetchAll() as $e) {
-        $k = (string) (int) $e['profesor_id'];
-        if (!isset($elegibles[$k])) {
-            $elegibles[$k] = [];
-        }
-        $elegibles[$k][] = (int) $e['materia_id'];
-    }
-
-    responder([
-        'materias'     => $materias,
-        'cuestionario' => (object) $cuestionario,
-        'config' => [
-            // Sin fila = defaults de la propia tabla (fail-open), igual que lee
-            // el formulario del profesor.
-            'mostrar_seleccion_materias' => $cfg === false ? true : ((int) $cfg['mostrar_seleccion_materias'] === 1),
-            'horas_minimas_verde'        => $cfg === false ? 10 : (float) $cfg['horas_minimas_verde'],
-        ],
-        'profesores' => $profesores,
-        'elegibles'  => (object) $elegibles,
-    ]);
+    responder(vista_editor($pdo, $deptoId, $semestreId));
 }
-
-// -----------------------------------------------------------------------------
-// PUT
-// -----------------------------------------------------------------------------
 
 $recurso = filter_input(INPUT_GET, 'recurso');
 $body    = cuerpo_json();
 
-// --- ?recurso=cuestionario: una o varias filas de materia_cuestionario -------
-// Reemplaza los dos POST con Prefer: resolution=merge-duplicates (guardar una
-// fila, y "marcar las restantes como revisadas"). Los dos mandan la misma
-// forma; la única diferencia era objeto vs. arreglo.
-if ($recurso === 'cuestionario') {
-    $semestreId = param_id('semestre_id');
-    $filas = isset($body['filas']) && is_array($body['filas']) ? $body['filas'] : [];
-    if ($filas === []) {
-        responder(['ok' => true, 'guardadas' => 0]);
-    }
+// -----------------------------------------------------------------------------
+// POST ?recurso=publicar
+// -----------------------------------------------------------------------------
 
-    $secciones = ['cobertura_departamental', 'catalogo_general', 'oculta'];
-
-    $pdo->beginTransaction();
+if ($metodo === 'POST' && $recurso === 'publicar') {
+    $publicar = !empty($body['publicado']);
     try {
-        $st = $pdo->prepare(
-            'INSERT INTO materia_cuestionario
-                    (materia_id, semestre_id, seccion, alias_de_id, etiqueta, orden, revisado)
-             VALUES (?,?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE
-                    seccion = VALUES(seccion), alias_de_id = VALUES(alias_de_id),
-                    etiqueta = VALUES(etiqueta), orden = VALUES(orden),
-                    revisado = VALUES(revisado)'
-        );
-
-        foreach ($filas as $f) {
-            if (!is_array($f)) {
-                $pdo->rollBack();
-                error_json('Fila de configuración inválida', 400);
-            }
-            $materiaId = filter_var(isset($f['materia_id']) ? $f['materia_id'] : null, FILTER_VALIDATE_INT);
-            if ($materiaId === false || $materiaId === null) {
-                $pdo->rollBack();
-                error_json('Falta materia_id en una de las filas', 400);
-            }
-            // Una por una y no un IN: la guardia tiene que correr por materia.
-            $deptoMateria = departamento_de_materia((int) $materiaId);
-            if ($deptoMateria === null) {
-                $pdo->rollBack();
-                error_json('No existe la materia ' . $materiaId, 404);
-            }
-            exigir_jefe_de($deptoMateria);
-
-            $seccion = isset($f['seccion']) ? (string) $f['seccion'] : 'catalogo_general';
-            if (!in_array($seccion, $secciones, true)) {
-                $pdo->rollBack();
-                error_json('Sección inválida', 400);
-            }
-
-            // Un alias solo tiene sentido en una materia oculta (chk_mc_alias_oculta).
-            // Se limpia aquí y no solo en el cliente porque en MySQL < 8.0.16 el
-            // CHECK se ignora en silencio y la fila entraría inconsistente.
-            $alias = filter_var(isset($f['alias_de_id']) ? $f['alias_de_id'] : null, FILTER_VALIDATE_INT);
-            if ($alias === false) {
-                $alias = null;
-            }
-            if ($seccion !== 'oculta') {
-                $alias = null;
-            }
-            if ($alias !== null && (int) $alias === (int) $materiaId) {
-                $pdo->rollBack();
-                error_json('Una materia no puede ser alias de sí misma', 400);
-            }
-
-            $orden = filter_var(isset($f['orden']) ? $f['orden'] : null, FILTER_VALIDATE_INT);
-            if ($orden === false) {
-                $orden = null;
-            }
-
-            $st->execute([
-                (int) $materiaId,
-                $semestreId,
-                $seccion,
-                $alias,
-                texto_opcional($f, 'etiqueta'),
-                $orden,
-                empty($f['revisado']) ? 0 : 1,
-            ]);
+        if ($publicar) {
+            $pdo->prepare(
+                'INSERT INTO departamento_semestre_config
+                        (departamento_id, semestre_id, publicado, publicado_at, publicado_por)
+                 VALUES (?,?,1,?,?)
+                 ON DUPLICATE KEY UPDATE publicado = 1,
+                        publicado_at = VALUES(publicado_at), publicado_por = VALUES(publicado_por)'
+            )->execute([$deptoId, $semestreId, ahora_utc(), mi_id()]);
+        } else {
+            // publicado_at/por se conservan: dicen cuándo se abrió por última vez.
+            $pdo->prepare(
+                'UPDATE departamento_semestre_config SET publicado = 0
+                  WHERE departamento_id = ? AND semestre_id = ?'
+            )->execute([$deptoId, $semestreId]);
         }
-
-        $pdo->commit();
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        fallo_interno('configuracion.php cuestionario', $e, 'No se pudo guardar la configuración');
+        fallo_interno('configuracion.php publicar', $e, 'No se pudo cambiar la publicación');
     }
-
-    responder(['ok' => true, 'guardadas' => count($filas)]);
+    $cfg = config_formulario($pdo, $deptoId, $semestreId);
+    responder(['publicado' => $cfg['publicado'], 'publicado_at' => $cfg['publicado_at']]);
 }
 
-// --- ?recurso=departamento: departamento_semestre_config ---------------------
-if ($recurso === 'departamento') {
-    $semestreId = param_id('semestre_id');
-    // exigir_jefe_de ya corrió dentro de departamento_objetivo().
+if ($metodo !== 'PUT' || $recurso !== 'formulario') {
+    error_json('Recurso no soportado', 400);
+}
 
-    $mostrar = empty($body['mostrar_seleccion_materias']) ? 0 : 1;
-    $horas   = filter_var(
-        isset($body['horas_minimas_verde']) ? $body['horas_minimas_verde'] : null,
-        FILTER_VALIDATE_FLOAT
-    );
-    if ($horas === false || $horas === null || $horas < 0) {
-        error_json('Las horas mínimas en verde deben ser un número mayor o igual que 0', 400, 'horas_invalidas');
+// -----------------------------------------------------------------------------
+// PUT ?recurso=formulario — validar todo antes de escribir nada
+// -----------------------------------------------------------------------------
+
+/** Entero >= 0, o null si viene vacío. Corta con 400 si viene algo raro. */
+function entero_opcional($valor, string $que): ?int
+{
+    if ($valor === null || $valor === '') {
+        return null;
+    }
+    $n = filter_var($valor, FILTER_VALIDATE_INT);
+    if ($n === false || $n < 0) {
+        error_json("$que debe ser un número entero mayor o igual que 0", 400);
+    }
+    return (int) $n;
+}
+
+$horas = filter_var(
+    isset($body['horas_minimas_verde']) ? $body['horas_minimas_verde'] : null,
+    FILTER_VALIDATE_FLOAT
+);
+if ($horas === false || $horas === null || $horas < 0 || $horas > 60) {
+    error_json('Las horas mínimas en verde deben ser un número entre 0 y 60', 400, 'horas_invalidas');
+}
+
+$intro = isset($body['texto_introduccion']) ? trim((string) $body['texto_introduccion']) : '';
+// Guardar el texto por defecto tal cual sería ruido: NULL significa "el de
+// siempre", y así un cambio futuro al default le llega a quien no lo tocó.
+$intro = ($intro === '' || $intro === TEXTO_INTRODUCCION_DEFAULT) ? null : $intro;
+
+// --- Secciones ---------------------------------------------------------------
+
+$st = $pdo->prepare(
+    'SELECT id, tipo FROM cuestionario_seccion WHERE departamento_id = ? AND semestre_id = ?'
+);
+$st->execute([$deptoId, $semestreId]);
+$tipoExistente = [];
+foreach ($st->fetchAll() as $s) {
+    $tipoExistente[(int) $s['id']] = $s['tipo'];
+}
+
+$entrada = isset($body['secciones']) && is_array($body['secciones']) ? $body['secciones'] : [];
+$secciones = [];
+$conteoTipo = ['num_cursos' => 0, 'disponibilidad' => 0];
+$vistas = [];
+foreach ($entrada as $s) {
+    if (!is_array($s)) {
+        error_json('Sección inválida', 400);
+    }
+    $id = filter_var(isset($s['id']) ? $s['id'] : null, FILTER_VALIDATE_INT);
+    $id = ($id === false || $id === null) ? null : (int) $id;
+    $tipo = isset($s['tipo']) ? (string) $s['tipo'] : '';
+    if (!in_array($tipo, TIPOS_SECCION, true)) {
+        error_json('Tipo de sección inválido', 400);
+    }
+    if ($id !== null) {
+        // Una sección de otro depto/semestre, o de otro tipo, no se toca desde aquí.
+        if (!isset($tipoExistente[$id]) || $tipoExistente[$id] !== $tipo) {
+            error_json('Una de las secciones no pertenece a este formulario', 400);
+        }
+        if (isset($vistas[$id])) {
+            error_json('Hay una sección repetida', 400);
+        }
+        $vistas[$id] = true;
+    }
+    $clave = isset($s['clave_temporal']) ? (string) $s['clave_temporal'] : '';
+    if ($id === null && $clave === '') {
+        error_json('Falta clave_temporal en una sección nueva', 400);
+    }
+    if (isset($conteoTipo[$tipo])) {
+        $conteoTipo[$tipo]++;
     }
 
+    $titulo = trim(isset($s['titulo']) ? (string) $s['titulo'] : '');
+    if ($titulo === '') {
+        error_json('Toda sección necesita un título', 400, 'titulo_vacio');
+    }
+    if (mb_strlen($titulo) > 255) {
+        error_json('Un título es demasiado largo (máximo 255 caracteres)', 400);
+    }
+    $audiencia = isset($s['audiencia']) ? (string) $s['audiencia'] : 'todos';
+    if (!in_array($audiencia, AUDIENCIAS, true)) {
+        error_json('Audiencia inválida', 400);
+    }
+    // num_cursos y disponibilidad son para todos: sin ellos no hay qué asignar.
+    if ($tipo === 'num_cursos' || $tipo === 'disponibilidad') {
+        $audiencia = 'todos';
+    }
+
+    $secciones[] = [
+        'id'          => $id,
+        'clave'       => $clave,
+        'tipo'        => $tipo,
+        'titulo'      => $titulo,
+        'descripcion' => texto_opcional($s, 'descripcion'),
+        'audiencia'   => $audiencia,
+        'minimo'      => $tipo === 'materias'
+            ? entero_opcional(isset($s['minimo_verdes']) ? $s['minimo_verdes'] : null, 'El mínimo de verdes')
+            : null,
+        'cobertura'   => $tipo === 'materias' && !empty($s['cobertura_departamental']) ? 1 : 0,
+        'obligatoria' => $tipo === 'abierta' && !empty($s['obligatoria']) ? 1 : 0,
+    ];
+}
+if ($conteoTipo['num_cursos'] !== 1 || $conteoTipo['disponibilidad'] !== 1) {
+    error_json(
+        'El formulario debe tener exactamente una pregunta de número de cursos y una de disponibilidad',
+        400,
+        'secciones_fijas'
+    );
+}
+
+// --- Materias ----------------------------------------------------------------
+
+$st = $pdo->prepare('SELECT id FROM materia WHERE departamento_id = ?');
+$st->execute([$deptoId]);
+$materiasDelDepto = array_flip(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)));
+
+$tipoPorRef = [];
+foreach ($secciones as $s) {
+    $tipoPorRef[$s['id'] !== null ? 'id:' . $s['id'] : 'tmp:' . $s['clave']] = $s['tipo'];
+}
+
+// El alias ("nombre viejo de") NO se edita desde aquí: decisión del
+// 2026-09-28, lo cambia un administrador directo en la base. Se conserva el que
+// ya haya y se ignora lo que mande el cliente.
+$st = $pdo->prepare(
+    'SELECT mc.materia_id, mc.alias_de_id FROM materia_cuestionario mc
+       JOIN materia m ON m.id = mc.materia_id
+      WHERE mc.semestre_id = ? AND m.departamento_id = ? AND mc.alias_de_id IS NOT NULL'
+);
+$st->execute([$semestreId, $deptoId]);
+$aliasActual = [];
+foreach ($st->fetchAll() as $a) {
+    $aliasActual[(int) $a['materia_id']] = (int) $a['alias_de_id'];
+}
+
+$materias = [];
+$entrada = isset($body['materias']) && is_array($body['materias']) ? $body['materias'] : [];
+foreach ($entrada as $m) {
+    if (!is_array($m)) {
+        error_json('Materia inválida', 400);
+    }
+    $materiaId = filter_var(isset($m['materia_id']) ? $m['materia_id'] : null, FILTER_VALIDATE_INT);
+    if ($materiaId === false || $materiaId === null || !isset($materiasDelDepto[(int) $materiaId])) {
+        error_json('Una de las materias no es de este departamento', 400);
+    }
+    $materiaId = (int) $materiaId;
+
+    // `seccion` es el id de una sección existente, la clave_temporal de una
+    // nueva, o null para ocultarla.
+    $ref = null;
+    if (isset($m['seccion']) && $m['seccion'] !== null && $m['seccion'] !== '') {
+        $ref = is_int($m['seccion']) || ctype_digit((string) $m['seccion'])
+            ? 'id:' . (int) $m['seccion']
+            : 'tmp:' . (string) $m['seccion'];
+        if (!isset($tipoPorRef[$ref]) || $tipoPorRef[$ref] !== 'materias') {
+            error_json('Una materia apunta a una sección que no es de materias', 400);
+        }
+    }
+
+    // chk_mc_alias_oculta: un alias solo tiene sentido en una materia oculta,
+    // así que si la jefatura la pasa a una sección, el alias se limpia. Se
+    // aplica aquí porque en MariaDB 5.5 el CHECK se ignora en silencio.
+    $alias = ($ref === null && isset($aliasActual[$materiaId])) ? $aliasActual[$materiaId] : null;
+
+    $etiqueta = texto_opcional($m, 'etiqueta');
+    if ($etiqueta !== null && mb_strlen($etiqueta) > 255) {
+        error_json('Un nombre de materia es demasiado largo (máximo 255 caracteres)', 400);
+    }
+
+    $materias[$materiaId] = [
+        'ref'      => $ref,
+        'alias'    => $alias,
+        'etiqueta' => $etiqueta,
+        'orden'    => entero_opcional(isset($m['orden']) ? $m['orden'] : null, 'El orden'),
+        'revisado' => empty($m['revisado']) ? 0 : 1,
+    ];
+}
+
+// -----------------------------------------------------------------------------
+// Escribir, todo o nada
+// -----------------------------------------------------------------------------
+
+$pdo->beginTransaction();
+try {
     $pdo->prepare(
         'INSERT INTO departamento_semestre_config
-                (departamento_id, semestre_id, mostrar_seleccion_materias, horas_minimas_verde)
+                (departamento_id, semestre_id, horas_minimas_verde, texto_introduccion)
          VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE
-                mostrar_seleccion_materias = VALUES(mostrar_seleccion_materias),
-                horas_minimas_verde = VALUES(horas_minimas_verde)'
-    )->execute([$deptoId, $semestreId, $mostrar, $horas]);
+         ON DUPLICATE KEY UPDATE horas_minimas_verde = VALUES(horas_minimas_verde),
+                texto_introduccion = VALUES(texto_introduccion)'
+    )->execute([$deptoId, $semestreId, $horas, $intro]);
 
-    responder(['ok' => true]);
-}
+    $upd = $pdo->prepare(
+        'UPDATE cuestionario_seccion
+            SET titulo = ?, descripcion = ?, audiencia = ?, minimo_verdes = ?,
+                cobertura_departamental = ?, obligatoria = ?, orden = ?, activa = 1
+          WHERE id = ? AND departamento_id = ? AND semestre_id = ?'
+    );
+    $ins = $pdo->prepare(
+        'INSERT INTO cuestionario_seccion
+                (departamento_id, semestre_id, tipo, titulo, descripcion, audiencia,
+                 minimo_verdes, cobertura_departamental, obligatoria, orden)
+         VALUES (?,?,?,?,?,?,?,?,?,?)'
+    );
 
-// --- ?recurso=modo_materias: RF15 -------------------------------------------
-// Cambiar el modo y, en el mismo movimiento, dejar la lista personalizada
-// coherente: al poner 'personalizada' se siembra con TODO el cuestionario
-// (si se dejara vacía, esa persona abriría el formulario sin una sola materia
-// y sin ninguna pista de por qué), y al salir de 'personalizada' se borra
-// (si solo cambiara el modo, la lista quedaría latente y reaparecería la
-// próxima vez que alguien la volviera a poner). Antes eran 2 o 3 peticiones
-// sin transacción entre ellas.
-if ($recurso === 'modo_materias') {
-    $semestreId = param_id('semestre_id');
-    $profesorId = filter_var(isset($body['profesor_id']) ? $body['profesor_id'] : null, FILTER_VALIDATE_INT);
-    $modo       = isset($body['modo']) ? (string) $body['modo'] : '';
-    if ($profesorId === false || $profesorId === null) {
-        error_json('Falta profesor_id', 400);
-    }
-    if (!in_array($modo, ['todas', 'personalizada', 'ninguna'], true)) {
-        error_json('Modo inválido', 400);
-    }
-    exigir_profesor_del_departamento($pdo, (int) $profesorId);
-
-    $pdo->beginTransaction();
-    try {
-        // El UPDATE lista una sola columna: no hay forma de que por aquí se
-        // cambie rol, departamento_id ni password_hash.
-        $pdo->prepare('UPDATE profesor SET modo_materias_elegibles = ? WHERE id = ?')
-            ->execute([$modo, (int) $profesorId]);
-
-        if ($modo === 'personalizada') {
-            $st = $pdo->prepare('SELECT COUNT(*) FROM profesor_materia_elegible WHERE profesor_id = ?');
-            $st->execute([(int) $profesorId]);
-            if ((int) $st->fetchColumn() === 0) {
-                $ins = $pdo->prepare(
-                    'INSERT IGNORE INTO profesor_materia_elegible (profesor_id, materia_id) VALUES (?, ?)'
-                );
-                foreach (materias_visibles($pdo, $deptoId, $semestreId) as $materiaId) {
-                    $ins->execute([(int) $profesorId, $materiaId]);
-                }
-            }
+    $idPorRef = [];
+    $orden = 1;
+    foreach ($secciones as $s) {
+        if ($s['id'] !== null) {
+            $upd->execute([
+                $s['titulo'], $s['descripcion'], $s['audiencia'], $s['minimo'],
+                $s['cobertura'], $s['obligatoria'], $orden, $s['id'], $deptoId, $semestreId,
+            ]);
+            $idPorRef['id:' . $s['id']] = $s['id'];
         } else {
-            $pdo->prepare('DELETE FROM profesor_materia_elegible WHERE profesor_id = ?')
-                ->execute([(int) $profesorId]);
+            $ins->execute([
+                $deptoId, $semestreId, $s['tipo'], $s['titulo'], $s['descripcion'], $s['audiencia'],
+                $s['minimo'], $s['cobertura'], $s['obligatoria'], $orden,
+            ]);
+            $idPorRef['tmp:' . $s['clave']] = (int) $pdo->lastInsertId();
         }
-
-        $pdo->commit();
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        fallo_interno('configuracion.php modo_materias', $e, 'No se pudo cambiar el modo');
+        $orden++;
     }
 
-    // Se devuelve la lista resultante para que la pantalla no la adivine.
-    $st = $pdo->prepare('SELECT materia_id FROM profesor_materia_elegible WHERE profesor_id = ?');
-    $st->execute([(int) $profesorId]);
-    responder([
-        'ok'        => true,
-        'modo'      => $modo,
-        'elegibles' => array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)),
-    ]);
+    // Lo que no vino, se borra en suave: puede tener respuestas colgando.
+    $conservadas = array_values($idPorRef);
+    $marcas = implode(',', array_fill(0, count($conservadas), '?'));
+    $pdo->prepare(
+        "UPDATE cuestionario_seccion SET activa = 0
+          WHERE departamento_id = ? AND semestre_id = ? AND id NOT IN ($marcas)"
+    )->execute(array_merge([$deptoId, $semestreId], $conservadas));
+
+    $upsert = $pdo->prepare(
+        'INSERT INTO materia_cuestionario
+                (materia_id, semestre_id, seccion_id, alias_de_id, etiqueta, orden, revisado)
+         VALUES (?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE seccion_id = VALUES(seccion_id), alias_de_id = VALUES(alias_de_id),
+                etiqueta = VALUES(etiqueta), orden = VALUES(orden), revisado = VALUES(revisado)'
+    );
+    foreach ($materias as $materiaId => $m) {
+        $upsert->execute([
+            $materiaId,
+            $semestreId,
+            $m['ref'] === null ? null : $idPorRef[$m['ref']],
+            $m['alias'],
+            $m['etiqueta'],
+            $m['orden'],
+            $m['revisado'],
+        ]);
+    }
+
+    $pdo->commit();
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    fallo_interno('configuracion.php formulario', $e, 'No se pudo guardar el formulario');
 }
 
-// --- ?recurso=elegibles: reemplaza la lista personalizada completa -----------
-// Un solo PUT con el conjunto final, en vez de un POST por materia marcada y un
-// DELETE por materia desmarcada. La pantalla ya tiene el conjunto completo en
-// memoria, así que mandarlo entero es más simple y además atómico.
-if ($recurso === 'elegibles') {
-    $profesorId = filter_var(isset($body['profesor_id']) ? $body['profesor_id'] : null, FILTER_VALIDATE_INT);
-    if ($profesorId === false || $profesorId === null) {
-        error_json('Falta profesor_id', 400);
-    }
-    exigir_profesor_del_departamento($pdo, (int) $profesorId);
-
-    $ids = [];
-    if (isset($body['materia_ids']) && is_array($body['materia_ids'])) {
-        foreach ($body['materia_ids'] as $id) {
-            $n = filter_var($id, FILTER_VALIDATE_INT);
-            if ($n !== false && $n !== null) {
-                $ids[(int) $n] = true;
-            }
-        }
-    }
-
-    $pdo->beginTransaction();
-    try {
-        $pdo->prepare('DELETE FROM profesor_materia_elegible WHERE profesor_id = ?')
-            ->execute([(int) $profesorId]);
-        if ($ids !== []) {
-            $ins = $pdo->prepare(
-                'INSERT IGNORE INTO profesor_materia_elegible (profesor_id, materia_id) VALUES (?, ?)'
-            );
-            foreach (array_keys($ids) as $materiaId) {
-                $ins->execute([(int) $profesorId, $materiaId]);
-            }
-        }
-        $pdo->commit();
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        fallo_interno('configuracion.php elegibles', $e, 'No se pudo guardar la lista');
-    }
-
-    responder(['ok' => true, 'elegibles' => array_keys($ids)]);
-}
-
-error_json('Recurso no soportado', 400);
+responder(vista_editor($pdo, $deptoId, $semestreId));

@@ -1,25 +1,24 @@
 <?php
 // =============================================================================
-// GET ?semestre_id=N -> { mostrar_materias, horas_minimas_verde, materias[] }
+// GET ?semestre_id=N
+//   -> { publicado: false, secciones: [] }               si no está publicado
+//   -> { publicado, texto_introduccion, horas_minimas_verde, secciones[] }
 //
-// El catálogo de materias del cuestionario del profesor que llama, ya resuelto
-// por el servidor: filtrado por su departamento, sin las ocultas, con los alias
-// pegados a la materia visible, acotado a su lista personalizada si la tiene, y
-// ordenado.
+// El formulario del profesor que llama, ya resuelto por el servidor: las
+// secciones de su departamento que le aplican por tipo de contrato, cada
+// sección de materias con sus materias (sin ocultas, con alias pegados y
+// ordenadas). Mientras la jefatura no lo publique, no devuelve nada.
 //
-// Reemplaza 4 llamados del load de FormularioPreferencias.jsx:
-//   /departamento_semestre_config?departamento_id=eq.X&semestre_id=eq.Y
-//   /materia?departamento_id=eq.X&activa=eq.true
-//   /materia_cuestionario?semestre_id=eq.Y
-//   /profesor_materia_elegible?profesor_id=eq.Z
+// Desde 2026-09-28 todos los profesores de un departamento ven el mismo
+// formulario: ya no hay lista personalizada por profesor. Lo que la jefatura
+// decide por persona (bloqueo_profesor_materia) NO se lee aquí a propósito: el
+// profesor nunca debe verlo.
 //
 // Políticas que reemplaza:
 //   catalogo_lectura_autenticados  -> basta con estar autenticado
-//   propia_elegibilidad            -> WHERE profesor_id = mi_id()
 //
-// El armado está en lib/catalogo.php porque panel.php lo usa igual para la
-// vista de solo lectura del Jefe: si estuviera duplicado, las dos vistas se
-// desincronizarían.
+// El armado está en lib/catalogo.php porque preferencia.php valida el envío
+// contra el mismo formulario y panel.php lo muestra igual en solo lectura.
 // =============================================================================
 
 declare(strict_types=1);
@@ -30,13 +29,4 @@ require_once __DIR__ . '/lib/catalogo.php';
 
 exigir_metodo('GET');
 
-$semestreId = param_id('semestre_id');
-$perfil     = mi_perfil();
-
-responder(cuestionario_de(
-    db(),
-    (int) $perfil['id'],
-    $perfil['departamento_id'] === null ? null : (int) $perfil['departamento_id'],
-    (string) $perfil['modo_materias_elegibles'],
-    $semestreId
-));
+responder(cuestionario_de(db(), mi_perfil(), param_id('semestre_id')));

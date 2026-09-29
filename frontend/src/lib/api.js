@@ -102,14 +102,14 @@ export const catalogos = (token) => pedir('catalogos.php', token);
 
 // --- Cuestionario del profesor ----------------------------------------------
 
-/** El catálogo del cuestionario ya resuelto por el servidor. */
+/** El formulario del profesor que llama, ya resuelto por el servidor. */
 export const cuestionario = (token, semestreId) =>
   pedir(`cuestionario.php?semestre_id=${semestreId}`, token);
 
 export const leerPreferencia = (token, semestreId) =>
   pedir(`preferencia.php?semestre_id=${semestreId}`, token);
 
-/** Guarda preferencia + materias + disponibilidad en UNA transacción. */
+/** Guarda preferencia + materias + disponibilidad + respuestas en UNA transacción. */
 export const guardarPreferencia = (token, semestreId, datos) =>
   put(`preferencia.php?semestre_id=${semestreId}`, token, datos);
 
@@ -140,27 +140,53 @@ export const editarMateria = (token, id, cambios) =>
 export const guardarCoOferta = (token, agregar, quitar) =>
   put('materias.php?recurso=co_oferta', token, { agregar, quitar });
 
-// --- Configuración del cuestionario -----------------------------------------
+// --- Editor del formulario (jefatura) ---------------------------------------
+// departamentoId es opcional: sin él, el servidor usa el departamento propio.
+// Solo jefe_division y admin pueden pedir otro (departamento_objetivo()).
 
-export const leerConfiguracion = (token, semestreId) =>
-  pedir(`configuracion.php?semestre_id=${semestreId}`, token);
+const conDepto = (ruta, semestreId, departamentoId) =>
+  `${ruta}${ruta.includes('?') ? '&' : '?'}semestre_id=${semestreId}` +
+  (departamentoId ? `&departamento_id=${departamentoId}` : '');
 
-/** Una o varias filas de materia_cuestionario, en una transacción. */
-export const guardarFilasCuestionario = (token, semestreId, filas) =>
-  put(`configuracion.php?recurso=cuestionario&semestre_id=${semestreId}`, token, { filas });
+/** El formulario completo, sin filtrar por audiencia, más las materias ocultas. */
+export const leerFormulario = (token, semestreId, departamentoId) =>
+  pedir(conDepto('configuracion.php', semestreId, departamentoId), token);
 
-export const guardarConfigDepartamento = (token, semestreId, config) =>
-  put(`configuracion.php?recurso=departamento&semestre_id=${semestreId}`, token, config);
+/** Guarda TODO el formulario en una transacción y devuelve cómo quedó. */
+export const guardarFormulario = (token, semestreId, departamentoId, formulario) =>
+  put(conDepto('configuracion.php?recurso=formulario', semestreId, departamentoId), token, formulario);
 
-export const cambiarModoMaterias = (token, semestreId, profesorId, modo) =>
-  put(`configuracion.php?recurso=modo_materias&semestre_id=${semestreId}`, token, {
+export const publicarFormulario = (token, semestreId, departamentoId, publicado) =>
+  post(conDepto('configuracion.php?recurso=publicar', semestreId, departamentoId), token, { publicado });
+
+// --- Respuestas y bloqueos (jefatura) ---------------------------------------
+
+export const leerRespuestas = (token, semestreId, departamentoId) =>
+  pedir(conDepto('respuestas.php', semestreId, departamentoId), token);
+
+export const cambiarBloqueo = (token, semestreId, departamentoId, profesorId, materiaId, bloqueado) =>
+  post(conDepto('respuestas.php?recurso=bloqueo', semestreId, departamentoId), token, {
     profesor_id: profesorId,
-    modo,
+    materia_id: materiaId,
+    bloqueado,
   });
 
-/** Reemplaza la lista personalizada completa de un profesor. */
-export const guardarElegibles = (token, profesorId, materiaIds) =>
-  put('configuracion.php?recurso=elegibles', token, {
-    profesor_id: profesorId,
-    materia_ids: materiaIds,
-  });
+// --- Semestres (admin y jefa de división) ----------------------------------
+
+export const leerSemestres = (token) => pedir('semestres.php', token);
+
+/** Abre (o reusa) ese semestre, lo deja activo y cierra el anterior. */
+export const abrirSemestre = (token, tipo, anio) =>
+  post('semestres.php?recurso=abrir', token, { tipo, anio });
+
+export const reactivarSemestre = (token, semestreId) =>
+  post('semestres.php?recurso=reactivar', token, { semestre_id: semestreId });
+
+// --- Estimación de demanda (jefatura) ---------------------------------------
+
+export const leerDemanda = (token, semestreId, departamentoId) =>
+  pedir(conDepto('demanda.php', semestreId, departamentoId), token);
+
+/** Reemplaza la estimación del departamento/semestre con estas filas, en una transacción. */
+export const guardarDemanda = (token, semestreId, departamentoId, filas) =>
+  post(conDepto('demanda.php', semestreId, departamentoId), token, { filas });

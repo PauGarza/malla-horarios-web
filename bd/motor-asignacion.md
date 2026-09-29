@@ -9,11 +9,15 @@
 
 | Tabla | Para qué |
 |---|---|
-| `estimacion_demanda` | `grupos_sugeridos` dice cuántos `grupo` debe haber por materia/semestre — es el punto de partida. |
+| `estimacion_demanda` | `grupos_sugeridos` dice cuántos `grupo` debe haber por materia/semestre — es el punto de partida. Desde 2026-09-29 la cargan los jefes desde la app (PDF de Servicios Escolares → `api/demanda.php`). |
+| `semestre` | `estado = 'activo'` es el semestre que se está planeando (hay exactamente uno): el motor trabaja sobre ese. |
 | `materia`, `plan_estudio_materia`, `materia_prerequisito`, `materia_co_oferta`, `materia_equivalencia` | Catálogo académico: créditos (cuántos bloques de 30 min necesita cada grupo), seriación, qué materias son la misma clase con otra clave (co-oferta), tipo de salón que exige (`materia.tipo_salon_requerido`). |
-| `profesor` | Roster: `departamento_id`, `tipo_contrato` (tiempo_completo asigna por curso, asignatura por hora — RN04), `modo_materias_elegibles`. |
+| `profesor` | Roster: `departamento_id`, `tipo_contrato` (tiempo_completo asigna por curso, asignatura por hora — RN04). Desde 2026-09-28 ya no hay lista personalizada de materias por profesor (`modo_materias_elegibles` se eliminó): todos los de un departamento contestan el mismo formulario. |
 | `preferencia`, `preferencia_materia`, `disponibilidad` | Lo que declaró cada profesor para el semestre. **`disponibilidad` es restricción DURA** (el profesor dijo que no puede en rojo — no asignar ahí). **`preferencia_materia` es BLANDA** (ranking de materias deseadas — el motor debe intentar maximizarla, no es obligatoria de cumplir al 100%). |
-| `departamento_semestre_config` | `horas_minimas_verde` (umbral de validez de una preferencia — ver checklist de envío) y `mostrar_seleccion_materias` (si un departamento no captura preferencia de materias, el motor solo tiene `disponibilidad` de ese departamento como input, no ranking de materias). |
+| `bloqueo_profesor_materia` | **Restricción DURA** (2026-09-28): la jefatura decidió que ese profesor NO da esa materia ese semestre. Nunca asignarlo, sin importar lo que haya contestado en `preferencia_materia` (esa respuesta se conserva intacta debajo del bloqueo). |
+| `preferencia_respuesta` | Respuestas a las preguntas abiertas del formulario (una fila por sección `abierta`). Texto libre para que lo lea la jefatura; el motor no lo interpreta. Reemplaza a `preferencia.horarios_otro_depto` / `observaciones_*`, que quedaron obsoletas. |
+| `departamento_semestre_config` | `horas_minimas_verde` (umbral de validez de una preferencia — ver checklist de envío). `publicado` dice si el formulario ya estaba abierto. (`mostrar_seleccion_materias` quedó obsoleta: un departamento que no captura materias simplemente no tiene secciones de materias en `cuestionario_seccion`, y el motor solo tiene `disponibilidad` como input de ese departamento.) |
+| `cuestionario_seccion`, `materia_cuestionario` | Qué materias vio cada departamento en su formulario y en qué sección. `cuestionario_seccion.cobertura_departamental` marca las secciones de cursos departamentales; ya viene copiado a `preferencia_materia.cobertura_departamental`. |
 | `franja_horaria` | Catálogo fijo de bloques de 30 min (07:00–14:00 y 16:00–20:00, Lun–Vie) — el universo de horarios posibles. |
 | `salon`, `salon_disponibilidad_departamento` | Salones y qué departamento puede usar cuál, qué día/franja, cada semestre. |
 | `grupo` | Estado actual (`demanda`/`en_asignacion`/`asignado`/`cancelado`), `cupo_maximo`. |
@@ -66,6 +70,8 @@ gastar intentos en combinaciones que la base va a rechazar (ver `triggers.sql`):
 - **Sin medias horas sueltas** (RN06) — no dejar huecos de 30 min aislados en el día de un profesor o
   un salón.
 - **Cupo de salón vs. tamaño de grupo**: `grupo.cupo_maximo <= salon.capacidad`.
+- **Bloqueos de jefatura**: nunca asignar un par profesor-materia que esté en
+  `bloqueo_profesor_materia` para ese semestre.
 - **Disponibilidad dura**: nunca asignar un bloque marcado `rojo` en `disponibilidad` para ese
   profesor. `amarillo` es "posible pero complicado" — evitarlo si hay alternativa en `verde`, no es un
   bloqueo absoluto.

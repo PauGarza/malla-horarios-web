@@ -280,12 +280,12 @@ clases — ver §4.1. Un admin/Servicios Escolares/Nómina que no dé clases tam
 | rol | rol_enum NOT NULL DEFAULT 'profesor' | `profesor` \| `jefe_departamento` \| `jefe_division` \| `servicios_escolares` \| `nomina` \| `admin` — se firma directo como claim en el JWT de login, no se consulta en cada política RLS (más barato). **`jefe_division` se agregó 2026-09-25**: la División Académica (DACE) está arriba de los departamentos, así que su alcance son los 3 (Matemáticas, Actuaría, Estadística). Tiene el mismo alcance que `admin` pero no es lo mismo: admin administra el sistema, jefe_division dirige la división y sigue dando clases. En el código la pregunta se hace por comportamiento (`ve_todos_los_departamentos()` en `api/lib/auth.php`), nunca comparando contra un rol concreto |
 | departamento_id | int NULL FK → departamento | NULL solo si rol ∈ {admin, servicios_escolares, nomina}; obligatorio para profesor/jefe_departamento/jefe_division (ambos dan clases, confirmado 2026-08-21 que un profesor puede impartir materias de OTROS departamentos aunque pertenezca a uno solo) |
 | tipo_contrato | tipo_contrato_enum NULL | `tiempo_completo` \| `asignatura` — taxonomía de 2 valores del cuestionario actual (autoritativa; la de 3 valores `hours`/`half-time`/`full-time` de Mat·Scheduler queda obsoleta). NULL bajo la misma condición que `departamento_id` |
-| modo_materias_elegibles | modo_materias_enum NOT NULL DEFAULT 'todas' | `todas` \| `personalizada` \| `ninguna` — qué ve el profesor en su cuestionario; solo aplica a quien realmente da clases |
+| modo_materias_elegibles | modo_materias_enum NOT NULL DEFAULT 'todas' | `todas` \| `personalizada` \| `ninguna` — qué ve el profesor en su cuestionario; solo aplica a quien realmente da clases. **Eliminada 2026-09-28** (ver §12) |
 | password_predeterminada | boolean NOT NULL DEFAULT true | true = sigue usando `cu` como contraseña, no la ha cambiado — informativo para admin/Jefe, no bloquea nada |
 | activo | boolean NOT NULL DEFAULT true | |
 | CHECK | | `rol IN ('admin','servicios_escolares','nomina') OR (departamento_id IS NOT NULL AND tipo_contrato IS NOT NULL)` |
 
-### `profesor_materia_elegible`
+### `profesor_materia_elegible` — ELIMINADA 2026-09-28 (ver §12)
 Solo relevante cuando `modo_materias_elegibles = 'personalizada'`; configurado por el Jefe de
 Departamento.
 | Columna | Tipo | Notas |
@@ -380,7 +380,7 @@ departamento) o admin (de cualquiera) — ver política `departamento_config_esc
 |---|---|---|
 | departamento_id | int FK → departamento | |
 | semestre_id | int FK → semestre | |
-| mostrar_seleccion_materias | boolean NOT NULL DEFAULT true | `false` = el cuestionario de ese departamento ese semestre NO muestra selección de materias — el profesor solo declara disponibilidad de horario |
+| mostrar_seleccion_materias | boolean NOT NULL DEFAULT true | `false` = el cuestionario de ese departamento ese semestre NO muestra selección de materias — el profesor solo declara disponibilidad de horario. **Obsoleta desde 2026-09-28**: no tener secciones de materias en `cuestionario_seccion` significa lo mismo (§12) |
 | horas_minimas_verde | numeric(5,2) NOT NULL DEFAULT 10 | resuelve D18 de `GUIA-DECISIONES.md` con un valor por defecto, configurable por departamento |
 | PK(departamento_id, semestre_id) | | |
 
@@ -525,8 +525,9 @@ Reglas de negocio validadas vía trigger/aplicación (agregados, no expresables 
 | UNIQUE(profesor_id, semestre_id) | | |
 
 ### `preferencia_materia` (antes `Preferencia_Materia` — restricción BLANDA, ranking de materias)
-Las opciones que ve el profesor al elegir vienen filtradas por `profesor.modo_materias_elegibles` +
-`profesor_materia_elegible` (lógica de aplicación, no una FK adicional aquí).
+Las opciones que ve el profesor salen del formulario de su departamento (`cuestionario_seccion` +
+`materia_cuestionario`, ver §12) — lógica de aplicación, no una FK adicional aquí. Hasta el
+2026-09-28 además se filtraban por `profesor.modo_materias_elegibles` + `profesor_materia_elegible`.
 | Columna | Tipo | Notas |
 |---|---|---|
 | id | serial PK | |
@@ -555,7 +556,8 @@ aplicación al momento de enviar, no una columna).
 - `departamento` 1—N `profesor`, `materia`
 - `plan_estudio` N—M `departamento` vía `plan_estudio_departamento` (planes conjuntos, ej. MCD/MR)
 - `plan_estudio` N—M `materia` vía `plan_estudio_materia`
-- `profesor` N—M `materia` vía `profesor_materia_elegible` (solo si modo = personalizada)
+- ~~`profesor` N—M `materia` vía `profesor_materia_elegible`~~ (eliminada 2026-09-28) — ahora
+  `profesor` N—M `materia` vía `bloqueo_profesor_materia` (por semestre, §12)
 - `materia` self-N:M vía `materia_prerequisito` (seriación), `materia_co_oferta` (co-oferta),
   `materia_equivalencia` (revalidación) — **tres relaciones distintas**, no una
 - `materia` 1—N `grupo`; `semestre` 1—N `grupo`; `materia`+`semestre` 1—N `estimacion_demanda`
@@ -591,7 +593,7 @@ Ver también [`diagrama-er.md`](diagrama-er.md) para la versión visual (Mermaid
 | Identidad de profesor sin duplicados | `cu` UNIQUE NOT NULL en `profesor` |
 | Separación dura/blanda (D09) | tablas distintas: `disponibilidad` (dura) vs. `preferencia_materia` (blanda) |
 | Mínimos de verdes para envío válido (2+5 TC / 5 Asignatura) | validación de aplicación al pasar `preferencia.estado` a `enviado`, usando `preferencia_materia.cobertura_departamental` |
-| Elegibilidad de materias por profesor | `profesor.modo_materias_elegibles` + `profesor_materia_elegible` |
+| Elegibilidad de materias por profesor | `bloqueo_profesor_materia` (desde 2026-09-28; antes `profesor.modo_materias_elegibles` + `profesor_materia_elegible`) |
 | Creación de grupos a partir de la demanda real (RF13) | `estimacion_demanda.grupos_sugeridos` informa cuántas filas de `grupo` crear por materia/semestre |
 
 ## 9. Verificación de formas normales (1FN–4FN)
@@ -819,7 +821,10 @@ propio** departamento, y a admin el de cualquiera — comparando `app_rol()`/`ap
 Function con secreto compartido simple) — ya no hace falta, el camino "correcto a largo plazo" resultó
 ser tan rápido de construir como el atajo.
 
-Sigue pendiente (no de alcance, sino de construcción): la pantalla/parser en sí (pegar tabla → preview
+**CONSTRUIDO 2026-09-29** (ver §13): se sube el PDF en `CargaDemanda.jsx`, el parser corre en el
+navegador y `api/demanda.php` hace el upsert. El párrafo de abajo queda como registro.
+
+Seguía pendiente (no de alcance, sino de construcción): la pantalla/parser en sí (pegar tabla → preview
 → upsert) que llame a estas tablas con la sesión ya autenticada del Jefe de Departamento — ver
 `motor-asignacion.md` en la copia pública (`malla-horarios/bd/`) para el resumen de qué tabla escribe
 qué, aplicable también a esta pantalla de carga de catálogo.
@@ -842,3 +847,60 @@ todavía no se han ejecutado contra ningún proyecto real. Falta: crear el proye
 correr `schema.sql` → `triggers.sql` → `rls-policies.sql` → `seed.sql` en ese orden, configurar
 el sistema de autenticación nativo del proveedor para el login de profesores, y construir el frontend real que reemplace al mockup
 (hoy `mockup-cuestionario.html` no llama a ningún backend).
+
+## 12. Formulario editable por jefatura (2026-09-28)
+
+Pedido de la jefa de división. El esquema que corre es el de MySQL
+(`mysql/schema-mysql.sql`); este documento solo registra el diseño.
+
+**Qué cambió y por qué:**
+
+- **Sin personalización por profesor.** Se eliminan `profesor.modo_materias_elegibles` y
+  `profesor_materia_elegible`. Todos los profesores de un departamento ven el mismo formulario,
+  para evitar comparaciones entre colegas ("¿por qué a ti te salen otras materias?"). Lo único que
+  todavía distingue a un profesor de otro es la **audiencia** de cada sección, que depende del tipo
+  de contrato, no de la persona.
+- **`cuestionario_seccion`** (nueva): el formulario de un depto/semestre es una lista ordenada de
+  secciones de cuatro tipos: `num_cursos`, `materias` (verde/amarillo/rojo),
+  `disponibilidad` y `abierta` (pregunta de texto). La jefatura edita títulos, descripciones,
+  audiencia (`todos` / `tiempo_completo_medio` / `asignatura`), mínimo de verdes y si una sección
+  es de cobertura departamental; agrega y quita secciones de materias y preguntas abiertas. Se
+  borra en suave (`activa = 0`) porque las respuestas la referencian.
+  **Regla de audiencia:** las materias de una sección que un profesor no ve se agregan a su primera
+  sección de materias visible. Así se conserva lo que ya pasaba antes: asignatura veía las de
+  cobertura mezcladas en el catálogo.
+- **`materia_cuestionario.seccion`** (enum) → **`seccion_id`** (FK, `NULL` = oculta). Sin fila
+  sigue siendo fail-open: la materia cae en la primera sección de materias para todos.
+- **Publicación:** `departamento_semestre_config.publicado` (+ `publicado_at`, `publicado_por`).
+  Sin publicar, el profesor no ve el formulario y el API rechaza guardar.
+  `texto_introduccion` es el texto de arriba del formulario (`NULL` = el de siempre).
+- **`preferencia_respuesta`** (nueva): respuestas a las preguntas abiertas. Reemplaza a
+  `preferencia.horarios_otro_depto` y `observaciones_*`, que quedan obsoletas (sus datos se
+  migraron a las preguntas equivalentes).
+- **`bloqueo_profesor_materia`** (nueva): la jefatura bloquea pares profesor-materia **después**
+  de que contestan, desde la vista de respuestas. Es una capa aparte a propósito: la respuesta del
+  profesor no se toca (al desbloquear vuelve a contar tal cual), el profesor nunca la ve, y para
+  el motor es **restricción dura** (`motor-asignacion.md`).
+
+**Formas normales:** en las tres tablas nuevas cada atributo no clave depende de toda la clave
+(las dos puente, de su PK compuesta; `cuestionario_seccion`, de su id); `cuestionario_seccion` guarda atributos que solo aplican a un tipo
+(`minimo_verdes`, `obligatoria`) como `NULL`/0 en los demás, decisión consciente frente a
+partir la tabla en cuatro — el formulario se lee siempre completo y en orden.
+
+## 13. Ciclo de semestres y carga de la demanda (2026-09-29)
+
+- **`semestre.estado`** (`activo` | `cerrado`): hay exactamente un semestre activo, el que se
+  está planeando. Antes el "actual" era el de id más alto y nada impedía escribir en uno viejo.
+  Toda escritura que cuelga de un semestre exige que sea el activo; los cerrados quedan de consulta.
+  "Solo uno activo" lo garantiza el API en una transacción (MariaDB 5.5 no tiene índices parciales).
+  Lo cambian admin y jefa de división: el semestre es uno solo para los 3 departamentos.
+- **Abrir el siguiente semestre** copia, por departamento, el formulario del anterior
+  (`cuestionario_seccion`, `materia_cuestionario`, texto e horas de
+  `departamento_semestre_config`), sin publicar, y la `salon_disponibilidad_departamento`. No copia
+  preferencias, bloqueos ni demanda.
+- **Carga de la demanda:** construida como se diseñó en §10.3, con dos hallazgos de los PDF reales
+  de 202603. `con_prerrequisito` pasa de entero a `DECIMAL(8,2)` porque Actuaría la trae con
+  decimales; y Estadística trae dos materias sin nombre (EST13102, EST24129), que se aceptan
+  conservando el nombre del catálogo. El código de periodo del archivo (`202603`) es año + 01
+  primavera / 02 verano / 03 otoño, confirmado con el encabezado "Otoño 2026" del PDF de Actuaría.
+  Subir la estimación **reemplaza** la anterior del departamento y semestre.

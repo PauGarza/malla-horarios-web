@@ -4,12 +4,16 @@ import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import FormularioPreferencias from './pages/FormularioPreferencias';
 import PanelPreferencias from './pages/PanelPreferencias';
-import ConfiguracionCuestionario from './pages/ConfiguracionCuestionario';
+import EditorCuestionario from './pages/EditorCuestionario';
+import RespuestasCuestionario from './pages/RespuestasCuestionario';
 import CatalogoMaterias from './pages/CatalogoMaterias';
+import PerfilUsuario from './pages/PerfilUsuario';
+import CargaDemanda from './pages/CargaDemanda';
+import Semestres from './pages/Semestres';
+import BarraSuperior from './components/BarraSuperior';
 
-// Navegación por estado simple, sin librería de ruteo: con 5 pantallas
-// (login / home / formulario / panel / configuración) una URL propia por vista
-// todavía no se justifica. La vista es un objeto y no un string porque el
+// Navegación por estado simple, sin librería de ruteo: con un puñado de
+// pantallas una URL propia por vista todavía no se justifica. La vista es un objeto y no un string porque el
 // formulario puede abrirse "para otro profesor" desde el panel y necesita
 // llevar a quién; guardarlo en un useState aparte se desincronizaría.
 // Si se agregan más vistas reales (panel de Jefe grande, admin) vale la pena
@@ -20,6 +24,24 @@ function Shell() {
 
   if (loading) return <div className="app-cargando">Cargando…</div>;
   if (!token || !profesor) return <LoginPage />;
+
+  // La barra va arriba de TODA vista autenticada: el menú de usuario (perfil,
+  // cerrar sesión) tiene que estar a un clic desde cualquier pantalla.
+  return (
+    <>
+      <BarraSuperior
+        onInicio={() => setVista({ nombre: 'home' })}
+        onPerfil={() => setVista({ nombre: 'perfil' })}
+      />
+      <Vista vista={vista} setVista={setVista} />
+    </>
+  );
+}
+
+function Vista({ vista, setVista }) {
+  if (vista.nombre === 'perfil') {
+    return <PerfilUsuario onVolver={() => setVista({ nombre: 'home' })} />;
+  }
 
   if (vista.nombre === 'formulario') {
     return (
@@ -40,18 +62,37 @@ function Shell() {
       />
     );
   }
-  if (vista.nombre === 'configuracion-cuestionario') {
-    return <ConfiguracionCuestionario onVolver={() => setVista({ nombre: 'home' })} />;
+  if (vista.nombre === 'editor-cuestionario') {
+    return <EditorCuestionario onVolver={() => setVista({ nombre: 'home' })} />;
+  }
+  if (vista.nombre === 'respuestas') {
+    return <RespuestasCuestionario onVolver={() => setVista({ nombre: 'home' })} />;
   }
   if (vista.nombre === 'catalogo-materias') {
     return <CatalogoMaterias onVolver={() => setVista({ nombre: 'home' })} />;
+  }
+  if (vista.nombre === 'carga-demanda' || vista.nombre === 'demanda') {
+    return (
+      <CargaDemanda
+        key={vista.nombre}
+        soloConsulta={vista.nombre === 'demanda'}
+        onVolver={() => setVista({ nombre: 'home' })}
+      />
+    );
+  }
+  if (vista.nombre === 'semestres') {
+    return <Semestres onVolver={() => setVista({ nombre: 'home' })} />;
   }
   return (
     <HomePage
       onAbrirFormulario={() => setVista({ nombre: 'formulario' })}
       onAbrirPanelPreferencias={() => setVista({ nombre: 'panel-preferencias' })}
-      onAbrirConfigCuestionario={() => setVista({ nombre: 'configuracion-cuestionario' })}
+      onAbrirEditor={() => setVista({ nombre: 'editor-cuestionario' })}
+      onAbrirRespuestas={() => setVista({ nombre: 'respuestas' })}
       onAbrirCatalogoMaterias={() => setVista({ nombre: 'catalogo-materias' })}
+      onAbrirCargaDemanda={() => setVista({ nombre: 'carga-demanda' })}
+      onAbrirDemanda={() => setVista({ nombre: 'demanda' })}
+      onAbrirSemestres={() => setVista({ nombre: 'semestres' })}
     />
   );
 }

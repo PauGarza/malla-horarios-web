@@ -26,9 +26,46 @@ SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 START TRANSACTION;
 
+-- Desde 2026-09-28 las secciones del formulario son filas de
+-- cuestionario_seccion (antes, un enum en materia_cuestionario). Primero se
+-- siembran las 7 que reproducen el formulario original y luego cada materia
+-- apunta a la suya. Misma plantilla que migracion-2026-09-28-formulario-editable.sql
+-- y que secciones_por_defecto() en api/lib/catalogo.php.
+INSERT INTO cuestionario_seccion
+       (departamento_id, semestre_id, tipo, titulo, descripcion, audiencia,
+        minimo_verdes, cobertura_departamental, obligatoria, orden)
+SELECT d.id, s.id, t.tipo, t.titulo, t.descripcion, t.audiencia, t.minimo_verdes, t.cobertura, 0, t.orden
+FROM departamento d
+CROSS JOIN semestre s
+CROSS JOIN (
+              SELECT 1 AS orden, 'num_cursos' AS tipo,
+                     '¿Cuántos cursos puedes impartir este semestre?' AS titulo,
+                     CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci AS descripcion,
+                     'todos' AS audiencia, CAST(NULL AS SIGNED) AS minimo_verdes, 0 AS cobertura
+    UNION ALL SELECT 2, 'materias', 'Cursos de cálculo — cobertura departamental',
+                     'Cursos de cálculo que, por ser departamentales, necesitan que varios profesores de tiempo completo o medio tiempo los impartan.',
+                     'tiempo_completo_medio', 2, 1
+    UNION ALL SELECT 3, 'materias', 'Catálogo de materias', NULL, 'todos', 5, 0
+    UNION ALL SELECT 4, 'disponibilidad', 'Disponibilidad de horarios',
+                     'Haz clic para cambiar el color de una franja, o mantén presionado y arrastra para pintar varias de un jalón.',
+                     'todos', NULL, 0
+    UNION ALL SELECT 5, 'abierta', '¿Ya solicitaste cursos en otro departamento? ¿En qué horarios?',
+                     'Ej. Martes 10:00-11:30 en Actuaría', 'asignatura', NULL, 0
+    UNION ALL SELECT 6, 'abierta', 'Observaciones sobre la asignación de cursos', NULL, 'todos', NULL, 0
+    UNION ALL SELECT 7, 'abierta', 'Observaciones sobre disponibilidad de horarios', NULL, 'todos', NULL, 0
+) t
+WHERE d.clave_prefijo = 'MAT' AND s.tipo = 'primavera' AND s.anio = 2027
+  AND NOT EXISTS (
+      SELECT 1 FROM cuestionario_seccion x
+       WHERE x.departamento_id = d.id AND x.semestre_id = s.id
+  );
+
+-- v.seccion sigue escrita con los nombres del enum viejo para no reescribir
+-- las 51 filas: el CASE del JOIN la traduce a la seccion sembrada arriba, y
+-- 'oculta' no encuentra ninguna (seccion_id NULL = oculta).
 INSERT IGNORE INTO materia_cuestionario
-       (materia_id, semestre_id, seccion, alias_de_id, etiqueta, orden, revisado)
-SELECT m.id, s.id, v.seccion, a.id, v.etiqueta, v.orden, v.revisado
+       (materia_id, semestre_id, seccion_id, alias_de_id, etiqueta, orden, revisado)
+SELECT m.id, s.id, cs.id, a.id, v.etiqueta, v.orden, v.revisado
 FROM (
   SELECT 'MAT-12250' AS clave, 'cobertura_departamental' AS seccion, CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci AS alias_de, 'Cálculo Aplicado (Mercadotecnia, Relaciones Internacionales, Ciencia Política)' AS etiqueta, 1 AS orden, 1 AS revisado
   UNION ALL SELECT 'MAT-12220', 'cobertura_departamental', NULL, 'Cálculo Una Variable (Economía, Dir. Financiera)', 2, 1
@@ -85,6 +122,10 @@ FROM (
 JOIN materia m ON m.clave = v.clave COLLATE utf8mb4_unicode_ci
 LEFT JOIN materia a ON a.clave = v.alias_de COLLATE utf8mb4_unicode_ci
 CROSS JOIN semestre s
+LEFT JOIN cuestionario_seccion cs
+       ON cs.departamento_id = m.departamento_id AND cs.semestre_id = s.id
+      AND cs.orden = CASE v.seccion WHEN 'cobertura_departamental' THEN 2
+                                    WHEN 'catalogo_general' THEN 3 END
 WHERE s.tipo = 'primavera' AND s.anio = 2027;
 
 COMMIT;
@@ -92,11 +133,12 @@ COMMIT;
 -- -----------------------------------------------------------------------------
 -- Verificacion
 -- -----------------------------------------------------------------------------
---   SELECT mc.seccion, COUNT(*) FROM materia_cuestionario mc
+--   SELECT cs.titulo, COUNT(*) FROM materia_cuestionario mc
 --     JOIN materia m ON m.id = mc.materia_id
+--     LEFT JOIN cuestionario_seccion cs ON cs.id = mc.seccion_id
 --    WHERE m.clave LIKE 'MAT-%'
---    GROUP BY mc.seccion;
---   -- esperado: cobertura_departamental 5, catalogo_general 38, oculta 8
+--    GROUP BY cs.titulo;
+--   -- esperado: cobertura departamental 5, catalogo 38, NULL (ocultas) 8
 --
 --   SELECT COUNT(*) FROM materia_cuestionario WHERE revisado = 0;  -- esperado: 8
 --

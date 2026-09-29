@@ -170,9 +170,10 @@ textarea {
 /* --- Home ------------------------------------------------------------ */
 
 .home-header {
-  background: var(--itam);
-  color: white;
-  padding: 20px 24px;
+  /* Ya no es barra verde: la barra superior ocupa ese lugar en toda la app. */
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -183,12 +184,13 @@ textarea {
 .home-header h1 {
   margin: 0;
   font-size: 22px;
+  color: var(--itam);
 }
 
 .home-subtitle {
   margin: 4px 0 0;
   font-size: 13px;
-  opacity: 0.85;
+  color: var(--gray-text);
 }
 
 .home-main {
@@ -278,6 +280,8 @@ textarea {
 }
 
 .badge {
+  display: inline-block;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 700;
   padding: 4px 10px;
@@ -307,6 +311,7 @@ textarea {
   padding: 10px 12px;
   text-align: left;
   font-size: 14px;
+  vertical-align: middle;
 }
 .panel-tabla th {
   color: var(--gray-text);
@@ -418,27 +423,6 @@ textarea {
   font-size: 11px;
   color: var(--gray-text);
   font-style: italic;
-}
-
-.pestanas {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--gray-border);
-  margin-bottom: 4px;
-}
-.pestana {
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: var(--gray-text);
-  cursor: pointer;
-}
-.pestana.activa {
-  color: var(--itam);
-  border-bottom-color: var(--itam);
-  font-weight: 600;
 }
 
 .aviso-revision {
@@ -558,99 +542,9 @@ textarea {
   padding: 4px 0;
 }
 
-.editor-profesor {
-  padding: 12px;
-  background: var(--gray-bg);
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Lista de materias elegibles: rejilla de 4 columnas fijas en vez de flex, para
-   que casilla, clave y nombre queden alineados en columna de una fila a otra.
-   Con flex, cada fila repartía el ancho según lo largo que fuera el nombre y
-   las casillas quedaban escalonadas. */
-.elegibles {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.elegibles-encabezado {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--gray-text);
-}
-.elegibles-acciones {
-  display: flex;
-  gap: 12px;
-}
-.elegibles-acciones .btn-link {
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.aviso-compacto {
-  margin: 0;
-  font-size: 12px;
-  padding: 8px 10px;
-}
-
-.elegibles-lista {
-  background: white;
-  border: 1px solid var(--gray-border);
-  border-radius: 6px;
-  /* 43 materias dentro de una fila de tabla empujarían todo lo demás fuera de
-     la pantalla; se scrollea aquí adentro. */
-  max-height: 330px;
-  overflow-y: auto;
-}
-
-.elegible-fila {
-  display: grid;
-  grid-template-columns: 16px 88px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 10px;
-  font-size: 13px;
-  line-height: 1.35;
-  border-bottom: 1px solid var(--gray-bg);
-  cursor: pointer;
-}
-.elegible-fila:last-child {
-  border-bottom: 0;
-}
-.elegible-fila:hover {
-  background: var(--gray-bg);
-}
-
-.elegible-clave {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 11px;
-  color: var(--gray-text);
-  white-space: nowrap;
-}
-.elegible-nombre {
-  min-width: 0;
-}
-.etiqueta-cobertura {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--itam);
-  background: var(--verde-bg);
-  border-radius: 999px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-
 .panel-acciones {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -857,4 +751,816 @@ textarea {
   padding: 40px;
   text-align: center;
   color: var(--gray-text);
+}
+
+/* --- Barra superior y perfil ------------------------------------------ */
+
+.barra-superior {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--itam);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.barra-marca {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 6px 0;
+}
+
+.usuario-menu {
+  position: relative;
+}
+
+.usuario-boton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: white;
+  padding: 4px 10px 4px 4px;
+  font-size: 14px;
+}
+.usuario-boton:hover,
+.usuario-boton[aria-expanded='true'] {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.usuario-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  color: var(--itam);
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.usuario-nombre {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usuario-desplegable {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 230px;
+  background: white;
+  color: #1c2733;
+  border: 1px solid var(--gray-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.usuario-desplegable-datos {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gray-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.usuario-desplegable-datos span {
+  color: var(--gray-text);
+  font-size: 12px;
+}
+
+.usuario-desplegable button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.usuario-desplegable button:hover,
+.usuario-desplegable button:focus-visible {
+  background: var(--gray-bg);
+}
+
+
+@media (max-width: 560px) {
+  .usuario-nombre {
+    display: none;
+  }
+}
+
+.perfil-titulo {
+  font-size: 18px;
+}
+
+.perfil-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.perfil-datos dt {
+  font-size: 12px;
+  color: var(--gray-text);
+  font-weight: 600;
+}
+.perfil-datos dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+
+.perfil-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 380px;
+}
+
+/* --- Formulario dinámico (2026-09-28) ---------------------------------- */
+
+/* Textos que escribe la jefatura en el editor: respetan sus saltos de línea. */
+.texto-libre {
+  white-space: pre-line;
+}
+
+.obligatoria {
+  color: var(--rojo);
+}
+
+.selector-depto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-text);
+}
+
+select {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  background: white;
+  max-width: 100%;
+}
+
+.btn-icono {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 13px;
+  color: var(--itam);
+  line-height: 1.2;
+}
+.btn-icono:hover:not(:disabled) {
+  background: var(--gray-bg);
+}
+.btn-icono.peligro {
+  color: var(--rojo);
+}
+
+.segmentado {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: white;
+}
+.segmentado button {
+  border: 0;
+  background: none;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--gray-text);
+}
+.segmentado button + button {
+  border-left: 1px solid var(--gray-border);
+}
+.segmentado button.active {
+  background: var(--itam);
+  color: white;
+  font-weight: 600;
+}
+
+/* --- Editor del formulario ---------------------------------------------- */
+
+.editor-herramientas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* La franja de color a la izquierda es el guiño a Google Forms: dice "esta
+   tarjeta se edita" sin tener que explicarlo. */
+.editor-seccion {
+  border-left: 4px solid var(--itam);
+  margin-bottom: 0;
+}
+
+.editor-seccion-barra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.editor-tipo {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--itam);
+  margin-right: auto;
+}
+
+.editor-audiencia,
+.editor-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.formulario-seccion .editor-audiencia,
+.formulario-seccion .editor-mini {
+  font-weight: 400;
+}
+.editor-audiencia select,
+.editor-mini select,
+select.editor-mini {
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.editor-botones {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-titulo {
+  font-size: 18px;
+  font-weight: 600;
+  border: 0;
+  border-bottom: 1px solid var(--gray-border);
+  border-radius: 0;
+  padding: 6px 2px;
+}
+.editor-titulo:focus,
+.texto-auto:focus {
+  outline: none;
+  border-bottom: 2px solid var(--itam);
+}
+
+.texto-auto {
+  resize: none;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-bottom: 1px solid var(--gray-border);
+  border-radius: 0;
+  padding: 6px 2px;
+  line-height: 1.45;
+}
+.editor-descripcion {
+  font-size: 13px;
+  color: var(--gray-text);
+}
+
+.editor-opciones {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.editor-opcion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.formulario-seccion .editor-opcion input[type='number'] {
+  width: 100px;
+}
+
+.editor-materia {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.editor-materia.por-revisar {
+  background: var(--amarillo-bg);
+}
+.editor-materia-nombre {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.editor-materia-nombre .input-inline {
+  min-width: 0;
+}
+
+.editor-agregar-materia {
+  align-self: flex-start;
+  color: var(--itam);
+  font-weight: 600;
+}
+
+.editor-previa-num {
+  max-width: 100px;
+}
+
+.editor-previa summary,
+.editor-ocultas summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--itam);
+}
+.editor-ocultas {
+  margin-top: 14px;
+}
+
+.editor-insertar {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.editor-insertar .btn-link {
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.barra-editor {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  z-index: 5;
+}
+
+/* --- Respuestas y bloqueos ---------------------------------------------- */
+
+/* Más ancha que el resto: son decenas de columnas. */
+.respuestas-screen {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.respuestas-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.filtro-grupo {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 8px;
+  padding: 10px 14px 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.filtro-grupo legend {
+  font-weight: 700;
+  color: var(--itam);
+  padding: 0 4px;
+}
+
+.filtro-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+}
+
+.filtro-lista summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--itam);
+  padding: 4px 0;
+}
+.filtro-lista[open] {
+  border-top: 1px solid var(--gray-bg);
+}
+.filtro-lista-acciones {
+  display: flex;
+  gap: 14px;
+  padding: 4px 0;
+}
+.filtro-lista-acciones .btn-link {
+  font-size: 12px;
+}
+.filtro-lista-grupo {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.filtro-lista-grupo strong {
+  font-size: 12px;
+  color: var(--gray-text);
+  padding-top: 4px;
+}
+
+.respuestas-resumen {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.legend-bloqueada {
+  background: repeating-linear-gradient(45deg, #7b1d14, #7b1d14 3px, var(--rojo) 3px, var(--rojo) 6px);
+}
+.legend-vacia {
+  background: var(--gray-bg);
+  border: 1px solid var(--gray-border);
+}
+
+.respuestas-tabla-wrap {
+  overflow: auto;
+  max-height: 75vh;
+  border: 1px solid var(--gray-border);
+  border-radius: 8px;
+  background: white;
+}
+
+.respuestas-tabla {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.respuestas-tabla th,
+.respuestas-tabla td {
+  border-bottom: 1px solid var(--gray-bg);
+  border-right: 1px solid var(--gray-bg);
+  background: white;
+}
+
+/* Encabezado y primera columna fijos: con 50 materias y 45 profesores, sin
+   esto se pierde de quién es la fila o qué materia es la columna. */
+.respuestas-tabla thead th {
+  position: sticky;
+  z-index: 2;
+}
+.respuestas-tabla thead tr:first-child th {
+  top: 0;
+}
+.respuestas-tabla thead tr:nth-child(2) th {
+  top: 29px;
+}
+.respuestas-tabla .col-profesor {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  min-width: 220px;
+  max-width: 260px;
+  padding: 6px 10px;
+  font-weight: 400;
+}
+.respuestas-tabla thead .col-profesor {
+  z-index: 3;
+  font-weight: 700;
+}
+.respuestas-tabla .col-dato {
+  text-align: center;
+  padding: 4px 8px;
+  color: var(--gray-text);
+}
+
+.th-seccion {
+  height: 29px;
+  padding: 4px 8px;
+  text-align: left;
+  font-size: 11px;
+  color: var(--itam);
+  white-space: nowrap;
+  border-left: 2px solid var(--gray-border);
+}
+
+/* El nombre de la materia en vertical: los jefes conocen las materias por su
+   nombre, no por su clave, y en horizontal 50 nombres no caben. Hasta 3
+   renglones verticales antes de cortar con "…"; el nombre completo va en el
+   title. */
+.th-materia {
+  height: 190px;
+  vertical-align: bottom;
+  padding: 6px 2px;
+  max-width: 64px;
+}
+.th-materia-texto {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 178px;
+  text-align: left;
+}
+.th-materia-nombre {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.th-materia-clave {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--gray-text);
+}
+
+.respuestas-nombre {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.respuestas-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--gray-text);
+  font-weight: 400;
+}
+
+.celda-respuesta {
+  padding: 2px;
+}
+.celda {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+}
+.celda.verde {
+  background: var(--verde);
+}
+.celda.amarillo {
+  background: var(--amarillo);
+}
+.celda.rojo {
+  background: var(--rojo);
+}
+.celda.vacia {
+  background: var(--gray-bg);
+  border: 1px solid var(--gray-border);
+}
+/* Rayado oscuro, distinto del rojo liso del profesor: el bloqueo es una
+   decisión de la jefatura encima de la respuesta, no la respuesta. */
+.celda.bloqueada {
+  background: repeating-linear-gradient(45deg, #7b1d14, #7b1d14 3px, var(--rojo) 3px, var(--rojo) 6px);
+  outline: 2px solid #4a0f0a;
+  outline-offset: -2px;
+}
+.celda:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px #1c2733;
+}
+.celda:focus-visible {
+  outline: 2px solid #1c2733;
+  outline-offset: 1px;
+}
+
+.respuestas-tabla tfoot th,
+.respuestas-tabla tfoot td {
+  background: var(--gray-bg);
+  font-weight: 600;
+}
+.respuestas-tabla .total {
+  text-align: center;
+  padding: 4px 0;
+}
+.respuestas-tabla .total-cero {
+  color: var(--rojo);
+}
+
+.opcion-activa strong .badge {
+  margin-left: 8px;
+  font-size: 11px;
+}
+
+/* Secciones del menú de inicio: Formulario / Reportes / Acciones. */
+.home-seccion + .home-seccion {
+  margin-top: 28px;
+}
+.home-seccion h2 {
+  margin: 0;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-text);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gray-border);
+}
+
+/* Proceso del semestre: pasos numerados, en orden. */
+.pasos {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.paso {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--gray-border);
+  font-size: 14px;
+}
+.paso-activo {
+  background: white;
+  border-color: var(--itam);
+}
+.paso-activo:hover {
+  background: var(--gray-bg);
+}
+.paso-pendiente {
+  background: var(--gray-bg);
+  color: var(--gray-text);
+}
+/* Sin números: un punto por paso y una línea que los une de arriba a abajo,
+   para que se lea como flujo. */
+.pasos {
+  position: relative;
+}
+.pasos::before {
+  content: "";
+  position: absolute;
+  left: 21px;
+  top: 20px;
+  bottom: 20px;
+  width: 2px;
+  background: var(--gray-border);
+}
+.paso {
+  position: relative;
+}
+.paso-punto {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--itam);
+  box-shadow: 0 0 0 3px white;
+}
+.paso-pendiente .paso-punto {
+  background: var(--gray-border);
+  box-shadow: 0 0 0 3px var(--gray-bg);
+}
+.paso-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.paso-activo strong {
+  color: var(--itam);
+}
+.paso strong .badge {
+  margin-left: 8px;
+  font-size: 11px;
+}
+
+/* Semestre activo en la barra: siempre a la vista en cuál se trabaja. */
+.barra-semestre {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Fases del proceso en el inicio. */
+.fase + .fase {
+  margin-top: 14px;
+}
+.fase h3 {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--itam);
+}
+.paso-nota {
+  font-size: 12px;
+  color: var(--gray-text);
+  font-style: italic;
+}
+
+/* Carga de la estimación de demanda. */
+.demanda-screen {
+  max-width: 1100px;
+}
+.demanda-subir {
+  align-self: flex-start;
+  cursor: pointer;
+}
+.demanda-leyenda {
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.demanda-estado {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.demanda-estado.nueva {
+  background: var(--verde-bg);
+  color: var(--verde);
+}
+.demanda-estado.cambia {
+  background: var(--amarillo-bg);
+  color: var(--amarillo);
+}
+.demanda-estado.igual {
+  background: var(--gray-bg);
+  color: var(--gray-text);
+}
+.demanda-tabla td {
+  padding: 6px 8px;
+}
+.demanda-tabla .input-inline {
+  min-width: 240px;
+}
+.demanda-antes,
+.demanda-aviso {
+  display: block;
+  font-size: 11px;
+  color: var(--gray-text);
+}
+.demanda-aviso {
+  color: var(--rojo);
+}
+.fila-descartada td {
+  opacity: 0.45;
+}
+.sug-cero input,
+.fila-sug-cero td {
+  background: var(--amarillo-bg);
+}
+
+/* Semestres. */
+.semestre-nuevo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.semestre-cerrado {
+  border-top: 1px solid var(--gray-bg);
+  padding: 8px 0;
+}
+.semestre-cerrado summary {
+  cursor: pointer;
 }

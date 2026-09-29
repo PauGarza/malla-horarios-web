@@ -67,8 +67,8 @@ CREATE TABLE profesor (
     departamento_id         INT NULL
                             COMMENT 'NULL solo para admin/servicios_escolares/nomina (ver chk_profesor_depto).',
     tipo_contrato           ENUM('tiempo_completo','asignatura','medio_tiempo') NULL,
-    modo_materias_elegibles ENUM('todas','personalizada','ninguna') NOT NULL DEFAULT 'todas'
-                            COMMENT 'personalizada = ver profesor_materia_elegible.',
+    -- modo_materias_elegibles se elimino el 2026-09-28: todos los profesores
+    -- de un departamento ven el mismo formulario. Ver bloqueo_profesor_materia.
     password_predeterminada TINYINT(1) NOT NULL DEFAULT 1
                             COMMENT '1 = sigue usando la password por defecto (= cu). No bloquea nada.',
     estado_especial         VARCHAR(255) NULL
@@ -115,15 +115,8 @@ CREATE TABLE materia (
     CONSTRAINT chk_materia_creditos CHECK (creditos > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE profesor_materia_elegible (
-    profesor_id INT NOT NULL,
-    materia_id  INT NOT NULL,
-    PRIMARY KEY (profesor_id, materia_id),
-    KEY idx_pme_materia (materia_id),
-    CONSTRAINT fk_pme_profesor FOREIGN KEY (profesor_id) REFERENCES profesor(id) ON DELETE CASCADE,
-    CONSTRAINT fk_pme_materia  FOREIGN KEY (materia_id)  REFERENCES materia(id)  ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Solo se consulta cuando profesor.modo_materias_elegibles = personalizada.';
+-- profesor_materia_elegible (lista personalizada de materias por profesor) se
+-- elimino el 2026-09-28. Ver migracion-2026-09-28-limpieza.sql.
 
 CREATE TABLE plan_estudio_materia (
     id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -204,7 +197,15 @@ CREATE TABLE semestre (
     id       INT AUTO_INCREMENT PRIMARY KEY,
     tipo     ENUM('primavera','verano','otono') NOT NULL,
     anio     INT NOT NULL,
-    UNIQUE KEY uq_semestre (tipo, anio)
+    -- Desde 2026-09-29: exactamente UN semestre activo (en el que se trabaja);
+    -- los cerrados quedan de consulta. Lo garantiza api/semestres.php en una
+    -- transaccion, porque MariaDB 5.5 no tiene indices parciales.
+    estado      ENUM('activo','cerrado') NOT NULL DEFAULT 'cerrado',
+    abierto_at  DATETIME NULL COMMENT 'UTC. Cuando se activo por ultima vez.',
+    abierto_por INT NULL,
+    cerrado_at  DATETIME NULL COMMENT 'UTC.',
+    UNIQUE KEY uq_semestre (tipo, anio),
+    CONSTRAINT fk_semestre_abierto_por FOREIGN KEY (abierto_por) REFERENCES profesor(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='etiqueta ("otono-2026") se calcula al leer, no se guarda. Ver api/catalogos.php.';
 
@@ -212,22 +213,55 @@ CREATE TABLE departamento_semestre_config (
     departamento_id            INT NOT NULL,
     semestre_id                INT NOT NULL,
     mostrar_seleccion_materias TINYINT(1) NOT NULL DEFAULT 1
-                               COMMENT '0 = el cuestionario de ese depto/semestre no muestra seleccion de materias.',
+                               COMMENT 'OBSOLETA desde 2026-09-28: no tener secciones de materias equivale a 0. No se lee.',
     horas_minimas_verde        DECIMAL(5,2) NOT NULL DEFAULT 10
                                COMMENT 'D18 de GUIA-DECISIONES.md, configurable por Jefe de Departamento.',
+    texto_introduccion         TEXT NULL
+                               COMMENT 'NULL = texto por defecto (api/lib/catalogo.php).',
+    publicado                  TINYINT(1) NOT NULL DEFAULT 0
+                               COMMENT '0 = los profesores todavia no ven el formulario.',
+    publicado_at               DATETIME NULL COMMENT 'UTC.',
+    publicado_por              INT NULL,
     PRIMARY KEY (departamento_id, semestre_id),
     KEY idx_dsc_semestre (semestre_id),
-    CONSTRAINT fk_dsc_depto    FOREIGN KEY (departamento_id) REFERENCES departamento(id),
-    CONSTRAINT fk_dsc_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id)
+    CONSTRAINT fk_dsc_depto         FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_dsc_semestre      FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
+    CONSTRAINT fk_dsc_publicado_por FOREIGN KEY (publicado_por)   REFERENCES profesor(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Sin fila = defaults (fail-open). Editable por admin/Jefe de Departamento.';
+  COMMENT='Sin fila = defaults y SIN publicar. Editable por admin/Jefe de Departamento.';
+
+-- El formulario de un depto/semestre es una lista ORDENADA de secciones que la
+-- jefatura edita (2026-09-28). Sin filas, el editor siembra la plantilla de
+-- secciones_por_defecto() en api/lib/catalogo.php la primera vez que se abre.
+CREATE TABLE cuestionario_seccion (
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    departamento_id         INT NOT NULL,
+    semestre_id             INT NOT NULL,
+    tipo                    ENUM('num_cursos','materias','disponibilidad','abierta') NOT NULL
+                            COMMENT 'num_cursos y disponibilidad: exactamente una por depto/semestre, no se borran (se valida en PHP).',
+    titulo                  VARCHAR(255) NOT NULL,
+    descripcion             TEXT NULL,
+    audiencia               ENUM('todos','tiempo_completo_medio','asignatura') NOT NULL DEFAULT 'todos'
+                            COMMENT 'Materias de una seccion que el profesor no ve se agregan a su primera seccion de materias visible.',
+    minimo_verdes           INT NULL COMMENT 'Solo tipo materias. NULL = sin minimo.',
+    cobertura_departamental TINYINT(1) NOT NULL DEFAULT 0
+                            COMMENT 'Solo tipo materias. Se copia a preferencia_materia.cobertura_departamental.',
+    obligatoria             TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Solo tipo abierta.',
+    orden                   INT NOT NULL,
+    activa                  TINYINT(1) NOT NULL DEFAULT 1
+                            COMMENT '0 = borrada desde el editor. Borrado suave: preferencia_respuesta la referencia.',
+    KEY idx_cs_depto_semestre (departamento_id, semestre_id),
+    KEY idx_cs_semestre (semestre_id),
+    CONSTRAINT fk_cs_depto    FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_cs_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Bloques del formulario de un depto/semestre, en orden. Editable por jefatura.';
 
 CREATE TABLE materia_cuestionario (
     materia_id  INT NOT NULL,
     semestre_id INT NOT NULL,
-    seccion     ENUM('cobertura_departamental','catalogo_general','oculta')
-                NOT NULL DEFAULT 'catalogo_general'
-                COMMENT 'Sin fila = catalogo_general (fail-open). Ver diseno-bd.md.',
+    seccion_id  INT NULL
+                COMMENT 'NULL = oculta. Sin fila = primera seccion de materias para todos (fail-open).',
     alias_de_id INT NULL
                 COMMENT 'Esta materia es el nombre viejo de alias_de_id. Se cura a mano, NO se deriva de materia_co_oferta.',
     etiqueta    VARCHAR(255) NULL
@@ -238,11 +272,13 @@ CREATE TABLE materia_cuestionario (
     PRIMARY KEY (materia_id, semestre_id),
     KEY idx_materia_cuestionario_semestre (semestre_id),
     KEY idx_mc_alias (alias_de_id),
+    KEY idx_mc_seccion (seccion_id),
     CONSTRAINT fk_mc_materia  FOREIGN KEY (materia_id)  REFERENCES materia(id)  ON DELETE CASCADE,
     CONSTRAINT fk_mc_semestre FOREIGN KEY (semestre_id) REFERENCES semestre(id) ON DELETE CASCADE,
+    CONSTRAINT fk_mc_seccion  FOREIGN KEY (seccion_id)  REFERENCES cuestionario_seccion(id),
     CONSTRAINT fk_mc_alias    FOREIGN KEY (alias_de_id) REFERENCES materia(id),
     CONSTRAINT chk_mc_alias_distinto CHECK (alias_de_id IS NULL OR alias_de_id <> materia_id),
-    CONSTRAINT chk_mc_alias_oculta   CHECK (alias_de_id IS NULL OR seccion = 'oculta')
+    CONSTRAINT chk_mc_alias_oculta   CHECK (alias_de_id IS NULL OR seccion_id IS NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Que materias aparecen en el cuestionario y en que seccion. Independiente de estimacion_demanda a proposito.';
 
@@ -254,13 +290,13 @@ CREATE TABLE estimacion_demanda (
     nuevo_ingreso           INT NOT NULL DEFAULT 0,
     pct_baja                DECIMAL(5,2) NULL,
     pct_reprobacion         DECIMAL(5,2) NULL,
-    con_prerrequisito       INT NOT NULL DEFAULT 0,
+    con_prerrequisito       DECIMAL(8,2) NOT NULL DEFAULT 0 COMMENT 'Columna "Prerr.". Actuaria la trae con decimales.',
     demanda_ajustada        DECIMAL(8,2) NULL COMMENT 'Columna "Suma" del reporte real. Se guarda tal cual, no se recalcula.',
     capacidad_planeacion    INT NULL COMMENT 'Columna "Cap." del reporte real.',
     grupos_periodo_anterior INT NOT NULL DEFAULT 0,
     grupos_sugeridos        INT NOT NULL COMMENT '0 es valido y se conserva: materia con demanda pero sin grupo sugerido.',
     mostrar_en_cuestionario TINYINT(1) NOT NULL DEFAULT 1
-                            COMMENT 'Visibilidad GLOBAL por semestre, distinta de profesor_materia_elegible.',
+                            COMMENT 'Visibilidad para la vista de demanda. Lo que ve el profesor lo decide materia_cuestionario.',
     UNIQUE KEY uq_estimacion (materia_id, semestre_id),
     KEY idx_ed_semestre (semestre_id),
     CONSTRAINT fk_ed_materia  FOREIGN KEY (materia_id)  REFERENCES materia(id),
@@ -407,9 +443,9 @@ CREATE TABLE preferencia (
     semestre_id            INT NOT NULL,
     num_cursos_max         INT NOT NULL,
     otro_curso             TEXT NULL,
-    horarios_otro_depto    TEXT NULL COMMENT 'Solo relevante si tipo_contrato = asignatura (RN03).',
-    observaciones_cursos   TEXT NULL,
-    observaciones_horarios TEXT NULL,
+    horarios_otro_depto    TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',
+    observaciones_cursos   TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',
+    observaciones_horarios TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',
     estado                 ENUM('borrador','enviado') NOT NULL DEFAULT 'borrador',
     enviado_at             DATETIME NULL COMMENT 'UTC.',
     UNIQUE KEY uq_preferencia (profesor_id, semestre_id),
@@ -445,6 +481,36 @@ CREATE TABLE disponibilidad (
     CONSTRAINT fk_disp_franja      FOREIGN KEY (franja_id)      REFERENCES franja_horaria(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Restriccion DURA (verde/amarillo/rojo), separada de preferencia_materia por recomendacion de la literatura UCTP.';
+
+CREATE TABLE preferencia_respuesta (
+    preferencia_id INT NOT NULL,
+    seccion_id     INT NOT NULL,
+    texto          TEXT NOT NULL,
+    PRIMARY KEY (preferencia_id, seccion_id),
+    KEY idx_pr_seccion (seccion_id),
+    CONSTRAINT fk_pr_preferencia FOREIGN KEY (preferencia_id) REFERENCES preferencia(id) ON DELETE CASCADE,
+    CONSTRAINT fk_pr_seccion     FOREIGN KEY (seccion_id)     REFERENCES cuestionario_seccion(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Respuesta a una seccion tipo abierta.';
+
+-- La jefatura bloquea pares profesor-materia antes de correr el motor
+-- (2026-09-28). Capa aparte a proposito: la respuesta del profesor se conserva
+-- intacta, al desbloquear vuelve a contar, y el profesor nunca ve el bloqueo.
+CREATE TABLE bloqueo_profesor_materia (
+    profesor_id   INT NOT NULL,
+    materia_id    INT NOT NULL,
+    semestre_id   INT NOT NULL,
+    bloqueado_por INT NOT NULL,
+    bloqueado_at  DATETIME NOT NULL COMMENT 'UTC.',
+    PRIMARY KEY (profesor_id, materia_id, semestre_id),
+    KEY idx_bpm_materia (materia_id),
+    KEY idx_bpm_semestre (semestre_id),
+    CONSTRAINT fk_bpm_profesor FOREIGN KEY (profesor_id)   REFERENCES profesor(id),
+    CONSTRAINT fk_bpm_materia  FOREIGN KEY (materia_id)    REFERENCES materia(id),
+    CONSTRAINT fk_bpm_semestre FOREIGN KEY (semestre_id)   REFERENCES semestre(id),
+    CONSTRAINT fk_bpm_por      FOREIGN KEY (bloqueado_por) REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Restriccion DURA para el motor. Capa aparte: no toca preferencia_materia y el profesor nunca la ve.';
 
 -- -----------------------------------------------------------------------------
 -- Infraestructura del API (no existe en el esquema de Postgres)
