@@ -51,7 +51,9 @@ El ciclo tiene 5 fases. Aquí se documenta el detalle operativo real de cada una
 ### Fase 1 — Recolección de preferencias
 
 - Dirección Escolar manda la estimación de demanda (`Mat 202603.pdf`-tipo: grupos sugeridos por materia,
-  sin considerar salones todavía). Llega **a mediados de septiembre**, y cada departamento tiene sus
+  sin considerar salones todavía). Llega **después de que los profesores contestan el formulario de
+  preferencias** (aclaración del usuario, 2026-09-29; antes aquí decía "a mediados de septiembre"), y
+  cada departamento tiene sus
   propias fechas internas para cargar esa demanda contra su oferta.
 - **Hoy esa demanda se transcribe a mano** a una lista de cursos a abrir (con créditos y grupos
   sugeridos) — es un paso manual y una fuente de error, no automatizado en ningún lado.

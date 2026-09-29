@@ -44,7 +44,7 @@ $veTodos    = ve_todos_los_departamentos();
 $profesorId = filter_input(INPUT_GET, 'profesor_id', FILTER_VALIDATE_INT);
 if ($profesorId !== false && $profesorId !== null) {
     $st = $pdo->prepare(
-        'SELECT id, nombre, departamento_id, tipo_contrato, modo_materias_elegibles, estado_especial
+        'SELECT id, nombre, departamento_id, tipo_contrato, estado_especial
            FROM profesor WHERE id = ?'
     );
     $st->execute([(int) $profesorId]);
@@ -56,13 +56,9 @@ if ($profesorId !== false && $profesorId !== null) {
     // su propio departamento.
     exigir_jefe_de($objetivo['departamento_id'] === null ? null : (int) $objetivo['departamento_id']);
 
-    $cuestionario = cuestionario_de(
-        $pdo,
-        (int) $objetivo['id'],
-        $objetivo['departamento_id'] === null ? null : (int) $objetivo['departamento_id'],
-        (string) $objetivo['modo_materias_elegibles'],
-        $semestreId
-    );
+    // Sin exigir que esté publicado: el jefe puede revisar un borrador que
+    // alguien empezó antes de que se despublicara el formulario.
+    $cuestionario = cuestionario_de($pdo, $objetivo, $semestreId, false);
 
     responder(array_merge(
         [
@@ -71,7 +67,6 @@ if ($profesorId !== false && $profesorId !== null) {
                 'nombre'                  => $objetivo['nombre'],
                 'departamento_id'         => $objetivo['departamento_id'] === null ? null : (int) $objetivo['departamento_id'],
                 'tipo_contrato'           => $objetivo['tipo_contrato'],
-                'modo_materias_elegibles' => $objetivo['modo_materias_elegibles'],
                 'estado_especial'         => $objetivo['estado_especial'],
             ],
             'cuestionario' => $cuestionario,
@@ -85,7 +80,7 @@ if ($profesorId !== false && $profesorId !== null) {
 // jubiló: el panel es "quién falta por contestar" y esa gente no cuenta.
 $sql =
     'SELECT p.id, p.nombre, p.departamento_id, p.tipo_contrato,
-            p.modo_materias_elegibles, p.estado_especial,
+            p.estado_especial,
             pref.id AS preferencia_id, pref.estado, pref.enviado_at
        FROM profesor p
        LEFT JOIN preferencia pref
@@ -122,7 +117,6 @@ foreach ($st->fetchAll() as $f) {
             'nombre'                  => $f['nombre'],
             'departamento_id'         => $f['departamento_id'] === null ? null : (int) $f['departamento_id'],
             'tipo_contrato'           => $f['tipo_contrato'],
-            'modo_materias_elegibles' => $f['modo_materias_elegibles'],
         ],
         'preferenciaId' => $f['preferencia_id'] === null ? null : (int) $f['preferencia_id'],
         'estado'        => $f['estado'] === null ? 'no_iniciado' : $f['estado'],

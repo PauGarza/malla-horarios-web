@@ -1,73 +1,66 @@
 # frontend — Autoplanear (app real)
 
-Reemplaza a `../docs/mockup/mockup-cuestionario.html` (que se queda como referencia histórica de
-contenido/flujo, ya validado con los Jefes de Departamento). Esta carpeta es el código fuente de la
-app real que se conecta a la base de datos del proyecto y se publica en GitHub Pages.
+La app que usan profesores y jefatura, servida desde **https://horariosdace.itam.mx/**. Habla
+con el API propio en PHP que vive en el mismo origen (`../api/`, en `/api`). Reemplaza a
+`../docs/mockup/mockup-cuestionario.html`, que se queda como referencia histórica del contenido que
+ya validaron los Jefes de Departamento.
 
 ## Stack
 
-React + Vite (RNF01 de `../../REQUERIMIENTOS.md`, ya decidido desde 2026-08-07). Vite porque produce
-un build 100% estático — encaja directo con GitHub Pages, sin necesitar servidor propio.
+React 19 + Vite. La navegación entre vistas es por estado de React (`src/App.jsx`), no por rutas
+de URL, así que recargar nunca cae en una ruta que el servidor no conozca. `vite.config.js` usa
+`base: './'` (rutas relativas) por la misma razón.
 
+Única dependencia además de React: **`pdfjs-dist`**, para leer en el navegador el PDF de
+estimación de demanda de Servicios Escolares. Se carga solo cuando alguien sube un PDF (chunks
+aparte, ~1.7 MB), no en el arranque de la app.
 
-## Variables de entorno necesarias (build-time, públicas por diseño)
-
-Nombradas de forma genérica a propósito — el proveedor de base de datos es una decisión que se puede
-revisitar (ver `../backend/README.md`), y no queremos que el nombre de un proveedor específico quede
-regado por el código del frontend si el día de mañana migramos.
-
-- `VITE_DB_URL` — URL del proyecto/instancia de base de datos.
-- `VITE_DB_ANON_KEY` — clave pública (anon/anónima). **Nunca** la clave de administrador aquí — esa
-  nunca debe llegar al frontend, solo la usan la función de login y las herramientas de admin/Jefe de
-  Departamento que corren fuera de este sitio público (ver `../bd/diseno-bd.md` §4.2/§10.3).
-- `VITE_LOGIN_FUNCTION_URL` — endpoint de la función de login (`../backend/`).
-
-### Dónde viven esos valores
-
-| Archivo | Para qué | ¿Se commitea? |
-| --- | --- | --- |
-| `.env.example` | plantilla que documenta las 3 variables | sí |
-| `.env` | desarrollo local de cada quien | **no** (está en `.gitignore`) |
-| `.env.production` | el build que se publica | **sí, a propósito** |
-
-`.env.production` existe porque `.env` está ignorado y el build de GitHub Actions no lo ve: sin él,
-las 3 variables saldrían en `undefined` y el síntoma sería un "Failed to fetch" al iniciar sesión —
-idéntico al del bug de CORS ya resuelto, o sea fácil de diagnosticar mal. Que esté commiteado no es
-un descuido: las 3 son públicas por diseño y de todas formas quedan legibles en el JavaScript que el
-navegador descarga, así que esconderlas en *secrets* de CI daría una sensación de seguridad sin
-agregar ninguna. La protección real vive en RLS (`../bd/rls-policies.sql`).
-
-## Despliegue
-
-Se publica en GitHub Pages con `../.github/workflows/deploy-pages.yml`, que buildea y despliega en
-cada push a `main` que toque `frontend/`. `dist/` nunca se commitea: el artefacto lo produce CI.
-
-Como Pages sirve el repo desde un subdirectorio (`<usuario>.github.io/<repo>/`), `vite.config.js`
-fija `base`. Sin eso el build genera rutas absolutas tipo `/assets/index-abc.js` que ahí dan 404, y
-el síntoma es una pantalla en blanco sin error legible. Para probarlo sin desplegar:
+## Desarrollo y despliegue
 
 ```sh
-npm run build && npm run preview   # sirve en /malla-horarios-web/, igual que producción
+npm install
+npm run dev          # localhost; /api se reenvía a horariosdace.itam.mx (proxy en vite.config.js)
+npm run build        # dist/
+npm run lint         # oxlint
+npm run deploy:itam  # build + sube dist/ al servidor del ITAM por SFTP
+npm run deploy:api   # sube ../api/*.php (nunca sobrescribe api/lib/config.php)
 ```
 
-Ese `preview` usa el build de producción, así que también sirve para confirmar que
-`.env.production` entró bien: si no, el login truena ahí y no en Pages.
+El build **no necesita variables de entorno**: el API está en `/api` del mismo origen.
+`VITE_API_URL` (ver `.env.example`) solo sirve para apuntar a otro origen, y eso volvería a
+necesitar CORS en el PHP. Los dos scripts de despliegue leen las credenciales de SFTP de
+`.env.deploy` (plantilla en `.env.deploy.example`), que **nunca se commitea**.
 
-No hace falta `404.html` ni trucos de ruteo: la navegación entre vistas es por estado de React
-(`src/App.jsx`), no por rutas de URL, así que recargar nunca cae en una ruta que Pages no conozca.
+GitHub Pages ya no se usa (su workflow se eliminó el 2026-09-28): la app necesita el API en PHP, que
+Pages no puede servir.
 
-## Estado actual
+`scripts/probar-parser-demanda.mjs` prueba el lector del PDF de demanda contra archivos reales, sin
+navegador. Úsalo cuando llegue un reporte nuevo, para saber si cambió el formato antes de subirlo.
 
-App real y funcionando contra la base de datos del proyecto (React 19 + Vite 8). Ya construido:
+## Estructura
 
-- login con el JWT propio de la función del backend, sesión persistida en `localStorage`
-  (`src/lib/api.js`, `src/context/AuthContext.jsx`).
-- `HomePage` con opciones según el perfil de cada quien.
-- cuestionario de preferencias completo (`src/pages/FormularioPreferencias.jsx`): las dos secciones
-  con mínimos que bloquean el envío, validación de horas en verde, y rejilla de horarios con pintado
-  por arrastre.
-- vistas de Jefe de Departamento: panel de preferencias recibidas, configuración del cuestionario y
-  catálogo de materias.
+| Carpeta | Qué hay |
+|---|---|
+| `src/pages/` | Una pantalla por archivo (ver abajo) |
+| `src/components/` | `BarraSuperior` (menú de usuario y semestre activo), `SelectorDepartamento` (jefa de división / admin), `FormularioPiezas` (TriToggle, rejilla de disponibilidad: las comparten el formulario del profesor y el editor) |
+| `src/lib/api.js` | Un wrapper por endpoint. `PUT`/`PATCH`/`DELETE` van tunelados sobre `POST` con `X-HTTP-Method-Override` y el token va en `X-Autoplanear-Token`: el proxy del ITAM bloquea esos métodos y descarta `Authorization` (ver `../api/README.md`) |
+| `src/lib/roles.js` | Etiquetas de rol y contrato, `ROLES_GESTION` y `veTodosLosDepartamentos()`, espejo de `api/lib/auth.php` |
+| `src/lib/formulario.js` | Reglas del formulario compartidas: audiencia por contrato, mínimos para enviar, vista previa por contrato. Espejo de `api/lib/catalogo.php` |
+| `src/lib/parserDemanda.js` | Lector del PDF (o texto pegado) de estimación de demanda. Funciones puras |
+| `src/context/AuthContext.jsx` | Sesión (JWT en `localStorage`), perfil, departamentos, franjas y **semestre activo** |
 
-Falta, entre otras cosas, la pantalla de carga de catálogo y el panel "grande" de Jefe de
-Departamento — la lista viva está en el `TODO.md` del proyecto, fuera de este repo.
+## Pantallas
+
+El inicio (`HomePage`) se organiza en cuatro secciones:
+
+| Sección | Quién la ve | Pantallas |
+|---|---|---|
+| **Mi formulario** | quien da clases | `FormularioPreferencias` — el formulario del profesor, armado por el servidor según su contrato |
+| **Proceso del semestre** | jefatura | agrupado por fases del procedimiento: `CatalogoMaterias` → `EditorCuestionario` (editar y publicar) → `CargaDemanda` → `RespuestasCuestionario` (bloqueos) → pasos en construcción (asignar y revisar la malla, cartas, inscripciones) |
+| **Reportes** | jefatura | `PanelPreferencias` (quién contestó, reabrir), `CargaDemanda` en solo lectura ("Demanda del semestre") |
+| **Administración** | admin y jefa de división | `Semestres` — abrir el siguiente semestre, consultar y reactivar los anteriores |
+
+Además, desde el menú de usuario de la barra superior: `PerfilUsuario` (datos de la cuenta y cambio
+de contraseña).
+
+El estado vivo de lo que falta está en el `TODO.md` del proyecto, fuera de este repo.

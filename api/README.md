@@ -1,6 +1,6 @@
 # `api/` — el backend en PHP
 
-Nueve endpoints y cuatro archivos de librería que corren en
+Doce endpoints y seis archivos de librería que corren en
 `https://horariosdace.itam.mx/api/`, contra el MySQL del ITAM
 (`../bd/mysql/`).
 
@@ -75,16 +75,32 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 |---|---|---|
 | `login.php` | POST | `{cu, password}` → `{token, expira_en, rol}` |
 | `cambiar-password.php` | POST | `{password_actual, password_nueva}` → `{ok}` |
-| `catalogos.php` | GET | Perfil propio, departamentos, franjas y semestre actual |
-| `cuestionario.php` | GET | El catálogo del cuestionario del profesor que llama, ya resuelto |
-| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción |
-| `panel.php` | GET | Roster + preferencia de cada quien (jefe/admin) |
-| `reabrir.php` | POST | `estado` → `borrador` (jefe/admin) |
-| `materias.php` | GET, POST, PATCH, PUT | Catálogo de materias y co-oferta (jefe/admin) |
-| `configuracion.php` | GET, PUT | Cuestionario, config del depto y listas personalizadas (jefe/admin) |
+| `catalogos.php` | GET | Perfil propio, departamentos, franjas, semestre actual y si el formulario propio está publicado |
+| `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado |
+| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos |
+| `panel.php` | GET | Roster + preferencia de cada quien (jefatura) |
+| `reabrir.php` | POST | `estado` → `borrador` (jefatura) |
+| `materias.php` | GET, POST, PATCH, PUT | Catálogo de materias y co-oferta (jefatura) |
+| `configuracion.php` | GET, PUT, POST | El editor del formulario: leerlo, guardarlo completo, publicarlo (jefatura) |
+| `respuestas.php` | GET, POST | Matriz profesores × materias y bloqueos de jefatura (jefatura) |
+| `demanda.php` | GET, POST | Estimación de demanda de Servicios Escolares: leerla y reemplazarla (jefatura) |
+| `semestres.php` | GET, POST | Ciclo de semestres: listar, abrir el siguiente, reactivar uno (admin y jefa de división) |
 
 Los que aceptan varias operaciones las distinguen con `?recurso=` (`materias.php?recurso=co_oferta`,
-`configuracion.php?recurso=cuestionario|departamento|modo_materias|elegibles`).
+`configuracion.php?recurso=formulario|publicar`, `respuestas.php?recurso=bloqueo`). Los de
+jefatura aceptan `&departamento_id=` para jefe_division/admin; sin él usan el departamento propio.
+
+**Semestre activo (desde 2026-09-29).** Hay exactamente uno; `lib/semestre.php` lo resuelve y
+`exigir_semestre_activo()` hace que toda escritura que cuelga de un semestre (preferencias,
+formulario, publicación, bloqueos, reabrir, demanda) responda **409 `semestre_cerrado`** si no es el
+activo. Leer semestres cerrados sigue permitido. Abrir el siguiente copia el formulario de cada
+departamento (sin publicar) y la disponibilidad de salones.
+
+**Desde 2026-09-28** el armado del formulario vive en `lib/catalogo.php` (`cuestionario_de()`,
+`formulario_completo()`, `faltantes_para_enviar()`), compartido por cuatro endpoints para que lo
+que ve el profesor, lo que valida el servidor y lo que edita la jefatura no se desincronicen.
+Los bloqueos (`bloqueo_profesor_materia`) **solo** los lee `respuestas.php`: ningún endpoint que
+use un profesor los consulta, porque el profesor no debe enterarse.
 
 ## Reglas que se respetan en todos
 
@@ -119,6 +135,9 @@ vulnerabilidad clásica de JWT.
 - **`trg_bloquear_automodificacion_modo_materias`** y **`trg_limitar_reapertura_jefe`**: los
   dos existían para acotar políticas RLS necesariamente más amplias que su intención. Un
   endpoint que no acepta el campo no necesita trigger.
+- **La lista personalizada de materias por profesor** (`?recurso=modo_materias|elegibles`),
+  eliminada el 2026-09-28: todos los profesores de un departamento ven el mismo formulario, y lo
+  que se decide por persona se hace después como bloqueo, en `respuestas.php`.
 
 ## Verificación
 

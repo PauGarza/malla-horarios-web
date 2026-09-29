@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/db.php';
 require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/semestre.php';
 
 exigir_metodo('POST');
 exigir_rol(...ROLES_GESTION);
@@ -29,16 +30,19 @@ if ($prefId === false || $prefId === null || $prefId < 1) {
 
 // Que la preferencia sea de un profesor del departamento de quien reabre.
 $st = db()->prepare(
-    'SELECT p.departamento_id FROM preferencia pref
+    'SELECT p.departamento_id, pref.semestre_id FROM preferencia pref
        JOIN profesor p ON p.id = pref.profesor_id
       WHERE pref.id = ?'
 );
 $st->execute([$prefId]);
-$depto = $st->fetchColumn();
-if ($depto === false) {
+$fila = $st->fetch();
+if ($fila === false) {
     error_json('No existe esa preferencia', 404);
 }
+$depto = $fila['departamento_id'];
 exigir_jefe_de($depto === null ? null : (int) $depto);
+// Una preferencia de un semestre cerrado es histórico: no se reabre.
+exigir_semestre_activo(db(), (int) $fila['semestre_id']);
 
 db()->prepare("UPDATE preferencia SET estado = 'borrador', enviado_at = NULL WHERE id = ?")
     ->execute([$prefId]);

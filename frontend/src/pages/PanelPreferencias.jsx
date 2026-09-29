@@ -107,21 +107,25 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
                 <td>
                   <span className={`badge badge-${f.estado}`}>{ESTADO_LABELS[f.estado]}</span>
                 </td>
-                <td className="panel-acciones">
-                  {f.estado !== 'no_iniciado' && (
-                    <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor)}>
-                      Ver formulario
-                    </button>
-                  )}
-                  {f.estado === 'enviado' && (
-                    <button
-                      className="btn-secondary"
-                      disabled={reabriendoId === f.profesorId}
-                      onClick={() => reabrir(f)}
-                    >
-                      Activar formulario de nuevo
-                    </button>
-                  )}
+                <td>
+                  {/* El flex va en un div y no en el <td>: un td con
+                      display:flex deja de ser celda y la fila se desfasa. */}
+                  <div className="panel-acciones">
+                    {f.estado !== 'no_iniciado' && (
+                      <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor)}>
+                        Ver formulario
+                      </button>
+                    )}
+                    {f.estado === 'enviado' && (
+                      <button
+                        className="btn-secondary"
+                        disabled={reabriendoId === f.profesorId}
+                        onClick={() => reabrir(f)}
+                      >
+                        Activar formulario de nuevo
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -28,9 +28,10 @@ erDiagram
     MATERIA ||--o{ MATERIA_EQUIVALENCIA : "equivale a"
     MATERIA ||--o{ GRUPO : "genera"
     MATERIA ||--o{ ESTIMACION_DEMANDA : ""
-    MATERIA ||--o{ PROFESOR_MATERIA_ELEGIBLE : ""
+    MATERIA ||--o{ BLOQUEO_PROFESOR_MATERIA : ""
+    MATERIA ||--o{ MATERIA_CUESTIONARIO : ""
 
-    PROFESOR ||--o{ PROFESOR_MATERIA_ELEGIBLE : ""
+    PROFESOR ||--o{ BLOQUEO_PROFESOR_MATERIA : ""
     PROFESOR ||--o{ IMPARTE_PROFESOR : ""
     PROFESOR ||--o{ PREFERENCIA : "declara"
 
@@ -54,6 +55,10 @@ erDiagram
 
     PREFERENCIA ||--o{ PREFERENCIA_MATERIA : ""
     PREFERENCIA ||--o{ DISPONIBILIDAD : ""
+    PREFERENCIA ||--o{ PREFERENCIA_RESPUESTA : ""
+    DEPARTAMENTO ||--o{ CUESTIONARIO_SECCION : ""
+    CUESTIONARIO_SECCION ||--o{ MATERIA_CUESTIONARIO : ""
+    CUESTIONARIO_SECCION ||--o{ PREFERENCIA_RESPUESTA : ""
 ```
 
 ## Dominio: catálogo académico
@@ -201,7 +206,12 @@ erDiagram
     SALON ||--o{ IMPARTE_HORARIO : ""
 ```
 
-## Dominio: preferencias de profesores
+## Dominio: formulario y preferencias de profesores
+
+Desde 2026-09-28 el formulario de cada departamento/semestre es una lista ordenada de secciones que
+edita la jefatura (`CUESTIONARIO_SECCION`), y ya no hay lista personalizada por profesor: se
+eliminaron `PROFESOR_MATERIA_ELEGIBLE` y `profesor.modo_materias_elegibles`. Lo que se decide por
+persona va después, como `BLOQUEO_PROFESOR_MATERIA`. Ver `diseno-bd.md` §12.
 
 ```mermaid
 erDiagram
@@ -209,18 +219,36 @@ erDiagram
         int id PK
         varchar cu UK
         text tipo_contrato
-        text modo_materias_elegibles
     }
     MATERIA {
         int id PK
         varchar clave
     }
-    PROFESOR_MATERIA_ELEGIBLE {
-        int profesor_id FK
-        int materia_id FK
-    }
     SEMESTRE {
         int id PK
+    }
+    DEPARTAMENTO {
+        int id PK
+    }
+    CUESTIONARIO_SECCION {
+        int id PK
+        int departamento_id FK
+        int semestre_id FK
+        text tipo "num_cursos | materias | disponibilidad | abierta"
+        text titulo
+        text audiencia
+        int minimo_verdes
+        boolean cobertura_departamental
+        boolean obligatoria
+        int orden
+        boolean activa
+    }
+    MATERIA_CUESTIONARIO {
+        int materia_id FK
+        int semestre_id FK
+        int seccion_id FK "NULL = oculta"
+        int alias_de_id FK
+        text etiqueta
     }
     PREFERENCIA {
         int id PK
@@ -236,6 +264,11 @@ erDiagram
         text nivel
         boolean cobertura_departamental
     }
+    PREFERENCIA_RESPUESTA {
+        int preferencia_id FK
+        int seccion_id FK
+        text texto
+    }
     DISPONIBILIDAD {
         int id PK
         int preferencia_id FK
@@ -243,18 +276,30 @@ erDiagram
         int franja_id FK
         text nivel
     }
+    BLOQUEO_PROFESOR_MATERIA {
+        int profesor_id FK
+        int materia_id FK
+        int semestre_id FK
+        int bloqueado_por FK
+    }
     FRANJA_HORARIA {
         int id PK
     }
 
-    PROFESOR ||--o{ PROFESOR_MATERIA_ELEGIBLE : ""
-    MATERIA ||--o{ PROFESOR_MATERIA_ELEGIBLE : ""
+    DEPARTAMENTO ||--o{ CUESTIONARIO_SECCION : "su formulario"
+    SEMESTRE ||--o{ CUESTIONARIO_SECCION : ""
+    CUESTIONARIO_SECCION ||--o{ MATERIA_CUESTIONARIO : "agrupa"
+    MATERIA ||--o{ MATERIA_CUESTIONARIO : ""
     PROFESOR ||--o{ PREFERENCIA : "declara"
     SEMESTRE ||--o{ PREFERENCIA : ""
     PREFERENCIA ||--o{ PREFERENCIA_MATERIA : "(soft)"
     MATERIA ||--o{ PREFERENCIA_MATERIA : ""
+    PREFERENCIA ||--o{ PREFERENCIA_RESPUESTA : ""
+    CUESTIONARIO_SECCION ||--o{ PREFERENCIA_RESPUESTA : "pregunta abierta"
     PREFERENCIA ||--o{ DISPONIBILIDAD : "(hard)"
     FRANJA_HORARIA ||--o{ DISPONIBILIDAD : ""
+    PROFESOR ||--o{ BLOQUEO_PROFESOR_MATERIA : "(hard, jefatura)"
+    MATERIA ||--o{ BLOQUEO_PROFESOR_MATERIA : ""
 ```
 
 ## Dominio: salones, roles y configuración por departamento
@@ -292,8 +337,9 @@ erDiagram
     DEPARTAMENTO_SEMESTRE_CONFIG {
         int departamento_id FK
         int semestre_id FK
-        boolean mostrar_seleccion_materias
         numeric horas_minimas_verde
+        text texto_introduccion
+        boolean publicado
     }
     PROFESOR {
         int id PK

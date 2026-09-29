@@ -47,9 +47,11 @@ INSERT INTO franja_horaria (hora_inicio, hora_fin, orden) VALUES
 -- se arma al leer, en api/catalogos.php.
 -- -----------------------------------------------------------------------------
 
-INSERT INTO semestre (tipo, anio) VALUES
-    ('otono', 2026),
-    ('primavera', 2027);
+-- primavera 2027 es el ACTIVO: el semestre en el que se trabaja (desde
+-- 2026-09-29 hay exactamente uno; se cambia desde la vista de Semestres).
+INSERT INTO semestre (tipo, anio, estado) VALUES
+    ('otono', 2026, 'cerrado'),
+    ('primavera', 2027, 'activo');
 
 -- -----------------------------------------------------------------------------
 -- Salones de ejemplo (nombres reales de los reportes de Servicios Escolares —

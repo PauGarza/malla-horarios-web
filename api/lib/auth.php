@@ -194,7 +194,7 @@ function mi_perfil(): array
     }
     $st = db()->prepare(
         'SELECT id, cu, nombre, rol, departamento_id, tipo_contrato,
-                modo_materias_elegibles, password_predeterminada, estado_especial, activo
+                password_predeterminada, estado_especial, activo
            FROM profesor WHERE id = ?'
     );
     $st->execute([mi_id()]);
@@ -289,7 +289,7 @@ function ve_todos_los_departamentos(): bool
  * Alcance sobre un departamento. jefe_division y admin pueden en cualquiera;
  * jefe_departamento solo en el suyo.
  *
- * Es la guardia de roster_departamento_select, jefe_modo_materias_update,
+ * Es la guardia de roster_departamento_select,
  * jefe_preferencia_reapertura, materia_escritura_departamento,
  * materia_cuestionario_escritura y departamento_config_escritura.
  */

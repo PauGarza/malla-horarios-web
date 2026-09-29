@@ -19,6 +19,21 @@ archivos son material nuevo y se editan aquí.
 7. cargar-profesores.php         <- por SFTP, se abre una vez y se borra
 ```
 
+`schema-mysql.sql` ya describe el estado final. Las **migraciones** son solo para una base que ya
+existía antes del cambio, y no se corren en una instalación desde cero:
+
+```
+migracion-2026-09-28-formulario-editable.sql   formulario por secciones, publicación, respuestas
+                                               abiertas, bloqueos. ADITIVA: correr ANTES de
+                                               desplegar el API nuevo.
+migracion-2026-09-28-limpieza.sql              borra la lista personalizada por profesor y el enum
+                                               materia_cuestionario.seccion. Correr DESPUÉS de
+                                               desplegar el API nuevo (el viejo los lee).
+migracion-2026-09-29-semestres.sql             semestre.estado (un solo semestre activo) y
+                                               estimacion_demanda.con_prerrequisito a DECIMAL.
+                                               ADITIVA: correr ANTES de desplegar el API nuevo.
+```
+
 ### Los datos reales
 
 `seed-mysql.sql` es el catálogo base (departamentos, franjas, semestres, salones). Encima van
