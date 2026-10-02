@@ -56,6 +56,8 @@ CREATE TABLE profesor (
     password_hash           VARCHAR(255) NOT NULL
                             COMMENT 'bcrypt, manejado por la app. NUNCA se selecciona fuera de login.php / cambiar-password.php.',
     nombre                  VARCHAR(255) NOT NULL,
+    correo                  VARCHAR(255) NULL
+                            COMMENT 'Opcional (2026-10-02). Lo captura la persona en Mi perfil o al darse de alta. En minusculas.',
     -- jefe_division se agrego 2026-09-25: la division academica (DACE) esta
     -- arriba de los departamentos, asi que su alcance son los 3 (Matematicas,
     -- Actuaria, Estadistica). Es un rol academico y NO es lo mismo que admin,
@@ -238,7 +240,7 @@ CREATE TABLE cuestionario_seccion (
     departamento_id         INT NOT NULL,
     semestre_id             INT NOT NULL,
     tipo                    ENUM('num_cursos','materias','disponibilidad','abierta') NOT NULL
-                            COMMENT 'num_cursos y disponibilidad: exactamente una por depto/semestre, no se borran (se valida en PHP).',
+                            COMMENT 'disponibilidad: exactamente una por depto/semestre. num_cursos: a lo mas una, opcional desde 2026-10-02 (se valida en PHP).',
     titulo                  VARCHAR(255) NOT NULL,
     descripcion             TEXT NULL,
     audiencia               ENUM('todos','tiempo_completo_medio','asignatura') NOT NULL DEFAULT 'todos'
@@ -312,9 +314,11 @@ CREATE TABLE franja_horaria (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     hora_inicio TIME NOT NULL UNIQUE,
     hora_fin    TIME NOT NULL,
-    orden       INT  NOT NULL
+    orden       INT  NOT NULL,
+    dias        SET('lunes','martes','miercoles','jueves','viernes') NULL
+                COMMENT 'NULL = todos los dias. 2026-10-02: 14:00-14:30 solo martes y jueves.'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Catalogo fijo: 07:00-14:00 y 16:00-20:00 en bloques de 30 min (22 franjas). Nunca 14:00-16:00 (RN05) ni despues de 20:00.';
+  COMMENT='Catalogo fijo: 07:00-14:00 y 16:00-20:00 en bloques de 30 min, mas 14:00-14:30 solo mar/jue (23 franjas). RN05 + esa excepcion.';
 
 CREATE TABLE salon (
     id        INT AUTO_INCREMENT PRIMARY KEY,
@@ -441,7 +445,8 @@ CREATE TABLE preferencia (
     id                     INT AUTO_INCREMENT PRIMARY KEY,
     profesor_id            INT NOT NULL,
     semestre_id            INT NOT NULL,
-    num_cursos_max         INT NOT NULL,
+    num_cursos_max         INT NULL
+                           COMMENT 'NULL = el formulario no tenia la pregunta (opcional desde 2026-10-02).',
     otro_curso             TEXT NULL,
     horarios_otro_depto    TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',
     observaciones_cursos   TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',

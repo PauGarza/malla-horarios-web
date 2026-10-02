@@ -66,9 +66,14 @@ export default function Semestres({ onVolver }) {
   const cerrados = datos.semestres.filter((s) => s.estado !== 'activo');
   const resumenDe = (semestreId, deptoId) =>
     datos.resumen[semestreId]?.[deptoId] ?? { publicado: false, enviadas: 0, borradores: 0, demanda: 0 };
+  // El API dice qué departamentos le toca ver a quien llama (null = todos):
+  // la jefatura de división hoy solo ve Matemáticas.
+  const visibles = datos.departamentos_visibles
+    ? departamentos.filter((d) => datos.departamentos_visibles.includes(d.id))
+    : departamentos;
 
   const borradoresActivo = activo
-    ? departamentos.reduce((n, d) => n + resumenDe(activo.id, d.id).borradores, 0)
+    ? visibles.reduce((n, d) => n + resumenDe(activo.id, d.id).borradores, 0)
     : 0;
   const etiquetaNuevo = nuevo ? `${TIPOS.find((t) => t.valor === nuevo.tipo)?.etiqueta} ${nuevo.anio}` : '';
 
@@ -86,13 +91,13 @@ export default function Semestres({ onVolver }) {
     setError('');
     try {
       await abrirSemestre(token, nuevo.tipo, nuevo.anio);
-      setMensaje(`${etiquetaNuevo} es ahora el semestre activo.`);
-      await Promise.all([cargar(), recargarPerfil()]);
     } catch (err) {
       setError(err.message);
-    } finally {
       setTrabajando(false);
+      return;
     }
+    setMensaje(`${etiquetaNuevo} es ahora el semestre activo.`);
+    await recargarTras(etiquetaNuevo);
   }
 
   async function reactivar(s) {
@@ -107,10 +112,23 @@ export default function Semestres({ onVolver }) {
     setError('');
     try {
       await reactivarSemestre(token, s.id);
-      setMensaje(`${etiquetaSemestre(s)} es ahora el semestre activo.`);
-      await Promise.all([cargar(), recargarPerfil()]);
     } catch (err) {
       setError(err.message);
+      setTrabajando(false);
+      return;
+    }
+    setMensaje(`${etiquetaSemestre(s)} es ahora el semestre activo.`);
+    await recargarTras(etiquetaSemestre(s));
+  }
+
+  // El cambio de semestre YA quedó hecho cuando esto corre: si la recarga
+  // falla, no puede decir que falló el cambio — reintentarlo daría "ya es el
+  // activo" y confundiría más.
+  async function recargarTras(etiqueta) {
+    try {
+      await Promise.all([cargar(), recargarPerfil()]);
+    } catch (err) {
+      setError(`${etiqueta} sí quedó activo, pero no se pudo recargar la pantalla (${err.message}). Recarga la página.`);
     } finally {
       setTrabajando(false);
     }
@@ -128,7 +146,7 @@ export default function Semestres({ onVolver }) {
         </tr>
       </thead>
       <tbody>
-        {departamentos.map((d) => {
+        {visibles.map((d) => {
           const r = resumenDe(s.id, d.id);
           return (
             <tr key={d.id}>

@@ -32,6 +32,38 @@ migracion-2026-09-28-limpieza.sql              borra la lista personalizada por 
 migracion-2026-09-29-semestres.sql             semestre.estado (un solo semestre activo) y
                                                estimacion_demanda.con_prerrequisito a DECIMAL.
                                                ADITIVA: correr ANTES de desplegar el API nuevo.
+migracion-2026-10-02-correo-y-roles.sql        profesor.correo, y reafirma los roles de Rumbos
+                                               (jefe_division) y Soto (jefe_departamento), los
+                                               dos en Matemáticas. ADITIVA: correr ANTES de
+                                               desplegar el API nuevo (catalogos.php lee correo:
+                                               al revés, todo el sitio da 500).
+migracion-2026-10-02-num-cursos-opcional.sql   preferencia.num_cursos_max acepta NULL: la pregunta
+                                               "Número de cursos" se puede quitar del formulario.
+                                               ADITIVA: correr ANTES de desplegar el API nuevo.
+migracion-2026-10-02-franja-1400-mar-jue.sql   franja_horaria.dias (NULL = todos) y la franja
+                                               14:00-14:30 solo martes y jueves, con su
+                                               disponibilidad de salones. ADITIVA: correr ANTES
+                                               de desplegar el API nuevo (catalogos.php lee dias).
+```
+
+Y dos archivos que no son migraciones de esquema:
+
+```
+datos-estadistica-mysql.sql      las 26 materias de Estadística (ver abajo). Se puede correr en
+                                 cualquier momento; es idempotente.
+datos-estadistica-co-oferta-mysql.sql
+                                 las 10 equivalencias oficiales de Estadística (columna "materias
+                                 equivalentes" de DACE/BD/datos raw/Cursos.xlsx, la misma fuente de
+                                 Matemáticas) + 8 filas comentadas que solo se ven en los horarios.
+                                 Después de datos-estadistica-mysql.sql.
+reinicio-2026-10-02-formulario-estadistica.sql
+                                 borra el formulario de Estadística del semestre activo, que se
+                                 había sembrado con la plantilla de Matemáticas, para que el editor
+                                 lo vuelva a sembrar con la plantilla genérica. DESPUÉS del deploy.
+                                 No borra nada si algún profesor de EST ya tiene preferencia.
+limpieza-2026-10-02-prueba.sql   borra el formulario/cuenta de prueba que salía arriba de Beatriz
+                                 en "Preferencias recibidas". En DOS pasos: primero identifica el
+                                 CU, luego borra solo ese.
 ```
 
 ### Los datos reales
@@ -48,6 +80,17 @@ los datos reales de Matemáticas, traducidos de los originales de PostgreSQL que
 
 **Los originales son los de `DACE/BD/`.** Si cambian los datos, se cambian allá y se vuelve a
 generar la traducción; estos archivos no se editan a mano.
+
+**Excepción: `datos-estadistica-mysql.sql` (2026-10-02) es original y se edita aquí.** Se escribió
+después de la migración, cuando Postgres ya es histórico, así que no tiene gemelo en `DACE/BD/`.
+Son 27 materias: las 26 del PDF de demanda de Estadística (`Est 202603`), con los nombres tal
+como los escribe Servicios Escolares —las dos que el PDF trae sin nombre (EST-13102, EST-24129) lo
+toman de los planes de estudio (`DACC/MATERIAS/WEB/planesOracle.csv`, que tiene exactamente las
+mismas 26 claves y créditos)— más **EST-24108 Regresión Avanzada**, que solo aparece en los
+grupos abiertos de `LE/Horarios_Primavera_2026.pdf`. Sus 6 créditos son **inferidos** (ese PDF
+no los trae) de sus 3 h/semana. No carga demanda (el PDF es de otoño 2026), ni configuración del
+formulario: el porqué está en el encabezado del archivo. Las equivalencias (co-oferta) van
+aparte, en `datos-estadistica-co-oferta-mysql.sql`.
 
 Tres diferencias mecánicas con el original, todas por MariaDB 5.5:
 

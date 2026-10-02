@@ -14,6 +14,11 @@ import SelectorDepartamento from '../components/SelectorDepartamento';
 //
 // Con soloConsulta es el reporte "Demanda del semestre": la misma tabla, sin
 // nada que subir.
+//
+// Desde 2026-10-02 se pueden agregar a mano materias que no vienen en el
+// reporte, en la misma vista previa (después de subir el PDF, o partiendo de
+// la estimación ya guardada). El API no distingue: es una fila más con las
+// columnas del reporte en 0.
 
 /**
  * pdf.js se carga solo cuando alguien sube un PDF (pesa ~1 MB). Se usa la
@@ -42,6 +47,31 @@ const COLUMNAS = [
   ['grupos_sugeridos', 'Sug'],
 ];
 
+// Una materia que no viene en el reporte y se agrega a mano (2026-10-02):
+// Servicios Escolares no la estimó, así que las columnas del reporte van en 0
+// y lo único que se captura son los grupos sugeridos.
+const NUEVA_VACIA = { clave: '', nombre: '', creditos: '', grupos_sugeridos: 1 };
+const AVISO_MANUAL = 'Agregada a mano: no viene en el reporte de Servicios Escolares.';
+
+function filaManual({ clave, nombre, creditos, grupos_sugeridos }) {
+  return {
+    clave,
+    nombre,
+    creditos: Number(creditos),
+    alumnos_total: 0,
+    nuevo_ingreso: 0,
+    pct_baja: 0,
+    pct_reprobacion: 0,
+    con_prerrequisito: 0,
+    demanda_ajustada: 0,
+    capacidad_planeacion: 0,
+    grupos_periodo_anterior: 0,
+    grupos_sugeridos: Number(grupos_sugeridos),
+    avisos: [AVISO_MANUAL],
+    incluir: true,
+  };
+}
+
 export default function CargaDemanda({ onVolver, soloConsulta = false }) {
   const { token, profesor, departamentos, semestre } = useAuth();
 
@@ -59,6 +89,8 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
   const [guardando, setGuardando] = useState(false);
   const [modoPegar, setModoPegar] = useState(false);
   const [textoPegado, setTextoPegado] = useState('');
+  const [nueva, setNueva] = useState(NUEVA_VACIA);
+  const [errorNueva, setErrorNueva] = useState('');
 
   useEffect(() => {
     let cancelado = false;
@@ -90,8 +122,10 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
   const prefijoDepto = datos?.materias[0]?.clave.split('-')[0] ?? null;
 
   /** Resultado del parser -> filas de vista previa, comparadas contra el catálogo. */
-  function prepararPrevia({ filas, ignorados, semestre: semestrePdf }, origen, nombreArchivo) {
+  function prepararPrevia({ filas, ignorados, semestre: semestrePdf }, origen, nombreArchivo, sinReporte = false) {
     const avisos = [];
+    setNueva(NUEVA_VACIA);
+    setErrorNueva('');
     const detectado = semestrePdf ?? semestreDeNombreArchivo(nombreArchivo);
     if (detectado && (detectado.tipo !== semestre.tipo || detectado.anio !== semestre.anio)) {
       avisos.push(
@@ -99,7 +133,7 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
       );
     }
     for (const linea of ignorados) avisos.push(`No se pudo leer este renglón: ${linea}`);
-    if (filas.length === 0) {
+    if (filas.length === 0 && !sinReporte) {
       avisos.push('No se encontró ninguna materia. ¿Es el reporte de "Estimación de la demanda"?');
     }
     const otrosPrefijos = prefijoDepto
@@ -141,6 +175,96 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
     prepararPrevia(filasDesdeTexto(textoPegado), 'texto pegado', '');
   }
 
+  /**
+   * Abre la vista previa con lo que ya está guardado, para agregarle materias
+   * sin volver a subir el PDF. Hace falta partir de lo guardado porque el
+   * guardado REEMPLAZA la estimación completa (api/demanda.php).
+   */
+  function editarCargada() {
+    const filas = (datos?.filas ?? []).map((f) => ({
+      clave: f.clave,
+      nombre: f.nombre,
+      creditos: Number(f.creditos),
+      alumnos_total: Number(f.alumnos_total),
+      nuevo_ingreso: Number(f.nuevo_ingreso),
+      pct_baja: Number(f.pct_baja ?? 0),
+      pct_reprobacion: Number(f.pct_reprobacion ?? 0),
+      con_prerrequisito: Number(f.con_prerrequisito),
+      demanda_ajustada: Number(f.demanda_ajustada ?? 0),
+      capacidad_planeacion: Number(f.capacidad_planeacion ?? 0),
+      grupos_periodo_anterior: Number(f.grupos_periodo_anterior),
+      grupos_sugeridos: Number(f.grupos_sugeridos),
+      avisos: [],
+    }));
+    prepararPrevia(
+      { filas, ignorados: [], semestre: null },
+      filas.length > 0 ? 'la estimación ya guardada' : 'captura a mano',
+      '',
+      true,
+    );
+  }
+
+  // Lo que se escribe en "clave" se completa con el catálogo: si la materia ya
+  // existe, su nombre y créditos salen de ahí.
+  function cambiarNueva(campo, valor) {
+    setErrorNueva('');
+    setNueva((n) => {
+      const sig = { ...n, [campo]: valor };
+      if (campo === 'clave') {
+        const enCatalogo = catalogo.get(valor.trim().toUpperCase());
+        if (enCatalogo) {
+          sig.nombre = enCatalogo.nombre;
+          sig.creditos = enCatalogo.creditos;
+        }
+      }
+      return sig;
+    });
+  }
+
+  function agregarMateria(e) {
+    e.preventDefault();
+    const clave = nueva.clave.trim().toUpperCase();
+    const patron = prefijoDepto ? new RegExp(`^${prefijoDepto}-\\d{4,6}$`) : /^[A-Z]{2,5}-\d{4,6}$/;
+    if (!patron.test(clave)) {
+      setErrorNueva(`La clave debe ser como ${prefijoDepto ?? 'MAT'}-12345.`);
+      return;
+    }
+    const yaEsta = previa.filas.find((f) => f.clave === clave);
+    if (yaEsta) {
+      if (!yaEsta.incluir) {
+        editarFila(clave, { incluir: true });
+        setNueva(NUEVA_VACIA);
+        return;
+      }
+      setErrorNueva(`${clave} ya está en la tabla: edítala ahí.`);
+      return;
+    }
+    const enCatalogo = catalogo.get(clave);
+    const nombre = nueva.nombre.trim() || enCatalogo?.nombre || '';
+    if (!nombre) {
+      setErrorNueva('Escribe el nombre: es una materia nueva en el catálogo.');
+      return;
+    }
+    if (!(Number(nueva.creditos) >= 1)) {
+      setErrorNueva('Los créditos deben ser mayores que 0.');
+      return;
+    }
+    if (!(Number(nueva.grupos_sugeridos) >= 0)) {
+      setErrorNueva('Los grupos sugeridos no pueden ser negativos.');
+      return;
+    }
+    setPrevia((p) => ({
+      ...p,
+      filas: [...p.filas, filaManual({ ...nueva, clave, nombre })],
+    }));
+    setNueva(NUEVA_VACIA);
+  }
+
+  // Para sugerir en "clave" las materias del catálogo que no están en la tabla.
+  const sugerenciasNueva = previa
+    ? (datos?.materias ?? []).filter((m) => !previa.filas.some((f) => f.clave === m.clave))
+    : [];
+
   const editarFila = (clave, cambios) =>
     setPrevia((p) => ({ ...p, filas: p.filas.map((f) => (f.clave === clave ? { ...f, ...cambios } : f)) }));
 
@@ -170,8 +294,9 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
 
     setGuardando(true);
     setError('');
+    let r;
     try {
-      const r = await guardarDemanda(
+      r = await guardarDemanda(
         token,
         semestre.id,
         departamentoId,
@@ -192,6 +317,16 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
           grupos_sugeridos: f.grupos_sugeridos,
         })),
       );
+    } catch (err) {
+      setError(err.message);
+      setGuardando(false);
+      return;
+    }
+
+    // A partir de aquí la estimación YA está guardada. Si la recarga falla, eso
+    // no puede decir "no se guardó": la vista previa ya se cerró y reintentar
+    // no tendría de dónde.
+    try {
       setMensaje(
         `Guardado: ${r.demanda} materias con demanda` +
           (r.nuevas ? `, ${r.nuevas} materias nuevas en el catálogo` : '') +
@@ -202,7 +337,7 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
       setPrevia(null);
       setDatos(await leerDemanda(token, semestre.id, departamentoId));
     } catch (err) {
-      setError(err.message);
+      setError(`La estimación sí se guardó, pero no se pudo recargar la tabla (${err.message}). Vuelve a abrir esta vista para verla.`);
     } finally {
       setGuardando(false);
     }
@@ -269,6 +404,15 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
               </button>
             </div>
           </details>
+          <p className="formulario-nota">
+            ¿Falta una materia que no viene en el reporte?{' '}
+            <button type="button" className="btn-link" disabled={cargando} onClick={editarCargada}>
+              {datos?.filas.length
+                ? 'Agregarla a la estimación ya guardada'
+                : 'Capturar materias a mano, sin PDF'}
+            </button>
+            {' '}— o súbela junto con el PDF: en la vista previa también puedes agregar materias.
+          </p>
         </section>
       )}
 
@@ -343,7 +487,7 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
                           <span className="demanda-antes">inactiva en el catálogo</span>
                         )}
                         {f.avisos.map((a) => (
-                          <span className="demanda-aviso" key={a}>
+                          <span className={a === AVISO_MANUAL ? 'demanda-antes' : 'demanda-aviso'} key={a}>
                             {a}
                           </span>
                         ))}
@@ -383,6 +527,70 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
               </tbody>
             </table>
           </div>
+
+          <form className="demanda-agregar" onSubmit={agregarMateria} noValidate>
+            <h3>Agregar una materia que no viene en el reporte</h3>
+            <p className="formulario-nota">
+              Si ya está en el catálogo basta con la clave. Las columnas del reporte quedan en 0; solo
+              se captura cuántos grupos sugieres abrir.
+            </p>
+            <div className="demanda-agregar-campos">
+              <label>
+                Clave
+                <input
+                  list="demanda-catalogo"
+                  value={nueva.clave}
+                  placeholder={`${prefijoDepto ?? 'MAT'}-12345`}
+                  onChange={(e) => cambiarNueva('clave', e.target.value)}
+                />
+                <datalist id="demanda-catalogo">
+                  {sugerenciasNueva.map((m) => (
+                    <option key={m.clave} value={m.clave}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </datalist>
+              </label>
+              <label className="demanda-agregar-nombre">
+                Materia
+                <input
+                  value={nueva.nombre}
+                  maxLength={255}
+                  placeholder="Nombre (solo si es nueva)"
+                  onChange={(e) => cambiarNueva('nombre', e.target.value)}
+                />
+              </label>
+              <label>
+                Créditos
+                <input
+                  className="input-num"
+                  type="number"
+                  min={1}
+                  value={nueva.creditos}
+                  onChange={(e) => cambiarNueva('creditos', e.target.value)}
+                />
+              </label>
+              <label>
+                Sug
+                <input
+                  className="input-num"
+                  type="number"
+                  min={0}
+                  value={nueva.grupos_sugeridos}
+                  onChange={(e) => cambiarNueva('grupos_sugeridos', e.target.value)}
+                />
+              </label>
+              <button type="submit" className="btn-secondary" disabled={!nueva.clave.trim()}>
+                Agregar
+              </button>
+            </div>
+            {errorNueva && (
+              <p className="formulario-error" role="alert">
+                {errorNueva}
+              </p>
+            )}
+          </form>
+
           <footer className="formulario-acciones">
             <button className="btn-link" disabled={guardando} onClick={() => setPrevia(null)}>
               Descartar

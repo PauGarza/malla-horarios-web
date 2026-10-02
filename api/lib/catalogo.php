@@ -45,20 +45,46 @@ function sin_acentos(string $s): string
 }
 
 /**
- * La plantilla con la que arranca un depto/semestre sin formulario: reproduce
- * el formulario de dos secciones que ya validó la jefatura. La misma plantilla
- * está en bd/mysql/migracion-2026-09-28-formulario-editable.sql; si cambia
- * aquí, que cambie allá.
+ * La plantilla con la que arranca un depto/semestre sin formulario (y sin uno
+ * anterior que copiar).
+ *
+ * Para Matemáticas reproduce el formulario de dos secciones de materias que ya
+ * validó su jefatura (la misma plantilla de
+ * bd/mysql/migracion-2026-09-28-formulario-editable.sql): "Cursos de cálculo —
+ * cobertura departamental" con su mínimo de 2 verdes, y el resto con 5.
+ *
+ * Desde 2026-10-02, para cualquier otro departamento es genérica: UNA sección
+ * con todas sus materias y sin mínimo. Antes todos recibían la de Matemáticas,
+ * y como sus materias no tienen fila en materia_cuestionario, la regla
+ * fail-open las metía todas en la sección de cálculo (la primera), que además
+ * solo ven tiempo completo y medio tiempo. Cada jefatura arma sus secciones
+ * desde el editor.
  */
-function secciones_por_defecto(): array
+function secciones_por_defecto(?string $prefijoDepto): array
+{
+    $materias = $prefijoDepto === 'MAT'
+        ? [
+            ['materias', 'Cursos de cálculo — cobertura departamental',
+                'Cursos de cálculo que, por ser departamentales, necesitan que varios profesores de tiempo '
+                . 'completo o medio tiempo los impartan.',
+                'tiempo_completo_medio', 2, 1],
+            ['materias', 'Catálogo de materias', null, 'todos', 5, 0],
+        ]
+        : [
+            ['materias', 'Materias del departamento', null, 'todos', null, 0],
+        ];
+
+    return array_merge(
+        [['num_cursos', '¿Cuántos cursos puedes impartir este semestre?', null, 'todos', null, 0]],
+        $materias,
+        secciones_por_defecto_cierre()
+    );
+}
+
+/** Lo que va después de las materias en la plantilla, igual para todos. */
+function secciones_por_defecto_cierre(): array
 {
     return [
-        ['num_cursos', '¿Cuántos cursos puedes impartir este semestre?', null, 'todos', null, 0],
-        ['materias', 'Cursos de cálculo — cobertura departamental',
-            'Cursos de cálculo que, por ser departamentales, necesitan que varios profesores de tiempo '
-            . 'completo o medio tiempo los impartan.',
-            'tiempo_completo_medio', 2, 1],
-        ['materias', 'Catálogo de materias', null, 'todos', 5, 0],
         ['disponibilidad', 'Disponibilidad de horarios',
             'Haz clic para cambiar el color de una franja, o mantén presionado y arrastra para pintar '
             . 'varias de un jalón.',
@@ -187,8 +213,11 @@ function asegurar_formulario(PDO $pdo, int $deptoId, int $semestreId): void
                          minimo_verdes, cobertura_departamental, obligatoria, orden)
                  VALUES (?,?,?,?,?,?,?,?,0,?)'
             );
+            $st = $pdo->prepare('SELECT clave_prefijo FROM departamento WHERE id = ?');
+            $st->execute([$deptoId]);
+            $prefijo = $st->fetchColumn();
             $orden = 1;
-            foreach (secciones_por_defecto() as $s) {
+            foreach (secciones_por_defecto($prefijo === false ? null : (string) $prefijo) as $s) {
                 $ins->execute([$deptoId, $semestreId, $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $orden++]);
             }
         }

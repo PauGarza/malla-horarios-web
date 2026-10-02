@@ -17,7 +17,9 @@
 //
 // Autorización: el semestre es uno solo para los 3 departamentos de la
 // división, así que no basta con ser jefe de departamento —
-// ve_todos_los_departamentos() (admin y jefe_division).
+// administra_semestres() (admin y jefe_division). No es
+// ve_todos_los_departamentos(): desde 2026-10-02 la jefa de división ve solo
+// Matemáticas, pero el semestre sigue siendo suyo.
 // =============================================================================
 
 declare(strict_types=1);
@@ -29,7 +31,7 @@ require_once __DIR__ . '/lib/semestre.php';
 
 exigir_metodo('GET', 'POST');
 exigir_rol(...ROLES_GESTION);
-if (!ve_todos_los_departamentos()) {
+if (!administra_semestres()) {
     error_json('Solo la jefatura de división y el administrador manejan los semestres', 403);
 }
 
@@ -76,7 +78,23 @@ if (metodo_http() === 'GET') {
         $poner((int) $f['semestre_id'], (int) $f['departamento_id'], 'demanda', (int) $f['n']);
     }
 
-    responder(['semestres' => $semestres, 'resumen' => (object) $resumen]);
+    // Quien administra semestres sin ver todos los departamentos (hoy, la
+    // jefatura de división: ver DIVISION_SOLO_SU_DEPARTAMENTO) solo recibe el
+    // avance del suyo. Los semestres en sí sí son de toda la división.
+    if (!ve_todos_los_departamentos()) {
+        $mio = mi_departamento();
+        foreach ($resumen as $sem => $porDepto) {
+            $resumen[$sem] = ($mio !== null && isset($porDepto[$mio])) ? [$mio => $porDepto[$mio]] : [];
+        }
+    }
+
+    responder([
+        'semestres' => $semestres,
+        'resumen'   => (object) $resumen,
+        // null = todos. Para que la pantalla no pinte columnas vacías de
+        // departamentos que no le tocan.
+        'departamentos_visibles' => ve_todos_los_departamentos() ? null : [mi_departamento()],
+    ]);
 }
 
 // -----------------------------------------------------------------------------

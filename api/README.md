@@ -74,21 +74,39 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 | Archivo | Métodos | Qué hace |
 |---|---|---|
 | `login.php` | POST | `{cu, password}` → `{token, expira_en, rol}` |
+| `registro.php` | GET / POST | GET → `{departamentos}`; POST `{cu, nombre, password, departamento_id, tipo_contrato[, correo]}` → `{ok}` (201). Sin sesión; el rol siempre es `profesor` y `estado_especial` queda NULL (solo lo captura un admin) |
 | `cambiar-password.php` | POST | `{password_actual, password_nueva}` → `{ok}` |
-| `catalogos.php` | GET | Perfil propio, departamentos, franjas, semestre actual y si el formulario propio está publicado |
+| `perfil.php` | POST | `{correo}` → `{ok, correo}`. Lo editable del perfil propio; `""` borra el correo (2026-10-02) |
+| `catalogos.php` | GET | Perfil propio (con `correo`), departamentos, franjas, semestre actual y si el formulario propio está publicado |
 | `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado |
-| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos |
+| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` solo se exige (1-6) si el formulario del profesor trae esa pregunta; si no, se guarda NULL (2026-10-02) |
 | `panel.php` | GET | Roster + preferencia de cada quien (jefatura) |
 | `reabrir.php` | POST | `estado` → `borrador` (jefatura) |
 | `materias.php` | GET, POST, PATCH, PUT | Catálogo de materias y co-oferta (jefatura) |
-| `configuracion.php` | GET, PUT, POST | El editor del formulario: leerlo, guardarlo completo, publicarlo (jefatura) |
+| `configuracion.php` | GET, PUT, POST | El editor del formulario: leerlo, guardarlo completo, publicarlo (jefatura). Exige una sección de disponibilidad y a lo más una de número de cursos (opcional desde 2026-10-02) |
 | `respuestas.php` | GET, POST | Matriz profesores × materias y bloqueos de jefatura (jefatura) |
-| `demanda.php` | GET, POST | Estimación de demanda de Servicios Escolares: leerla y reemplazarla (jefatura) |
+| `demanda.php` | GET, POST | Estimación de demanda de Servicios Escolares: leerla y reemplazarla (jefatura). Las materias agregadas a mano en la pantalla llegan como filas normales con las columnas del reporte en 0 |
 | `semestres.php` | GET, POST | Ciclo de semestres: listar, abrir el siguiente, reactivar uno (admin y jefa de división) |
 
 Los que aceptan varias operaciones las distinguen con `?recurso=` (`materias.php?recurso=co_oferta`,
 `configuracion.php?recurso=formulario|publicar`, `respuestas.php?recurso=bloqueo`). Los de
-jefatura aceptan `&departamento_id=` para jefe_division/admin; sin él usan el departamento propio.
+jefatura aceptan `&departamento_id=` para quien `ve_todos_los_departamentos()`; sin él usan el
+departamento propio.
+
+**Alcance de la jefatura de división (desde 2026-10-02, temporal).** Con
+`DIVISION_SOLO_SU_DEPARTAMENTO = true` en `lib/auth.php`, `jefe_division` deja de ver los 3
+departamentos y se comporta como jefatura de su `departamento_id` (Matemáticas): hoy solo `admin`
+pasa `ve_todos_los_departamentos()`. Lo que es de toda la división —abrir y reactivar semestres—
+lo conserva vía `administra_semestres()`, pero `semestres.php` ya solo le manda el avance de su
+departamento. Para devolverle los 3 se pone en `false` aquí **y** en `frontend/src/lib/roles.js`.
+
+| Cuenta | MAT | ACT | EST | semestres |
+|---|---|---|---|---|
+| Rumbos (`jefe_division`) | 200 | 403 | 403 | 200 (solo avance de MAT) |
+| Soto (`jefe_departamento`) | 200 | 403 | 403 | 403 |
+| admin | 200 | 200 | 200 | 200 |
+
+(Lo esperado tras el deploy; falta comprobarlo contra producción.)
 
 **Semestre activo (desde 2026-09-29).** Hay exactamente uno; `lib/semestre.php` lo resuelve y
 `exigir_semestre_activo()` hace que toda escritura que cuelga de un semestre (preferencias,
@@ -157,3 +175,22 @@ Corridas contra el servidor el 2026-09-25, con el token de un profesor:
 | `password_hash` en las respuestas | no aparece ✅ |
 
 Falta la del `profesor_id` ajeno en el cuerpo del PUT, que se hace con dos cuentas.
+
+**Desde 2026-10-01 estas pruebas son un script:** [`pruebas/autorizacion.mjs`](pruebas/autorizacion.mjs)
+(Node 18+, sin dependencias; `deploy:api` no lo sube porque solo sube `.php`). Las
+credenciales van por variable de entorno, nunca en el repo:
+
+```sh
+AP_URL=https://horariosdace.itam.mx/api AP_PROF_CU=... AP_PROF_PASS=... \
+  node api/pruebas/autorizacion.mjs
+```
+
+Cubre lo de la tabla y además: 403 en los 16 caminos de gestión con token de profesor, token
+con `alg:"none"`, claim `rol` cambiado a admin y `exp` vencido → 401. Opcionales:
+`AP_PROF2_*` + `AP_ESCRIBIR=1` para el `profesor_id` ajeno (escribe el borrador de la primera
+cuenta), y `AP_JEFE_*` para comprobar que un jefe de departamento no puede pedir
+`?departamento_id=` de otro.
+
+**Rol y `activo` se leen de la base en cada petición** (2026-10-01, `sesion()` en
+`lib/auth.php`). Antes salían del claim del JWT, así que a quien se le quitaba la jefatura o se
+desactivaba conservaba sus permisos hasta que el token venciera (12 h).

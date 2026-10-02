@@ -70,12 +70,24 @@ if (!in_array($estado, ['borrador', 'enviado'], true)) {
     error_json('Estado inválido', 400);
 }
 
-$numCursos = filter_var(isset($body['num_cursos_max']) ? $body['num_cursos_max'] : null, FILTER_VALIDATE_INT);
-// Se valida aquí y no solo con el CHECK porque en MySQL < 8.0.16 los CHECK se
-// ignoran en silencio (ver bd/mysql/README.md) y este es el único camino por el
-// que ese valor entra a la base.
-if ($numCursos === false || $numCursos === null || $numCursos < 1 || $numCursos > 6) {
-    error_json('El número de cursos debe estar entre 1 y 6', 400, 'cursos_invalidos');
+// La pregunta de número de cursos es opcional desde 2026-10-02: la jefatura la
+// puede quitar del formulario. Si este profesor no la tiene, se guarda NULL y
+// se ignora lo que mande; si la tiene, es obligatoria.
+$pideNumCursos = false;
+foreach ($cuestionario['secciones'] as $s) {
+    if ($s['tipo'] === 'num_cursos') {
+        $pideNumCursos = true;
+    }
+}
+$numCursos = null;
+if ($pideNumCursos) {
+    $numCursos = filter_var(isset($body['num_cursos_max']) ? $body['num_cursos_max'] : null, FILTER_VALIDATE_INT);
+    // Se valida aquí y no solo con el CHECK porque en MySQL < 8.0.16 los CHECK se
+    // ignoran en silencio (ver bd/mysql/README.md) y este es el único camino por el
+    // que ese valor entra a la base.
+    if ($numCursos === false || $numCursos === null || $numCursos < 1 || $numCursos > 6) {
+        error_json('El número de cursos debe estar entre 1 y 6', 400, 'cursos_invalidos');
+    }
 }
 
 $nivelesValidos = ['verde', 'amarillo', 'rojo'];
@@ -112,6 +124,15 @@ if (isset($body['materias']) && is_array($body['materias'])) {
     }
 }
 
+// En qué días existe cada franja: null = todos (2026-10-02: 14:00-14:30 solo
+// martes y jueves). Una celda de un día en que su franja no existe se descarta
+// en silencio, igual que las materias que no están en el formulario; una
+// franja que no existe en el catálogo es un error.
+$diasDeFranja = [];
+foreach ($pdo->query('SELECT id, dias FROM franja_horaria') as $f) {
+    $diasDeFranja[(int) $f['id']] = ($f['dias'] === null || $f['dias'] === '') ? null : explode(',', $f['dias']);
+}
+
 $celdas     = [];
 $horasVerde = 0.0;
 if (isset($body['disponibilidad']) && is_array($body['disponibilidad'])) {
@@ -123,8 +144,13 @@ if (isset($body['disponibilidad']) && is_array($body['disponibilidad'])) {
         $franjaId = filter_var(isset($d['franja_id']) ? $d['franja_id'] : null, FILTER_VALIDATE_INT);
         $nivel    = isset($d['nivel']) ? (string) $d['nivel'] : '';
         if (!in_array($dia, $dias, true) || $franjaId === false || $franjaId === null
-            || !in_array($nivel, $nivelesValidos, true)) {
+            || !in_array($nivel, $nivelesValidos, true)
+            || !array_key_exists((int) $franjaId, $diasDeFranja)) {
             error_json('Hay una celda de disponibilidad con datos inválidos', 400);
+        }
+        $permitidos = $diasDeFranja[(int) $franjaId];
+        if ($permitidos !== null && !in_array($dia, $permitidos, true)) {
+            continue;
         }
         $celdas[$dia . '-' . $franjaId] = [$dia, (int) $franjaId, $nivel];
     }

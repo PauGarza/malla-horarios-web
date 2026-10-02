@@ -20,7 +20,9 @@ exigir_metodo('POST');
 $cfg  = config();
 $body = cuerpo_json();
 
-$cu       = trim((string) (isset($body['cu']) ? $body['cu'] : ''));
+// Sin ceros a la izquierda, que es como está guardado el roster: antes la
+// pantalla de login le pedía a la persona quitarlos; ahora se quitan aquí.
+$cu       = ltrim(trim((string) (isset($body['cu']) ? $body['cu'] : '')), '0');
 $password = (string) (isset($body['password']) ? $body['password'] : '');
 if ($cu === '' || $password === '') {
     error_json('Faltan credenciales', 400);

@@ -192,7 +192,12 @@ export default function EditorCuestionario({ onVolver }) {
         key: claveNueva(),
         id: null,
         tipo,
-        titulo: tipo === 'materias' ? 'Nueva sección de materias' : 'Nueva pregunta',
+        titulo:
+          tipo === 'materias'
+            ? 'Nueva sección de materias'
+            : tipo === 'num_cursos'
+              ? '¿Cuántos cursos puedes impartir este semestre?'
+              : 'Nueva pregunta',
         descripcion: '',
         audiencia: 'todos',
         minimo_verdes: null,
@@ -507,6 +512,10 @@ export default function EditorCuestionario({ onVolver }) {
 
   // --- Edición --------------------------------------------------------------
 
+  // "Número de cursos" es opcional desde 2026-10-02 y puede haber a lo más una:
+  // el botón para (re)agregarla solo aparece cuando no está.
+  const tieneNumCursos = form.secciones.some((s) => s.tipo === 'num_cursos');
+
   const insertador = (indice) => (
     <div className="editor-insertar">
       <button type="button" className="btn-link" onClick={() => agregarSeccion('materias', indice)}>
@@ -515,6 +524,11 @@ export default function EditorCuestionario({ onVolver }) {
       <button type="button" className="btn-link" onClick={() => agregarSeccion('abierta', indice)}>
         + Pregunta abierta
       </button>
+      {!tieneNumCursos && (
+        <button type="button" className="btn-link" onClick={() => agregarSeccion('num_cursos', indice)}>
+          + Número de cursos
+        </button>
+      )}
     </div>
   );
 
@@ -606,7 +620,9 @@ export default function EditorCuestionario({ onVolver }) {
                 >
                   ↓
                 </button>
-                {(s.tipo === 'materias' || s.tipo === 'abierta') && (
+                {/* Disponibilidad es la única fija: sin ella no hay horario que
+                    asignar. Número de cursos es opcional desde 2026-10-02. */}
+                {s.tipo !== 'disponibilidad' && (
                   <button type="button" className="btn-icono peligro" onClick={() => borrarSeccion(s)}>
                     Eliminar
                   </button>

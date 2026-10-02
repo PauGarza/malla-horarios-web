@@ -160,6 +160,19 @@ textarea {
   margin-top: 8px;
 }
 
+/* La liga "Créala aquí" va dentro del texto: sin el margen de los botones
+   de la tarjeta y al tamaño de la letra de alrededor. */
+.login-hint .btn-link {
+  margin-top: 0;
+  font-size: inherit;
+}
+
+/* Los select del alta, del mismo ancho y alto que los input de la tarjeta. */
+.login-card select {
+  width: 100%;
+  padding: 8px 10px;
+}
+
 .login-hint code {
   background: var(--gray-bg);
   border-radius: 3px;
@@ -700,6 +713,12 @@ textarea {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* Franja que no existe ese día (14:00-14:30 fuera de martes y jueves): con
+   el mismo rayado de la comida, porque para esos días ya es comida. */
+.slot-no-aplica {
+  background: repeating-linear-gradient(45deg, #eef1f4, #eef1f4 6px, #e4e8ec 6px, #e4e8ec 12px);
 }
 
 .slot {
@@ -1544,6 +1563,33 @@ select.editor-mini {
 }
 .fila-descartada td {
   opacity: 0.45;
+}
+/* Agregar a mano una materia que no viene en el reporte. */
+.demanda-agregar {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--gray-bg);
+}
+.demanda-agregar h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.demanda-agregar-campos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+.demanda-agregar-campos label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.demanda-agregar-nombre {
+  flex: 1 1 220px;
 }
 .sug-cero input,
 .fila-sug-cero td {

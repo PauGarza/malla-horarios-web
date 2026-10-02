@@ -18,6 +18,14 @@ function readStoredSession() {
   }
 }
 
+function borrarSesionGuardada() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignorar
+  }
+}
+
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [profesor, setProfesor] = useState(null);
@@ -46,6 +54,31 @@ export function AuthProvider({ children }) {
     setFormularioPublicado(Boolean(datos.formulario_publicado));
   }, []);
 
+  // Error al restaurar una sesión guardada que NO es de autenticación (red
+  // caída, 500): la sesión sigue siendo buena y la pantalla ofrece reintentar.
+  const [errorCarga, setErrorCarga] = useState('');
+
+  const restaurar = useCallback(
+    (tok) => {
+      setLoading(true);
+      setErrorCarga('');
+      return cargarCatalogos(tok)
+        .catch((err) => {
+          // Solo un 401/403 dice que la sesión ya no sirve (vencida, cuenta
+          // desactivada). Antes cualquier error cerraba la sesión, así que un
+          // tropiezo de red sacaba a la persona a media captura.
+          if (err.status === 401 || err.status === 403) {
+            borrarSesionGuardada();
+            setToken(null);
+          } else {
+            setErrorCarga(err.message);
+          }
+        })
+        .finally(() => setLoading(false));
+    },
+    [cargarCatalogos],
+  );
+
   useEffect(() => {
     const session = readStoredSession();
     if (!session) {
@@ -53,35 +86,35 @@ export function AuthProvider({ children }) {
       return;
     }
     setToken(session.token);
-    cargarCatalogos(session.token)
-      .catch(() => {
-        localStorage.removeItem(STORAGE_KEY);
-        setToken(null);
-      })
-      .finally(() => setLoading(false));
-  }, [cargarCatalogos]);
+    restaurar(session.token);
+  }, [restaurar]);
+
+  const reintentarCarga = useCallback(() => restaurar(token), [restaurar, token]);
 
   const login = useCallback(
     async (cu, password) => {
       const { token: tok, expira_en } = await apiLogin(cu, password);
-      const session = { token: tok, expiresAt: Date.now() + expira_en * 1000 };
+      // Primero el perfil y DESPUÉS guardar la sesión: si catalogos falla, la
+      // pantalla de login muestra el error, y no debe quedar una sesión
+      // guardada que al recargar la página "aparezca" adentro sola.
+      await cargarCatalogos(tok);
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ token: tok, expiresAt: Date.now() + expira_en * 1000 }),
+        );
       } catch {
         // sin persistencia local sigue funcionando para esta pestaña
       }
+      setErrorCarga('');
       setToken(tok);
-      await cargarCatalogos(tok);
     },
     [cargarCatalogos],
   );
 
   const logout = useCallback(() => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignorar
-    }
+    borrarSesionGuardada();
+    setErrorCarga('');
     setToken(null);
     setProfesor(null);
     setDepartamentos([]);
@@ -110,6 +143,8 @@ export function AuthProvider({ children }) {
         formularioPublicado,
         nombreDepartamento,
         loading,
+        errorCarga,
+        reintentarCarga,
         login,
         logout,
         recargarPerfil,

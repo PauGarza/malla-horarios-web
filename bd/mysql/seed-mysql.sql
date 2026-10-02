@@ -24,15 +24,20 @@ INSERT INTO departamento (nombre, clave_prefijo) VALUES
 -- El original usaba generate_series, que no existe en MySQL. Son un catalogo
 -- fijo de 22 filas: literales es mas largo pero mas claro que cualquier truco
 -- con una tabla de numeros, y este archivo se lee mas veces de las que se corre.
+--
+-- 2026-10-02: excepcion a RN05 — martes y jueves se admite hasta las 14:30.
+-- Es la de orden 15 (23 franjas en total), con dias = 'martes,jueves'; las demas (dias NULL) valen
+-- todos los dias. Ver migracion-2026-10-02-franja-1400-mar-jue.sql.
 -- -----------------------------------------------------------------------------
 
-INSERT INTO franja_horaria (hora_inicio, hora_fin, orden) VALUES
-    ('07:00','07:30', 1), ('07:30','08:00', 2), ('08:00','08:30', 3), ('08:30','09:00', 4),
-    ('09:00','09:30', 5), ('09:30','10:00', 6), ('10:00','10:30', 7), ('10:30','11:00', 8),
-    ('11:00','11:30', 9), ('11:30','12:00',10), ('12:00','12:30',11), ('12:30','13:00',12),
-    ('13:00','13:30',13), ('13:30','14:00',14),
-    ('16:00','16:30',15), ('16:30','17:00',16), ('17:00','17:30',17), ('17:30','18:00',18),
-    ('18:00','18:30',19), ('18:30','19:00',20), ('19:00','19:30',21), ('19:30','20:00',22);
+INSERT INTO franja_horaria (hora_inicio, hora_fin, orden, dias) VALUES
+    ('07:00','07:30', 1, NULL), ('07:30','08:00', 2, NULL), ('08:00','08:30', 3, NULL), ('08:30','09:00', 4, NULL),
+    ('09:00','09:30', 5, NULL), ('09:30','10:00', 6, NULL), ('10:00','10:30', 7, NULL), ('10:30','11:00', 8, NULL),
+    ('11:00','11:30', 9, NULL), ('11:30','12:00',10, NULL), ('12:00','12:30',11, NULL), ('12:30','13:00',12, NULL),
+    ('13:00','13:30',13, NULL), ('13:30','14:00',14, NULL),
+    ('14:00','14:30',15, 'martes,jueves'),
+    ('16:00','16:30',16, NULL), ('16:30','17:00',17, NULL), ('17:00','17:30',18, NULL), ('17:30','18:00',19, NULL),
+    ('18:00','18:30',20, NULL), ('18:30','19:00',21, NULL), ('19:00','19:30',22, NULL), ('19:30','20:00',23, NULL);
 
 -- -----------------------------------------------------------------------------
 -- Semestres.
@@ -76,7 +81,8 @@ INSERT INTO salon (nombre, edificio, capacidad, tipo) VALUES
 -- horario) se carga despues sin cambiar el esquema, reemplazando este INSERT
 -- permisivo por datos de "act salones *.pdf".
 --
--- 7 salones x 3 deptos x 2 semestres x 5 dias x 22 franjas = 4 620 filas.
+-- 7 salones x 3 deptos x 2 semestres x 5 dias x 22 franjas = 4 620 filas, mas
+-- la franja de 14:00 solo martes y jueves (x 2 dias = 84 filas): 4 704.
 -- Se usa un derivado con UNION ALL y no VALUES ROW(), que es 8.0.19+.
 -- -----------------------------------------------------------------------------
 
@@ -87,4 +93,5 @@ SELECT s.id, d.id, sem.id, dias.valor, f.id
  CROSS JOIN semestre sem
  CROSS JOIN (SELECT 'lunes' AS valor UNION ALL SELECT 'martes' UNION ALL
              SELECT 'miercoles' UNION ALL SELECT 'jueves' UNION ALL SELECT 'viernes') dias
- CROSS JOIN franja_horaria f;
+ CROSS JOIN franja_horaria f
+ WHERE f.dias IS NULL OR FIND_IN_SET(dias.valor, f.dias) > 0;

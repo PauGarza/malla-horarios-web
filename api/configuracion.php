@@ -223,9 +223,12 @@ foreach ($entrada as $s) {
         'obligatoria' => $tipo === 'abierta' && !empty($s['obligatoria']) ? 1 : 0,
     ];
 }
-if ($conteoTipo['num_cursos'] !== 1 || $conteoTipo['disponibilidad'] !== 1) {
+// Disponibilidad es obligatoria (sin ella no hay horario que asignar).
+// Número de cursos es opcional desde 2026-10-02, pero a lo más una: es un solo
+// valor por preferencia (preferencia.num_cursos_max).
+if ($conteoTipo['disponibilidad'] !== 1 || $conteoTipo['num_cursos'] > 1) {
     error_json(
-        'El formulario debe tener exactamente una pregunta de número de cursos y una de disponibilidad',
+        'El formulario debe tener exactamente una pregunta de disponibilidad y a lo más una de número de cursos',
         400,
         'secciones_fijas'
     );

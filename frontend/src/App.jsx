@@ -19,10 +19,28 @@ import BarraSuperior from './components/BarraSuperior';
 // Si se agregan más vistas reales (panel de Jefe grande, admin) vale la pena
 // revisar esto — hoy sería complejidad sin beneficio.
 function Shell() {
-  const { token, profesor, loading } = useAuth();
+  const { token, profesor, loading, errorCarga, reintentarCarga, logout } = useAuth();
   const [vista, setVista] = useState({ nombre: 'home' });
 
   if (loading) return <div className="app-cargando">Cargando…</div>;
+  // Sesión buena pero el servidor no respondió al arrancar: ofrecer reintentar
+  // en vez de mandar al login, que haría creer que la sesión se perdió.
+  if (token && !profesor && errorCarga) {
+    return (
+      <div className="login-screen">
+        <div className="login-card">
+          <h1>No se pudo conectar</h1>
+          <p className="login-error">{errorCarga}</p>
+          <button type="button" className="btn-primary" onClick={reintentarCarga}>
+            Reintentar
+          </button>
+          <button type="button" className="btn-link" onClick={logout}>
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (!token || !profesor) return <LoginPage />;
 
   // La barra va arriba de TODA vista autenticada: el menú de usuario (perfil,

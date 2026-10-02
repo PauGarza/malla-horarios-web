@@ -89,6 +89,15 @@ const patch = conCuerpo('PATCH');
 
 export const login = (cu, password) => post('login.php', null, { cu, password });
 
+/** Departamentos para el formulario de alta; no requiere sesión. */
+export const departamentosRegistro = () => pedir('registro.php', null);
+
+/** Alta de cuenta con rol profesor; no requiere sesión. */
+export const registrar = (datos) => post('registro.php', null, datos);
+
+/** Lo editable del perfil propio; hoy solo el correo ('' lo borra). */
+export const guardarCorreo = (token, correo) => post('perfil.php', token, { correo });
+
 export const cambiarPassword = (token, passwordActual, passwordNueva) =>
   post('cambiar-password.php', token, {
     password_actual: passwordActual,

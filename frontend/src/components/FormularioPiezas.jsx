@@ -55,6 +55,12 @@ export function RejillaDisponibilidad({
                 <tr>
                   <td className="franja-hora">{f.hora_inicio.slice(0, 5)}</td>
                   {DIAS.map((d) => {
+                    // La franja no existe ese día (2026-10-02: 14:00-14:30 solo
+                    // martes y jueves). Sin botón ni data-clave, así no se
+                    // puede pintar ni con clic, ni arrastrando, ni con teclado.
+                    if (f.dias && !f.dias.includes(d.valor)) {
+                      return <td key={d.valor} className="slot-no-aplica" aria-hidden="true" />;
+                    }
                     const clave = claveDisponibilidad(d.valor, f.id);
                     return (
                       <SlotCelda
@@ -81,7 +87,7 @@ export function RejillaDisponibilidad({
 }
 
 // memo + handlers estables: al arrastrar se repinta solo la celda que cambió,
-// no las 110 de la rejilla.
+// no las 112 de la rejilla.
 const SlotCelda = memo(function SlotCelda({
   clave,
   nivel,

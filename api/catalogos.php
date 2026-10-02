@@ -33,9 +33,16 @@ $perfil = mi_perfil();
 
 $departamentos = $pdo->query('SELECT id, nombre FROM departamento ORDER BY id')->fetchAll();
 
-$franjas = $pdo->query(
-    'SELECT id, hora_inicio, hora_fin, orden FROM franja_horaria ORDER BY orden'
-)->fetchAll();
+// `dias`: null = todos los días; si no, la lista de días en que la franja
+// existe (2026-10-02: 14:00-14:30 solo martes y jueves). En la base es un SET
+// de MySQL, que llega como "martes,jueves".
+$franjas = array_map(
+    static function (array $f): array {
+        $f['dias'] = ($f['dias'] === null || $f['dias'] === '') ? null : explode(',', $f['dias']);
+        return $f;
+    },
+    $pdo->query('SELECT id, hora_inicio, hora_fin, orden, dias FROM franja_horaria ORDER BY orden')->fetchAll()
+);
 
 // El semestre en el que se trabaja: el ACTIVO (semestre.estado, desde
 // 2026-09-29). Antes era el de id más alto, porque no había columna que
@@ -57,6 +64,7 @@ responder([
         'id'                      => (int) $perfil['id'],
         'cu'                      => $perfil['cu'],
         'nombre'                  => $perfil['nombre'],
+        'correo'                  => $perfil['correo'],
         'rol'                     => $perfil['rol'],
         'departamento_id'         => $perfil['departamento_id'] === null ? null : (int) $perfil['departamento_id'],
         'tipo_contrato'           => $perfil['tipo_contrato'],

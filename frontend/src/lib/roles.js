@@ -23,9 +23,19 @@ export const ROLES_GESTION = ['jefe_departamento', 'jefe_division', 'admin'];
 
 export const gestionaDepartamento = (rol) => ROLES_GESTION.includes(rol);
 
+// TEMPORAL (2026-10-02): la jefatura de división ve solo su departamento
+// (Matemáticas). Espejo de DIVISION_SOLO_SU_DEPARTAMENTO en api/lib/auth.php:
+// se cambian los dos juntos.
+const DIVISION_SOLO_SU_DEPARTAMENTO = true;
+
 // Espejo de ve_todos_los_departamentos() en api/lib/auth.php. Solo decide si
 // se muestra el selector de departamento: quien autoriza es el servidor.
-export const veTodosLosDepartamentos = (rol) => rol === 'jefe_division' || rol === 'admin';
+export const veTodosLosDepartamentos = (rol) =>
+  rol === 'admin' || (rol === 'jefe_division' && !DIVISION_SOLO_SU_DEPARTAMENTO);
+
+// Espejo de administra_semestres(): el semestre es de toda la división, así
+// que la jefatura de división lo conserva aunque vea un solo departamento.
+export const administraSemestres = (rol) => rol === 'admin' || rol === 'jefe_division';
 
 export const etiquetaRol = (rol) => ROL_LABELS[rol] ?? rol;
 

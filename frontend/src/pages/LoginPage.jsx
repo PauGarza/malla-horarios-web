@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import RegistroPage from './RegistroPage';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -7,6 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -20,6 +22,8 @@ export default function LoginPage() {
       setEnviando(false);
     }
   }
+
+  if (registrando) return <RegistroPage onVolver={() => setRegistrando(false)} />;
 
   return (
     <div className="login-screen">
@@ -53,12 +57,11 @@ export default function LoginPage() {
           {enviando ? 'Entrando…' : 'Entrar'}
         </button>
 
-        {/* El CU del ejemplo es inventado a propósito: como la contraseña
-            inicial ES el CU, poner aquí el de una persona real sería publicar
-            sus credenciales en el código fuente de un repo público. */}
         <p className="login-hint">
-          Tu usuario y tu contraseña inicial son tu Clave Única, <strong>sin ceros a la izquierda</strong> —
-          si tu CU real es <code>000123456</code>, aquí escribe <code>123456</code>.
+          ¿No tienes cuenta?{' '}
+          <button type="button" className="btn-link" onClick={() => setRegistrando(true)}>
+            Créala aquí
+          </button>
         </p>
       </form>
     </div>
