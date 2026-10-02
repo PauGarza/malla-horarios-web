@@ -101,7 +101,10 @@ export default function FormularioPreferencias({
         const pref = prefDatos.preferencia;
         if (pref) {
           setEstado(pref.estado);
-          setNumCursosMax(pref.num_cursos_max);
+          // null si el formulario no tenía la pregunta de número de cursos
+          // (opcional desde 2026-10-02); si la jefatura la vuelve a poner,
+          // arranca en 1.
+          setNumCursosMax(pref.num_cursos_max ?? 1);
           // El merge deja en amarillo cualquier materia que la jefatura haya
           // agregado al formulario después de que se guardó el borrador.
           setNivelMaterias({
@@ -152,7 +155,7 @@ export default function FormularioPreferencias({
   // --- Rejilla de disponibilidad: pintar arrastrando -----------------------
   // El estado del arrastre vive en un ref: empezar a arrastrar no tiene por qué
   // provocar un render, y así los handlers pueden ser estables y dejar que el
-  // memo de SlotCelda corte las ~109 celdas que no cambiaron.
+  // memo de SlotCelda corte las ~111 celdas que no cambiaron.
   const arrastre = useRef({ activo: false, valor: undefined });
 
   const pintarSlot = useCallback((clave, valor) => {
@@ -270,7 +273,15 @@ export default function FormularioPreferencias({
       setEstado(nuevoEstado);
       setMensaje(nuevoEstado === 'enviado' ? 'Preferencias enviadas.' : 'Borrador guardado.');
     } catch (err) {
-      setError(err.message);
+      if (err.codigo === 'ya_enviada') {
+        // Lo más probable: un "Enviar" anterior SÍ llegó y se perdió la
+        // respuesta (red lenta), y esto es el reintento. Mostrarlo como error
+        // haría creer que no se envió. La pantalla pasa a solo lectura.
+        setEstado('enviado');
+        setMensaje('Tus preferencias ya estaban enviadas. Si necesitas cambiarlas, pide a tu Jefe de Departamento que reabra el formulario.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setGuardando(false);
     }

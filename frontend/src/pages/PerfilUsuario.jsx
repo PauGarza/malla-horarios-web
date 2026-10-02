@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { cambiarPassword } from '../lib/api';
+import { cambiarPassword, guardarCorreo } from '../lib/api';
 import { TIPO_CONTRATO_LABELS, etiquetaRol } from '../lib/roles';
 
 // Mismas reglas que api/cambiar-password.php, repetidas aquí solo para avisar
@@ -16,6 +16,31 @@ export default function PerfilUsuario({ onVolver }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
+
+  // El correo se guarda aparte de la contraseña: son dos formularios.
+  const [correo, setCorreo] = useState(profesor.correo ?? '');
+  const [guardandoCorreo, setGuardandoCorreo] = useState(false);
+  const [errorCorreo, setErrorCorreo] = useState('');
+  const [mensajeCorreo, setMensajeCorreo] = useState('');
+
+  async function enviarCorreo(e) {
+    e.preventDefault();
+    setErrorCorreo('');
+    setMensajeCorreo('');
+    setGuardandoCorreo(true);
+    try {
+      const r = await guardarCorreo(token, correo.trim());
+      setCorreo(r.correo ?? '');
+      setMensajeCorreo(r.correo ? 'Listo: guardamos tu correo.' : 'Listo: quitamos tu correo.');
+    } catch (err) {
+      setErrorCorreo(err.message);
+      setGuardandoCorreo(false);
+      return;
+    }
+    // Ya se guardó: si la recarga del perfil falla no es un error del guardado.
+    await recargarPerfil().catch(() => {});
+    setGuardandoCorreo(false);
+  }
 
   function validar() {
     if (!actual || !nueva || !confirmacion) return 'Llena los tres campos.';
@@ -86,6 +111,44 @@ export default function PerfilUsuario({ onVolver }) {
         <p className="formulario-nota">
           Si algún dato está mal, pídele a tu Jefe de Departamento que lo corrija.
         </p>
+      </section>
+
+      <section className="formulario-seccion">
+        <h2>Correo</h2>
+        <form className="perfil-form" onSubmit={enviarCorreo} noValidate>
+          <label htmlFor="correo">Correo electrónico</label>
+          <input
+            id="correo"
+            type="email"
+            autoComplete="email"
+            maxLength={255}
+            placeholder="nombre@itam.mx"
+            value={correo}
+            onChange={(e) => setCorreo(e.target.value)}
+          />
+          <p className="formulario-nota">
+            Para que la jefatura pueda contactarte sobre tu asignación. Déjalo vacío para quitarlo.
+          </p>
+          {errorCorreo && (
+            <p className="formulario-error" role="alert">
+              {errorCorreo}
+            </p>
+          )}
+          {mensajeCorreo && (
+            <p className="formulario-mensaje" role="status">
+              {mensajeCorreo}
+            </p>
+          )}
+          <div>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={guardandoCorreo || correo.trim() === (profesor.correo ?? '')}
+            >
+              {guardandoCorreo ? 'Guardando…' : 'Guardar correo'}
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="formulario-seccion">

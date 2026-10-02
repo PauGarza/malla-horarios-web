@@ -146,9 +146,25 @@ function sesion(): array
         error_json('Sesión inválida', 401);
     }
 
+    // El rol y `activo` se leen de la base en CADA petición, no del claim: el
+    // token dura 12 horas, y con el rol del claim a quien se le quitaba la
+    // jefatura o se desactivaba conservaba sus permisos hasta que venciera.
+    // El claim `rol` se sigue emitiendo por compatibilidad, pero ya no autoriza
+    // nada (el frontend usa el rol de catalogos.php). Es una consulta por llave
+    // primaria.
+    $st = db()->prepare('SELECT rol, activo FROM profesor WHERE id = ?');
+    $st->execute([(int) $id]);
+    $fila = $st->fetch();
+    if (!$fila) {
+        error_json('Sesión inválida o vencida, vuelve a entrar', 401);
+    }
+    if ((int) $fila['activo'] !== 1) {
+        error_json('Tu cuenta está desactivada', 403);
+    }
+
     $sesion = [
         'profesor_id' => (int) $id,
-        'rol'         => isset($claims['rol']) ? (string) $claims['rol'] : 'profesor',
+        'rol'         => (string) $fila['rol'],
     ];
     return $sesion;
 }
@@ -193,7 +209,7 @@ function mi_perfil(): array
         return $perfil;
     }
     $st = db()->prepare(
-        'SELECT id, cu, nombre, rol, departamento_id, tipo_contrato,
+        'SELECT id, cu, nombre, correo, rol, departamento_id, tipo_contrato,
                 password_predeterminada, estado_especial, activo
            FROM profesor WHERE id = ?'
     );
@@ -273,21 +289,49 @@ function exigir_rol(string ...$roles): void
 const ROLES_GESTION = ['jefe_departamento', 'jefe_division', 'admin'];
 
 /**
+ * TEMPORAL (2026-10-02, decisión de la usuaria): la jefatura de división se
+ * queda acotada a su propio departamento (Matemáticas) mientras Actuaría y
+ * Estadística no entren al proceso. Con true, jefe_division se comporta como
+ * jefe_departamento de su departamento_id para todo lo que es información de
+ * un departamento; lo que es de toda la división (los semestres, ver
+ * administra_semestres()) lo conserva.
+ *
+ * Para darle los 3 departamentos basta con ponerlo en false aquí Y en
+ * DIVISION_SOLO_SU_DEPARTAMENTO de frontend/src/lib/roles.js.
+ */
+const DIVISION_SOLO_SU_DEPARTAMENTO = true;
+
+/**
  * ¿Quien llama ve y edita TODOS los departamentos?
  *
  * jefe_division porque la division academica esta arriba de los departamentos
  * (DACE agrupa Matematicas, Actuaria y Estadistica), y admin porque administra
  * el sistema. Son cosas distintas con el mismo alcance, y por eso la pregunta
  * se hace por comportamiento y no comparando contra un rol concreto.
+ * Hoy jefe_division NO entra: ver DIVISION_SOLO_SU_DEPARTAMENTO.
  */
 function ve_todos_los_departamentos(): bool
+{
+    if (mi_rol() === 'admin') {
+        return true;
+    }
+    return mi_rol() === 'jefe_division' && !DIVISION_SOLO_SU_DEPARTAMENTO;
+}
+
+/**
+ * ¿Quien llama abre y cierra semestres? El semestre es uno solo para los 3
+ * departamentos, así que esto es de la división y no se acota con
+ * DIVISION_SOLO_SU_DEPARTAMENTO.
+ */
+function administra_semestres(): bool
 {
     return in_array(mi_rol(), ['admin', 'jefe_division'], true);
 }
 
 /**
- * Alcance sobre un departamento. jefe_division y admin pueden en cualquiera;
- * jefe_departamento solo en el suyo.
+ * Alcance sobre un departamento. Quien ve todos (admin) puede en cualquiera;
+ * cualquier otro rol de gestión (jefe_departamento, y hoy también
+ * jefe_division) solo en el suyo.
  *
  * Es la guardia de roster_departamento_select,
  * jefe_preferencia_reapertura, materia_escritura_departamento,
@@ -298,7 +342,7 @@ function exigir_jefe_de(?int $departamentoId): void
     if (ve_todos_los_departamentos()) {
         return;
     }
-    if (mi_rol() === 'jefe_departamento'
+    if (in_array(mi_rol(), ROLES_GESTION, true)
         && $departamentoId !== null
         && $departamentoId === mi_departamento()) {
         return;
@@ -308,7 +352,9 @@ function exigir_jefe_de(?int $departamentoId): void
 
 /**
  * El departamento sobre el que trabaja quien llama: el suyo, o el que pida por
- * ?departamento_id= si es admin. Corta con 403 si no tiene permiso.
+ * ?departamento_id= (solo quien ve_todos_los_departamentos() puede pedir uno
+ * ajeno).
+ * Corta con 403 si no tiene permiso.
  */
 function departamento_objetivo(): int
 {
@@ -319,6 +365,23 @@ function departamento_objetivo(): int
     }
     exigir_jefe_de($depto);
     return $depto;
+}
+
+/**
+ * El correo de un profesor tal como se guarda: sin espacios, en minúsculas, o
+ * null si viene vacío (es opcional). Corta con 400 si no parece un correo.
+ * Lo usan perfil.php y registro.php.
+ */
+function normalizar_correo($valor): ?string
+{
+    $correo = strtolower(trim((string) $valor));
+    if ($correo === '') {
+        return null;
+    }
+    if (strlen($correo) > 255 || filter_var($correo, FILTER_VALIDATE_EMAIL) === false) {
+        error_json('El correo no es válido', 400, 'correo_invalido');
+    }
+    return $correo;
 }
 
 /** El departamento al que pertenece una materia, o null si no existe. */

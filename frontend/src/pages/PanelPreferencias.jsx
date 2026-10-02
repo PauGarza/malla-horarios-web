@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { panel as cargarPanel, reabrirPreferencia } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
+import { veTodosLosDepartamentos } from '../lib/roles';
 
 const ESTADO_LABELS = {
   no_iniciado: 'No ha iniciado',
@@ -16,9 +17,8 @@ const ESTADO_LABELS = {
 export default function PanelPreferencias({ onVolver, onVerFormulario }) {
   const { token, profesor, semestre, nombreDepartamento } = useAuth();
   // Quién ve los 3 departamentos y no solo el suyo. Se pregunta por
-  // comportamiento y no contra un rol concreto: jefe_division y admin tienen el
-  // mismo alcance por motivos distintos.
-  const veTodos = ['admin', 'jefe_division'].includes(profesor.rol);
+  // comportamiento y no contra un rol concreto (ver lib/roles.js).
+  const veTodos = veTodosLosDepartamentos(profesor.rol);
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
