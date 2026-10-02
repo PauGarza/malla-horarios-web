@@ -52,9 +52,9 @@ Y dos archivos que no son migraciones de esquema:
 datos-estadistica-mysql.sql      las 26 materias de Estadística (ver abajo). Se puede correr en
                                  cualquier momento; es idempotente.
 datos-estadistica-co-oferta-mysql.sql
-                                 las 10 equivalencias oficiales de Estadística (columna "materias
-                                 equivalentes" de DACE/BD/datos raw/Cursos.xlsx, la misma fuente de
-                                 Matemáticas) + 8 filas comentadas que solo se ven en los horarios.
+                                 20 filas de equivalencias de Estadística: 10 oficiales (columna
+                                 "materias equivalentes" de DACE/BD/datos raw/Cursos.xlsx, la misma
+                                 fuente de Matemáticas) + 10 que se ven en los horarios de 2026.
                                  Después de datos-estadistica-mysql.sql.
 reinicio-2026-10-02-formulario-estadistica.sql
                                  borra el formulario de Estadística del semestre activo, que se

@@ -18,7 +18,8 @@
 -- imparten efectivamente juntas.
 --
 -- La parte 2 son cruces que se VEN en esos horarios pero NO están en la lista
--- oficial. Van comentados: se cargan solo si Estadística los confirma.
+-- oficial. Se cargan también (decisión de la usuaria, 2026-10-02: si se
+-- imparten juntas en los horarios, son equivalencias): 10 filas más.
 --
 -- Idempotente: INSERT IGNORE sobre la llave primaria (materia_id, co_ofertada_id).
 -- =============================================================================
@@ -47,7 +48,7 @@ SELECT m1.id, m2.id
   JOIN materia m2 ON m2.clave = v.clave_b;
 
 -- -----------------------------------------------------------------------------
--- Parte 2. Cruces vistos en los horarios, NO en la lista oficial (comentados)
+-- Parte 2. Cruces vistos en los horarios, no en la lista oficial: 10 filas
 --
 --   EST-11104 <-> EST-11105   otoño 2026: 11103, 11104 y 11105 juntas
 --                             (Islas LU MI 08:30 RH109; Santos MA JU 17:30 RH109).
@@ -55,30 +56,33 @@ SELECT m1.id, m2.id
 --   EST-21104 <-> EST-24124   MA JU 11:30 RH311; Cuervo MA JU 20:30 RHB-2).
 --   EST-24106 <-> EST-24125   los dos semestres (Campos LU MI 07:00 RH108;
 --                             Lunagómez LU MI 17:30 RHB-1).
---   EST-13101 <-> EST-13102   otoño 2026, Campos, RHB-2, pero 08:00-10:00 vs
---                             08:00-09:30: comparten salón y arranque, no la
---                             duración. El más dudoso.
+--   EST-13101 <-> EST-13102   otoño 2026, Campos, RHB-2; 08:00-10:00 vs
+--                             08:00-09:30 (13101 es de 8 créditos y 13102 de 6:
+--                             comparten la clase y la primera dura más).
 --
--- Para cargarlos, quita el "-- " del inicio de cada línea del bloque y córrelo.
+-- Si la parte 1 ya se corrió, se puede correr solo este bloque (o el archivo
+-- entero: INSERT IGNORE no duplica nada).
 -- -----------------------------------------------------------------------------
 
--- INSERT IGNORE INTO materia_co_oferta (materia_id, co_ofertada_id)
--- SELECT m1.id, m2.id
---   FROM (
---             SELECT 'EST-11104' AS clave_a, 'EST-11105' AS clave_b
---   UNION ALL SELECT 'EST-11105', 'EST-11104'
---   UNION ALL SELECT 'EST-21104', 'EST-24105'
---   UNION ALL SELECT 'EST-24105', 'EST-21104'
---   UNION ALL SELECT 'EST-21104', 'EST-24124'
---   UNION ALL SELECT 'EST-24124', 'EST-21104'
---   UNION ALL SELECT 'EST-24106', 'EST-24125'
---   UNION ALL SELECT 'EST-24125', 'EST-24106'
---        ) AS v
---   JOIN materia m1 ON m1.clave = v.clave_a
---   JOIN materia m2 ON m2.clave = v.clave_b;
+INSERT IGNORE INTO materia_co_oferta (materia_id, co_ofertada_id)
+SELECT m1.id, m2.id
+  FROM (
+            SELECT 'EST-11104' AS clave_a, 'EST-11105' AS clave_b
+  UNION ALL SELECT 'EST-11105', 'EST-11104'
+  UNION ALL SELECT 'EST-21104', 'EST-24105'
+  UNION ALL SELECT 'EST-24105', 'EST-21104'
+  UNION ALL SELECT 'EST-21104', 'EST-24124'
+  UNION ALL SELECT 'EST-24124', 'EST-21104'
+  UNION ALL SELECT 'EST-24106', 'EST-24125'
+  UNION ALL SELECT 'EST-24125', 'EST-24106'
+  UNION ALL SELECT 'EST-13101', 'EST-13102'
+  UNION ALL SELECT 'EST-13102', 'EST-13101'
+       ) AS v
+  JOIN materia m1 ON m1.clave = v.clave_a
+  JOIN materia m2 ON m2.clave = v.clave_b;
 
 -- -----------------------------------------------------------------------------
--- Verificación: la parte 1 sola da 10 filas (18 con la parte 2).
+-- Verificación: 20 filas (10 de la parte 1 + 10 de la parte 2).
 -- -----------------------------------------------------------------------------
 SELECT a.clave, a.nombre, '=' AS es, b.clave AS equivalente, b.nombre AS nombre_equivalente
   FROM materia_co_oferta c
