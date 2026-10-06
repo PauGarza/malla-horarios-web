@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Malla horaria · Otoño 2026</title>
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --ink:#1d2330; --ink2:#5b6475; --ink3:#8a92a3;
+  --line:#e3e6ec; --line2:#eef0f4; --accent:#1f4fd1; --accent-soft:#e8eefc;
+  --red:#d6334a; --red-soft:#fde8eb; --amber:#c47a00; --amber-soft:#fff3d9;
+  --green:#1f8a55; --green-soft:#e2f5ea;
+  --gut:58px; --row:26px; --gap:22px;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  color:var(--ink);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg)}
+body{display:flex;flex-direction:column;overflow:hidden;font-size:14px}
+button,select,input{font:inherit;color:inherit}
+
+/* Encabezado */
+header{display:flex;align-items:center;gap:20px;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+.brand{display:flex;flex-direction:column;line-height:1.15}
+.brand b{font-size:18px;letter-spacing:-.01em}
+.brand span{color:var(--ink2);font-size:12.5px}
+.stats{display:flex;gap:8px;margin-left:12px;flex-wrap:wrap}
+.stat{display:flex;align-items:baseline;gap:6px;padding:6px 12px;border-radius:999px;background:var(--line2);font-size:13px;color:var(--ink2);white-space:nowrap}
+.stat b{font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+.stat.bad{background:var(--red-soft);color:var(--red)} .stat.bad b{color:var(--red)}
+.stat.warn{background:var(--amber-soft);color:var(--amber)} .stat.warn b{color:var(--amber)}
+.stat.ok{background:var(--green-soft);color:var(--green)} .stat.ok b{color:var(--green)}
+.hdr-actions{margin-left:auto;display:flex;gap:8px}
+.btn{border:1px solid var(--line);background:var(--panel);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:#c9ced8;background:#fafbfc}
+.btn:disabled{opacity:.45;cursor:default}
+.proto{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:6px;align-self:center}
+
+/* Layout */
+.app{flex:1;display:flex;min-height:0}
+aside{width:330px;flex:none;position:relative;transition:width .15s;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:16px}
+main{flex:1;display:flex;flex-direction:column;min-width:0;padding:12px 16px 12px}
+
+/* Barra de herramientas */
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.seg{display:inline-flex;background:var(--line2);border-radius:9px;padding:3px}
+.seg button{border:0;background:transparent;padding:6px 14px;border-radius:7px;cursor:pointer;color:var(--ink2);font-weight:500}
+.seg button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.days{display:inline-flex;gap:4px}
+.days button{position:relative;border:1px solid var(--line);background:var(--panel);padding:6px 14px;border-radius:8px;cursor:pointer;font-weight:500}
+.days button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.days .badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.filters{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.filters select,.filters input{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;max-width:220px}
+.filters input{width:190px}
+.ms{position:relative}
+.ms-btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 11px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.ms-btn:hover{border-color:#c9ced8}
+.ms-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.ms-btn .cnt{background:var(--accent);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px;font-weight:700}
+.ms-btn .car{font-size:10px;color:var(--ink3)}
+.ms-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:80;width:320px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(20,30,60,.2);padding:8px}
+.ms-q{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.ms-acts{display:flex;justify-content:space-between;margin:6px 4px 4px}
+.ms-acts button{border:0;background:none;color:var(--accent);cursor:pointer;font-size:12.5px;font-weight:600;padding:2px}
+.ms-list{max-height:min(420px,60vh);overflow-y:auto}
+.ms-it{display:flex;gap:9px;align-items:flex-start;padding:6px 7px;border-radius:7px;cursor:pointer;font-size:13px;line-height:1.3}
+.ms-it:hover{background:var(--line2)}
+.ms-it input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none}
+.ms-it small{display:block;color:var(--ink3);font-size:11.5px}
+.ms-empty{color:var(--ink3);padding:8px}
+.btn.add{width:100%;border-style:dashed;color:var(--accent);font-weight:600;margin-top:6px}
+.btn.add:hover{background:var(--accent-soft);border-color:var(--accent)}
+.tcard.big{padding:16px 12px;text-align:center;font-weight:600;border:2px dashed var(--accent);color:var(--accent);background:var(--accent-soft);font-size:13.5px;margin:4px 0 12px}
+.tcard.big small{display:block;font-weight:400;color:var(--ink2);margin-top:3px}
+.tcard.mini{margin-top:4px}
+.det .field input,.det .field select{width:100%}
+.clearf{padding:6px 11px;color:var(--ink2)}
+.hint{color:var(--ink3);font-size:12.5px;margin:-2px 0 8px}
+
+/* Malla */
+.gridwrap{flex:1;min-height:0;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;position:relative}
+.colhead{position:sticky;top:0;z-index:20;display:flex;background:var(--panel);border-bottom:1px solid var(--line)}
+.colhead .sp{width:var(--gut);flex:none;position:sticky;left:0;background:var(--panel);z-index:2}
+.colhead .ch{flex:none;padding:7px 4px 6px;text-align:center;border-left:1px solid var(--line2);line-height:1.15}
+.colhead .ch b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.colhead .ch small{color:var(--ink3);font-size:11px}
+.colhead .ch.nosalon b{color:var(--amber)}
+.gridbody{position:relative}
+.row{position:absolute;left:var(--gut);right:0;border-top:1px solid var(--line2)}
+.row.hour{border-top-color:var(--line)}
+.row.blocked{background:repeating-linear-gradient(135deg,#f3f4f6 0 6px,#fafafa 6px 12px)}
+.gapband{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,#eef0f3 0 7px,#f7f8fa 7px 14px);border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:11.5px;letter-spacing:.03em}
+.tl{position:absolute;left:0;width:var(--gut);text-align:right;padding-right:8px;font-size:11.5px;color:var(--ink3);transform:translateY(-7px);font-variant-numeric:tabular-nums;background:var(--panel);z-index:3}
+.tl.hour{color:var(--ink2);font-weight:600}
+.vline{position:absolute;top:0;bottom:0;border-left:1px solid var(--line2)}
+.avail{position:absolute;pointer-events:none}
+.avail.p0{background:repeating-linear-gradient(135deg,rgba(120,128,140,.09) 0 4px,transparent 4px 9px)}
+.avail.p1{background:rgba(31,160,90,.13)}
+.avail.p2{background:rgba(31,160,90,.27)}
+.avail.p3{background:rgba(31,160,90,.45)}
+.rs{position:absolute;pointer-events:none;font-size:10px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;color:#1e3a8a;border-left:1px solid var(--line2)}
+.rs.zero{color:var(--red);background:rgba(214,51,74,.12)}
+.rshead{position:absolute;top:-1px;font-size:9.5px;color:var(--ink3);text-align:center;line-height:1.05}
+.lg{display:inline-flex;align-items:center;gap:4px;margin-right:12px;white-space:nowrap}
+.lg i{display:inline-block;width:14px;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.1)}
+.tcardp{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:6px}
+.tcardp h2{margin:0;font-size:17px}
+.tcardp .sub{color:var(--ink2);font-size:12.5px;margin:2px 0 10px}
+.tg{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px;border-left:4px solid var(--st-c);background:var(--bg-c);margin-bottom:4px}
+.tg:hover{filter:brightness(.97)}
+.tg b{font-variant-numeric:tabular-nums}
+.tg .s{color:var(--ink2);font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums}
+.tg.hard{outline:2px solid var(--red)}
+.btn.wide{width:100%;margin-top:4px}
+.sb{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.sb div{background:var(--line2);border-radius:8px;padding:6px 9px;font-size:11.5px;color:var(--ink2)}
+.sb b{display:block;font-size:16px;color:var(--ink)}
+.busy{position:absolute;pointer-events:none;background:rgba(214,51,74,.08);border-top:1.5px dashed rgba(214,51,74,.6);border-bottom:1.5px dashed rgba(214,51,74,.6);z-index:4;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:var(--red);font-size:11.5px;font-weight:600}
+
+/* Bloques */
+.blk{position:absolute;z-index:var(--z,5);border-radius:7px;padding:4px 6px 4px 8px;overflow:hidden;cursor:grab;
+  background:var(--bg-c);border:1px solid var(--bd-c);border-left:4px solid var(--st-c);
+  font-size:11.5px;line-height:1.25;user-select:none;transition:opacity .12s, box-shadow .12s}
+.blk:hover{box-shadow:0 3px 10px rgba(20,30,60,.18);z-index:60}
+.blk .vc{display:none}
+.blk.stack{background:var(--bgt-c);box-shadow:-2px 0 6px rgba(20,30,60,.10)}
+.blk.mute .vc{visibility:hidden}
+.blk.mute:hover .vc{visibility:visible}
+.blk.stack .in{width:var(--in)}
+.blk.strip{padding:4px 0 4px 2px}
+.blk.strip .in{display:none}
+.blk.strip .vc{display:block;writing-mode:vertical-rl;transform:rotate(180deg);font-weight:700;font-size:10px;white-space:nowrap;line-height:1}
+.blk.stack:hover{background:var(--bg-c)}
+.blk.stack:hover .in{display:block;width:auto}
+.blk.strip:hover{padding:4px 6px 4px 8px}
+.blk.strip:hover .vc{display:none}
+.blk .c{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.blk .n{color:#3b4352;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.blk .p{color:#3b4352;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.blk .p.none{color:var(--amber)}
+.blk.tiny .n,.blk.tiny .p{display:none}
+.blk.tiny{padding:2px 3px 2px 5px;font-size:10.5px}
+.blk.tiny .flag,.blk.strip .flag{display:none}
+.blk.hard{border:2px solid var(--red);border-left:4px solid var(--red);box-shadow:0 0 0 2px rgba(214,51,74,.15)}
+.blk.soft:not(.hard){border:2px solid var(--amber);border-left:4px solid var(--amber)}
+.blk .flag{position:absolute;top:3px;right:3px;width:17px;height:17px;border-radius:50%;color:#fff;font-size:11px;font-weight:800;line-height:17px;text-align:center}
+.blk.hard .flag{background:var(--red)}
+.blk.soft:not(.hard) .flag{background:var(--amber)}
+.blk.dim{opacity:.18}
+.blk.sel{box-shadow:0 0 0 3px var(--accent);z-index:55}
+.blk.partner{box-shadow:0 0 0 3px var(--red);z-index:56}
+.blk.dragging{opacity:.3}
+.blk.flash{animation:flash 1.2s ease 2}
+@keyframes flash{50%{box-shadow:0 0 0 6px rgba(31,79,209,.45)}}
+.pv{position:absolute;z-index:12;border-radius:7px;border:2.5px dashed var(--green);background:linear-gradient(rgba(31,138,85,.16),rgba(31,138,85,.16)),#fff;pointer-events:none;box-shadow:0 6px 18px rgba(20,30,60,.2);padding:4px 7px;font-size:11.5px;font-weight:700;color:var(--green)}
+.pv.hard{border-color:var(--red);background:linear-gradient(rgba(214,51,74,.14),rgba(214,51,74,.14)),#fff;color:var(--red)}
+.pv.soft{border-color:var(--amber);background:linear-gradient(rgba(196,122,0,.13),rgba(196,122,0,.13)),#fff;color:var(--amber)}
+
+/* Tooltip de arrastre */
+#card{position:fixed;z-index:90;width:340px;max-height:calc(100vh - 24px);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(20,30,60,.22);padding:14px 16px;font-size:13px;line-height:1.4;display:none}
+#card .x{position:absolute;top:8px;right:10px;border:0;background:none;font-size:20px;color:var(--ink3);cursor:pointer;line-height:1}
+#card .x:hover{color:var(--ink)}
+#card .cd{font-size:12px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums;padding-right:20px}
+#card h4{margin:2px 0 6px;font-size:16px;line-height:1.25;padding-right:20px}
+#card .meta{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-bottom:10px;color:var(--ink2)}
+#card .meta b{color:var(--ink);font-weight:600}
+#card .sec{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:12px 0 6px}
+#card .ch1{background:var(--red-soft);border-radius:8px;padding:7px 9px;margin-bottom:5px;color:#7a1626}
+#card .ch1 .t{font-weight:700;color:var(--red)}
+#card .ch1.soft{background:var(--amber-soft);color:#6b4500} #card .ch1.soft .t{color:var(--amber)}
+#card .okc{background:var(--green-soft);color:var(--green);border-radius:8px;padding:7px 9px;font-weight:600}
+#card .rooms{display:flex;flex-wrap:wrap;gap:6px}
+#card .rooms button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;font-weight:600;line-height:1.15;text-align:left}
+#card .rooms button small{display:block;font-weight:400;color:var(--ink3);font-size:11px}
+#card .rooms button:hover{border-color:var(--green);background:var(--green-soft)}
+#card .rooms button.cur{border-color:var(--accent);background:var(--accent-soft);cursor:default}
+#card .note{color:var(--ink3);font-size:12px;margin-top:6px}
+#tip{position:fixed;z-index:100;pointer-events:none;background:#1d2330;color:#fff;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.4;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:none}
+#tip .h{font-weight:700;margin-bottom:3px}
+#tip .ok{color:#7ee2a8;font-weight:600}
+#tip .bad{color:#ff9aa8}
+#tip .warn{color:#ffd27a}
+#tip .mut{color:#aab2c2}
+
+/* Panel lateral */
+aside.collapsed{width:46px;padding:10px 6px;overflow:hidden}
+.side-toggle{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:7px;border:1px solid var(--line);background:var(--panel);cursor:pointer;color:var(--ink2);font-size:15px;line-height:1;z-index:2}
+.side-toggle:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+aside.collapsed .side-toggle{position:static;margin:0 auto 14px;display:block}
+.vside{writing-mode:vertical-rl;margin:0 auto;display:flex;gap:16px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.vside .r{color:var(--red)} .vside .a{color:var(--amber)}
+aside:not(.collapsed) > :nth-child(2){margin-right:34px}
+aside h3{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin:18px 0 8px;display:flex;justify-content:space-between;align-items:center}
+aside h3:first-child{margin-top:0}
+aside h3 .n{font-size:12px;letter-spacing:0;background:var(--line2);color:var(--ink2);border-radius:999px;padding:1px 8px}
+.cf{display:flex;gap:9px;padding:9px 10px;border-radius:9px;border:1px solid var(--line);margin-bottom:6px;cursor:pointer;line-height:1.35;font-size:13px}
+.cf:hover{background:#fafbfc;border-color:#cfd4dd}
+.cf .dot{width:9px;height:9px;border-radius:50%;flex:none;margin-top:5px}
+.cf.hard .dot{background:var(--red)} .cf.soft .dot{background:var(--amber)}
+.cf .t{font-weight:600}
+.cf .s{color:var(--ink2);font-size:12px}
+.empty{color:var(--green);background:var(--green-soft);border-radius:9px;padding:10px 12px;font-size:13px;font-weight:500}
+.tray{display:flex;flex-direction:column;gap:6px}
+.tcard{border:1px dashed #b9c0cc;border-radius:9px;padding:8px 10px;cursor:grab;background:#fbfbfc;font-size:12.5px;line-height:1.3;user-select:none}
+.tcard:hover{border-color:var(--accent);background:var(--accent-soft)}
+.tcard b{font-variant-numeric:tabular-nums}
+.tcard .s{color:var(--ink2)}
+.legend{display:grid;gap:7px;font-size:12.5px;color:var(--ink2)}
+.legend div{display:flex;align-items:center;gap:8px}
+.legend i{width:22px;height:14px;border-radius:4px;flex:none;display:inline-block}
+.more{font-size:12.5px;color:var(--accent);cursor:pointer;padding:4px 2px;background:none;border:0}
+
+/* Detalle */
+.det-back{border:0;background:none;color:var(--accent);cursor:pointer;padding:0;margin-bottom:10px;font-weight:600}
+.det h2{margin:0 0 2px;font-size:18px;letter-spacing:-.01em}
+.det .sub{color:var(--ink2);margin-bottom:12px}
+.det .codes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.det .codes span{background:var(--line2);border-radius:6px;padding:2px 7px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--ink3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--panel)}
+.sched{display:grid;gap:4px}
+.sched div{display:flex;justify-content:space-between;background:var(--line2);border-radius:7px;padding:6px 10px;font-variant-numeric:tabular-nums}
+.minigrid{display:grid;grid-template-columns:28px repeat(5,1fr);gap:1px;font-size:10px;color:var(--ink3);margin-top:6px}
+.minigrid .c{height:7px;border-radius:1px}
+.minigrid .h{text-align:center;padding-bottom:2px}
+.mg0{background:#f2c4cb}.mg1{background:#f6e2b8}.mg2{background:#cfe9da}.mg3{background:#8fd0ab}.mgx{background:#eef0f3}
+.minigrid .c.on{outline:2px solid var(--ink);outline-offset:-1px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>Malla horaria · Departamento de Matemáticas</b><span id="semLbl"></span></div>
+  <span class="proto">Prototipo</span>
+  <div class="stats" id="stats"></div>
+  <div class="hdr-actions">
+    <button class="btn" id="undoBtn" title="Ctrl+Z">↶ Deshacer</button>
+    <button class="btn" id="resetBtn">Restablecer</button>
+  </div>
+</header>
+<div class="app">
+  <aside id="side"></aside>
+  <main>
+    <div class="toolbar">
+      <div class="seg" id="viewSeg">
+        <button data-v="salon" class="on">Por salón</button>
+        <button data-v="semana">Semana</button>
+      </div>
+      <div class="days" id="dayPills"></div>
+      <div class="filters">
+        <div class="ms" id="msProf"></div>
+        <div class="ms" id="msRoom"></div>
+        <div class="ms" id="msMat"></div>
+        <button class="btn clearf" id="clearF" hidden>Quitar filtros</button>
+      </div>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="gridwrap" id="gridwrap">
+      <div class="colhead" id="colhead"></div>
+      <div class="gridbody" id="gridbody"></div>
+    </div>
+  </main>
+</div>
+<div id="tip"></div>
+<div id="card"></div>
+
+<script>const DATA = {"semester":"Otoño 2026","rooms":[{"id":"r0","name":"105","cap":25},{"id":"r1","name":"107","cap":3},{"id":"r2","name":"PF105","cap":3},{"id":"r3","name":"302","cap":10},{"id":"r4","name":"304","cap":27},{"id":"r5","name":"PF101","cap":27},{"id":"r6","name":"209","cap":27},{"id":"r7","name":"305","cap":27},{"id":"r8","name":"310","cap":27},{"id":"r9","name":"307","cap":25},{"id":"r10","name":"SA3 / 105","cap":25},{"id":"r11","name":"316","cap":5},{"id":"r12","name":"SA3","cap":25},{"id":"r13","name":"111","cap":30},{"id":"r14","name":"SA2","cap":35},{"id":"r15","name":"Ma CC · Ju 209","cap":25},{"id":"r16","name":"B2","cap":25}],"teachers":[{"id":"t0","short":"Martina","full":"ROQUERO ROS MARTINA","prefs":[[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2]]},{"id":"t1","short":"Vladimir","full":"CAETANO DE OLIVEIRA CONTRERAS VLADIMIR","prefs":[[2,2,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2],[2,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2],[2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t2","short":"Ernesto","full":"PEREZ CHAVELA ERNESTO","prefs":[[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t3","short":"Carlos Rodolfo","full":"BARRERA CARLOS","prefs":[[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2]]},{"id":"t4","short":"Cesar L","full":"GARCIA GARCIA CESAR LUIS","prefs":[[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t5","short":"Lucia","full":"RAMIREZ DAVID LUCIA","prefs":[[2,2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,3,3,3,2,2,2,2,2],[2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,3,3,3,2,2,2,2,2],[2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2]]},{"id":"t6","short":"Abimael Javier","full":"BENGOCHEA CRUZ ABIMAEL JAVIER","prefs":[[2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,3,3,2,2,2,2,2,2],[2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,3,3,2,2,2,2,2,2],[2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,3,3,2,2,2,2,2,2],[2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,3,3,2,2,2,2,2,2],[2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t7","short":"Leobardo","full":"FERNANDEZ ROMAN LEOBARDO","prefs":[[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t8","short":"Zeferino","full":"PARADA GARCIA ZEFERINO","prefs":[[2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0]]},{"id":"t9","short":"Juan Carlos","full":"AGUILAR VILLEGAS JUAN CARLOS","prefs":[[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2]]},{"id":"t10","short":"EDITH MIREYA","full":"VARGAS GARCIA EDITH MIREYA","prefs":[[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1],[2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1],[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t11","short":"Joao","full":"LEITAO DA CRUZ MORAIS JOAO PEDRO","prefs":[[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0]]},{"id":"t12","short":"Maira","full":"MADRIZ MENDOZA MAIRA","prefs":[[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t13","short":"Jorge","full":"Jorge Rivera Noriega","prefs":[[0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0],[2,2,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0]]},{"id":"t14","short":"Andreas","full":"Andreas Wachtel","prefs":[[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1],[2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,3,3,3,3,3,3,3,3]]},{"id":"t15","short":"Gerardo","full":"GONZALEZ ROBERT GERARDO","prefs":[[2,2,3,3,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,2,2,2,2],[2,2,2,3,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,2,2,2]]},{"id":"t16","short":"Connor","full":"JACKMAN CONNOR","prefs":[[0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0],[2,2,2,2,2,2,2,3,3,3,3,3,2,2,2,2,3,3,3,3,3,2,2,2],[2,2,2,2,2,2,2,3,3,3,3,3,2,2,2,2,3,3,3,3,3,2,2,2],[2,2,2,2,2,2,2,3,3,3,3,3,2,2,2,2,3,3,3,3,3,2,2,2],[0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,0]]},{"id":"t17","short":"Beatriz","full":"RUMBOS PELLICER IRMA BEATRIZ","prefs":[[0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,1,1,0,0,0,0,0,0],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0]]},{"id":"t18","short":"Rubén Alejandro","full":"MARTINEZ AVENDAÑO RUBEN ALEJANDRO","prefs":[[0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1],[2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2,2,2,3,3,3,3,3,3],[2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2,2,2,3,3,3,3,3,3],[2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2,2,2,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1]]},{"id":"t19","short":"Campero","full":"CAMPERO PARDO JOSE DEL NIÑO DE JESUS","prefs":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]},{"id":"t20","short":"Jorge","full":"MONROY JIMENEZ JORGE","prefs":[[3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2]]},{"id":"t21","short":"Francisco Fernando","full":"NOREÑA VILLARIAS FRANCISCO FERNANDO","prefs":[[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,2,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t22","short":"SERGIO IVAN","full":"ARROYO GILES SERGIO IVAN","prefs":[[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3]]},{"id":"t23","short":"Juanita","full":"Juanita Gasca Arango","prefs":[[2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,3,3,3],[2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,3,3,3],[2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,3,3,3],[2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,3,3,3],[2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,3,3,3,3,3,3,3,3]]},{"id":"t24","short":"Raybel Andres","full":"GARCIA ANCONA RAYBEL ANDRES","prefs":[[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t25","short":"Marisol","full":"VILLANUEVA CASTILLO MARISOL","prefs":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,3,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]},{"id":"t26","short":"Concepcion","full":"RUIZ RUIZ FUNES CONCEPCION","prefs":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]},{"id":"t27","short":"Rita Eugenia","full":"MALDONADO LOZANO RITA EUGENIA","prefs":[[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2]]},{"id":"t28","short":"Yolanda Isabel","full":"PRETELIN MUÑOZ DE COTE YOLANDA ISABEL","prefs":[[2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2],[2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t29","short":"José Pablo","full":"OLIVARES PRETELIN JOSE PABLO","prefs":[[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,2,2]]},{"id":"t30","short":"Alejandro","full":"RIOS HERREJON ALEJANDRO","prefs":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]},{"id":"t31","short":"Hérica","full":"SANCHEZ LARIOS HERICA","prefs":[[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]},{"id":"t32","short":"Sharon Magali","full":"VALVERDE ESPARZA SHARON MAGALI","prefs":[[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3]]},{"id":"t33","short":"Angel","full":"PEREZ JUAREZ ANGEL","prefs":[[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t34","short":"Lysette","full":"FELIX FELIX LYSETTE","prefs":[[2,2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,2,2,2,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2]]},{"id":"t35","short":"Raybel Andrés","full":"Raybel Andrés García Ancona","prefs":[[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]]},{"id":"t36","short":"Ana Belén","full":"AVILEZ GARCIA ANA BELÉN","prefs":null},{"id":"t37","short":"Cheque","full":"SOTO SANCHEZ JOSÉ EZEQUIEL","prefs":null},{"id":"t38","short":"Harry","full":"OVIEDO LEON HARRY FERNANDO","prefs":null},{"id":"t39","short":"Joel","full":"ZAMORA RAMOS JOEL","prefs":null},{"id":"t40","short":"Juan","full":"ORENDAIN ALMADA JUAN","prefs":null},{"id":"t41","short":"Maya","full":"Maya","prefs":null},{"id":"t42","short":"Sofía","full":"MARTINEZ SOFIA","prefs":null},{"id":"t43","short":"Stefano","full":"DECIO STEFANO","prefs":null},{"id":"t44","short":"Maya","full":"Maya (?)","prefs":null},{"id":"t45","short":"ROJAS","full":"ROJAS NANDAYAPA LEONARDO","prefs":null}],"groups":[{"id":"g0","items":[{"code":"MAT-10101","name":"Métodos Cuantitativos para Derecho","seq":"001","cr":6}],"teacherId":"t28","roomId":"r0","sessions":[{"d":1,"s":2,"len":3},{"d":3,"s":2,"len":3}]},{"id":"g1","items":[{"code":"MAT-11310","name":"Matemáticas III","seq":"001","cr":8},{"code":"MAT-12310","name":"Álgebra Matricial","seq":"001","cr":0},{"code":"MAT-12350","name":"Álgebra Lineal Aplicada","seq":"001","cr":0}],"teacherId":"t31","roomId":"r1","sessions":[{"d":0,"s":16,"len":4},{"d":2,"s":16,"len":4}]},{"id":"g2","items":[{"code":"MAT-11310","name":"Matemáticas III","seq":"002","cr":8}],"teacherId":"t5","roomId":"r2","sessions":[{"d":1,"s":16,"len":4},{"d":3,"s":16,"len":4}]},{"id":"g3","items":[{"code":"MAT-11310","name":"Matemáticas III","seq":"003","cr":8},{"code":"MAT-12350","name":"Álgebra Lineal Aplicada","seq":"003","cr":0}],"teacherId":"t30","roomId":"r1","sessions":[{"d":1,"s":20,"len":3},{"d":3,"s":20,"len":3}]},{"id":"g4","items":[{"code":"MAT-12102","name":"Cálculo III","seq":"001","cr":9},{"code":"MAT-14101","name":"Cálculo Diferencial e Integral II","seq":"001","cr":8}],"teacherId":"t19","roomId":"r3","sessions":[{"d":0,"s":4,"len":3},{"d":2,"s":4,"len":3},{"d":4,"s":4,"len":3}]},{"id":"g5","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"001","cr":9}],"teacherId":"t0","roomId":"r4","sessions":[{"d":0,"s":4,"len":3},{"d":2,"s":4,"len":3},{"d":4,"s":4,"len":3}]},{"id":"g6","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"002","cr":9}],"teacherId":"t24","roomId":"r2","sessions":[{"d":0,"s":4,"len":3},{"d":2,"s":4,"len":3},{"d":4,"s":4,"len":3}]},{"id":"g7","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"003","cr":9}],"teacherId":"t12","roomId":"r3","sessions":[{"d":0,"s":6,"len":3},{"d":2,"s":6,"len":3},{"d":4,"s":6,"len":3}]},{"id":"g8","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"004","cr":9}],"teacherId":"t4","roomId":"r5","sessions":[{"d":0,"s":7,"len":3},{"d":2,"s":7,"len":3},{"d":4,"s":7,"len":3}]},{"id":"g9","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"005","cr":9}],"teacherId":"t5","roomId":"r2","sessions":[{"d":0,"s":7,"len":3},{"d":2,"s":7,"len":3},{"d":4,"s":7,"len":3}]},{"id":"g10","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"006","cr":9}],"teacherId":"t36","roomId":"r6","sessions":[{"d":0,"s":9,"len":3},{"d":2,"s":9,"len":3},{"d":4,"s":9,"len":3}]},{"id":"g11","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"007","cr":9}],"teacherId":"t1","roomId":"r4","sessions":[{"d":0,"s":10,"len":3},{"d":2,"s":10,"len":3},{"d":4,"s":10,"len":3}]},{"id":"g12","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"008","cr":9}],"teacherId":"t8","roomId":"r7","sessions":[{"d":0,"s":11,"len":3},{"d":2,"s":11,"len":3},{"d":4,"s":11,"len":3}]},{"id":"g13","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"009","cr":9}],"teacherId":"t15","roomId":"r3","sessions":[{"d":0,"s":16,"len":3},{"d":2,"s":16,"len":3},{"d":4,"s":16,"len":3}]},{"id":"g14","items":[{"code":"MAT-12200","name":"Cálculo Univariado","seq":"010","cr":9}],"teacherId":"t42","roomId":"r8","sessions":[{"d":0,"s":16,"len":3},{"d":2,"s":16,"len":3},{"d":4,"s":16,"len":3}]},{"id":"g15","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"001","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"001","cr":8}],"teacherId":"t24","roomId":"r4","sessions":[{"d":0,"s":0,"len":3},{"d":2,"s":0,"len":3},{"d":4,"s":0,"len":3}]},{"id":"g16","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"002","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"002","cr":8}],"teacherId":"t7","roomId":"r2","sessions":[{"d":0,"s":0,"len":3},{"d":2,"s":0,"len":3},{"d":4,"s":0,"len":3}]},{"id":"g17","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"003","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"003","cr":8}],"teacherId":"t3","roomId":"r7","sessions":[{"d":0,"s":2,"len":3},{"d":2,"s":2,"len":3},{"d":4,"s":2,"len":3}]},{"id":"g18","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"004","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"004","cr":8}],"teacherId":"t1","roomId":"r9","sessions":[{"d":0,"s":6,"len":3},{"d":2,"s":6,"len":3},{"d":4,"s":6,"len":3}]},{"id":"g19","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"005","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"005","cr":8}],"teacherId":"t19","roomId":"r4","sessions":[{"d":0,"s":7,"len":3},{"d":2,"s":7,"len":3},{"d":4,"s":7,"len":3}]},{"id":"g20","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"006","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"006","cr":8}],"teacherId":"t5","roomId":"r2","sessions":[{"d":0,"s":10,"len":3},{"d":2,"s":10,"len":3},{"d":4,"s":10,"len":3}]},{"id":"g21","items":[{"code":"MAT-12201","name":"Cálculo Multivariado","seq":"007","cr":9},{"code":"MAT-14102","name":"Cálculo Diferencial e Integral III","seq":"007","cr":8}],"teacherId":"t9","roomId":"r10","sessions":[]},{"id":"g22","items":[{"code":"MAT-12202","name":"Cálculo Vectorial","seq":"001","cr":9}],"teacherId":"t1","roomId":"r0","sessions":[{"d":0,"s":2,"len":3},{"d":2,"s":2,"len":3},{"d":4,"s":2,"len":3}]},{"id":"g23","items":[{"code":"MAT-12210","name":"Sistemas Dinámicos","seq":"001","cr":6},{"code":"MAT-24210","name":"Sistemas Dinámicos I","seq":"001","cr":6}],"teacherId":"t11","roomId":"r0","sessions":[{"d":1,"s":6,"len":3},{"d":3,"s":6,"len":3}]},{"id":"g24","items":[{"code":"MAT-12210","name":"Sistemas Dinámicos","seq":"002","cr":6},{"code":"MAT-24210","name":"Sistemas Dinámicos I","seq":"002","cr":6}],"teacherId":"t11","roomId":"r0","sessions":[{"d":1,"s":10,"len":3},{"d":3,"s":10,"len":3}]},{"id":"g25","items":[{"code":"MAT-12210","name":"Sistemas Dinámicos","seq":"003","cr":6},{"code":"MAT-24210","name":"Sistemas Dinámicos I","seq":"003","cr":6}],"teacherId":"t16","roomId":"r11","sessions":[{"d":1,"s":16,"len":3},{"d":3,"s":16,"len":3}]},{"id":"g26","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"001","cr":9}],"teacherId":"t21","roomId":"r6","sessions":[{"d":0,"s":0,"len":3},{"d":2,"s":0,"len":3},{"d":4,"s":0,"len":3}]},{"id":"g27","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"002","cr":9}],"teacherId":"t34","roomId":"r1","sessions":[{"d":0,"s":5,"len":3},{"d":2,"s":5,"len":3},{"d":4,"s":5,"len":3}]},{"id":"g28","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"003","cr":9}],"teacherId":"t0","roomId":"r1","sessions":[{"d":0,"s":8,"len":3},{"d":2,"s":8,"len":3},{"d":4,"s":8,"len":3}]},{"id":"g29","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"004","cr":9}],"teacherId":"t27","roomId":"r1","sessions":[{"d":0,"s":11,"len":3},{"d":2,"s":11,"len":3},{"d":4,"s":11,"len":3}]},{"id":"g30","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"005","cr":9}],"teacherId":"t6","roomId":"r9","sessions":[{"d":0,"s":9,"len":3},{"d":2,"s":9,"len":3},{"d":4,"s":9,"len":3}]},{"id":"g31","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"006","cr":9}],"teacherId":"t32","roomId":"r7","sessions":[{"d":0,"s":16,"len":3},{"d":2,"s":16,"len":3},{"d":4,"s":16,"len":3}]},{"id":"g32","items":[{"code":"MAT-12220","name":"Cálculo en una Variable","seq":"007","cr":9}],"teacherId":"t44","roomId":"r6","sessions":[{"d":0,"s":18,"len":3},{"d":2,"s":18,"len":3},{"d":4,"s":18,"len":3}]},{"id":"g33","items":[{"code":"MAT-12221","name":"Cálculo en Varias Variables","seq":"001","cr":9}],"teacherId":"t21","roomId":"r6","sessions":[{"d":0,"s":3,"len":3},{"d":2,"s":3,"len":3},{"d":4,"s":3,"len":3}]},{"id":"g34","items":[{"code":"MAT-12221","name":"Cálculo en Varias Variables","seq":"002","cr":9}],"teacherId":"t7","roomId":"r12","sessions":[{"d":0,"s":4,"len":3},{"d":2,"s":4,"len":3},{"d":4,"s":4,"len":3}]},{"id":"g35","items":[{"code":"MAT-12221","name":"Cálculo en Varias Variables","seq":"003","cr":9}],"teacherId":"t32","roomId":"r7","sessions":[{"d":0,"s":19,"len":3},{"d":2,"s":19,"len":3},{"d":4,"s":19,"len":3}]},{"id":"g36","items":[{"code":"MAT-12250","name":"Cálculo Aplicado","seq":"001","cr":9}],"teacherId":"t28","roomId":"r1","sessions":[{"d":0,"s":2,"len":3},{"d":2,"s":2,"len":3},{"d":4,"s":2,"len":3}]},{"id":"g37","items":[{"code":"MAT-12250","name":"Cálculo Aplicado","seq":"002","cr":9}],"teacherId":"t27","roomId":"r13","sessions":[{"d":0,"s":6,"len":3},{"d":2,"s":6,"len":3},{"d":4,"s":6,"len":3}]},{"id":"g38","items":[{"code":"MAT-12250","name":"Cálculo Aplicado","seq":"003","cr":9}],"teacherId":"t34","roomId":"r13","sessions":[{"d":0,"s":9,"len":3},{"d":2,"s":9,"len":3},{"d":4,"s":9,"len":3}]},{"id":"g39","items":[{"code":"MAT-12310","name":"Álgebra Matricial","seq":"002","cr":0},{"code":"MAT-12350","name":"Álgebra Lineal Aplicada","seq":"002","cr":0}],"teacherId":"t5","roomId":"r2","sessions":[{"d":1,"s":16,"len":3},{"d":3,"s":16,"len":3}]},{"id":"g40","items":[{"code":"MAT-12310","name":"Álgebra Matricial","seq":"003","cr":0}],"teacherId":"t30","roomId":"r1","sessions":[{"d":1,"s":16,"len":4},{"d":3,"s":16,"len":4}]},{"id":"g41","items":[{"code":"MAT-12349","name":"Principios de Álgebra Lineal","seq":"001","cr":4}],"teacherId":"t39","roomId":"r1","sessions":[{"d":1,"s":4,"len":2},{"d":3,"s":4,"len":2}]},{"id":"g42","items":[{"code":"MAT-12349","name":"Principios de Álgebra Lineal","seq":"002","cr":4}],"teacherId":"t28","roomId":"r1","sessions":[{"d":1,"s":6,"len":2},{"d":3,"s":6,"len":2}]},{"id":"g43","items":[{"code":"MAT-12349","name":"Principios de Álgebra Lineal","seq":"003","cr":4}],"teacherId":"t17","roomId":"r9","sessions":[{"d":1,"s":10,"len":4}]},{"id":"g44","items":[{"code":"MAT-12349","name":"Principios de Álgebra Lineal","seq":"004","cr":4}],"teacherId":"t26","roomId":"r0","sessions":[{"d":1,"s":17,"len":2},{"d":3,"s":17,"len":2}]},{"id":"g45","items":[{"code":"MAT-12351","name":"Álgebra Lineal","seq":"001","cr":4}],"teacherId":"t18","roomId":"r3","sessions":[{"d":1,"s":10,"len":4}]},{"id":"g46","items":[{"code":"MAT-12351","name":"Álgebra Lineal","seq":"002","cr":4}],"teacherId":"t18","roomId":"r3","sessions":[{"d":3,"s":10,"len":4}]},{"id":"g47","items":[{"code":"MAT-14201","name":"Álgebra Lineal I","seq":"001","cr":8}],"teacherId":"t20","roomId":"r3","sessions":[{"d":0,"s":0,"len":4},{"d":2,"s":0,"len":4}]},{"id":"g48","items":[{"code":"MAT-14201","name":"Álgebra Lineal I","seq":"002","cr":8}],"teacherId":"t39","roomId":"r13","sessions":[{"d":1,"s":6,"len":4},{"d":3,"s":6,"len":4}]},{"id":"g49","items":[{"code":"MAT-14201","name":"Álgebra Lineal I","seq":"003","cr":8}],"teacherId":"t16","roomId":"r1","sessions":[{"d":1,"s":8,"len":4},{"d":3,"s":8,"len":4}]},{"id":"g50","items":[{"code":"MAT-14201","name":"Álgebra Lineal I","seq":"004","cr":8}],"teacherId":"t33","roomId":"r3","sessions":[{"d":0,"s":10,"len":4},{"d":2,"s":10,"len":4}]},{"id":"g51","items":[{"code":"MAT-14201","name":"Álgebra Lineal I","seq":"005","cr":8}],"teacherId":"t39","roomId":"r13","sessions":[{"d":1,"s":10,"len":4},{"d":3,"s":10,"len":4}]},{"id":"g52","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"001","cr":6}],"teacherId":"t33","roomId":"r13","sessions":[{"d":0,"s":0,"len":3},{"d":2,"s":0,"len":3}]},{"id":"g53","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"002","cr":6}],"teacherId":"t25","roomId":"r9","sessions":[{"d":1,"s":2,"len":3},{"d":3,"s":2,"len":3}]},{"id":"g54","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"003","cr":6}],"teacherId":"t33","roomId":"r13","sessions":[{"d":0,"s":3,"len":3},{"d":2,"s":3,"len":3}]},{"id":"g55","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"004","cr":6}],"teacherId":"t40","roomId":"r3","sessions":[{"d":1,"s":3,"len":3},{"d":3,"s":3,"len":3}]},{"id":"g56","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"005","cr":6}],"teacherId":"t37","roomId":"r5","sessions":[{"d":0,"s":4,"len":3},{"d":2,"s":4,"len":3}]},{"id":"g57","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"006","cr":6}],"teacherId":"t37","roomId":"r11","sessions":[{"d":1,"s":4,"len":3},{"d":3,"s":4,"len":3}]},{"id":"g58","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"007","cr":6}],"teacherId":"t25","roomId":"r3","sessions":[{"d":1,"s":6,"len":3},{"d":3,"s":6,"len":3}]},{"id":"g59","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"008","cr":6}],"teacherId":"t20","roomId":"r0","sessions":[{"d":0,"s":7,"len":3},{"d":2,"s":7,"len":3}]},{"id":"g60","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"009","cr":6}],"teacherId":"t25","roomId":"r6","sessions":[{"d":1,"s":10,"len":3},{"d":3,"s":10,"len":3}]},{"id":"g61","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"010","cr":6}],"teacherId":"t15","roomId":"r11","sessions":[{"d":1,"s":11,"len":3},{"d":3,"s":11,"len":3}]},{"id":"g62","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"011","cr":6}],"teacherId":"t42","roomId":"r8","sessions":[{"d":0,"s":19,"len":3},{"d":2,"s":19,"len":3}]},{"id":"g63","items":[{"code":"MAT-14250","name":"Geometría Vectorial","seq":"012","cr":6}],"teacherId":"t29","roomId":"r11","sessions":[{"d":1,"s":19,"len":3},{"d":3,"s":19,"len":3}]},{"id":"g64","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"001","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"001","cr":0}],"teacherId":"t36","roomId":"r7","sessions":[{"d":0,"s":5,"len":3},{"d":2,"s":5,"len":3}]},{"id":"g65","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"002","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"002","cr":0}],"teacherId":"t12","roomId":"r9","sessions":[{"d":1,"s":5,"len":3},{"d":3,"s":5,"len":3}]},{"id":"g66","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"003","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"003","cr":0}],"teacherId":"t40","roomId":"r11","sessions":[{"d":1,"s":7,"len":3},{"d":3,"s":7,"len":3}]},{"id":"g67","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"004","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"004","cr":0}],"teacherId":"t10","roomId":"r0","sessions":[{"d":0,"s":10,"len":3},{"d":2,"s":10,"len":3}]},{"id":"g68","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"005","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"005","cr":0}],"teacherId":"t40","roomId":"r4","sessions":[{"d":1,"s":11,"len":3},{"d":3,"s":11,"len":3}]},{"id":"g69","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"006","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"006","cr":0}],"teacherId":"t10","roomId":"r0","sessions":[{"d":0,"s":16,"len":3},{"d":2,"s":16,"len":3}]},{"id":"g70","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"007","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"007","cr":0}],"teacherId":"t26","roomId":"r0","sessions":[{"d":1,"s":19,"len":3},{"d":3,"s":19,"len":3}]},{"id":"g71","items":[{"code":"MAT-14280","name":"Pensamiento matemático","seq":"008","cr":0},{"code":"MAT-14300","name":"Álgebra Superior I","seq":"008","cr":0}],"teacherId":"t22","roomId":"r0","sessions":[{"d":0,"s":20,"len":3},{"d":2,"s":20,"len":3}]},{"id":"g72","items":[{"code":"MAT-14281","name":"Matemáticas Discretas","seq":"001","cr":6},{"code":"MAT-14301","name":"Álgebra Superior II","seq":"001","cr":0}],"teacherId":"t22","roomId":"r3","sessions":[{"d":1,"s":20,"len":3},{"d":3,"s":20,"len":3}]},{"id":"g73","items":[{"code":"MAT-14281","name":"Matemáticas Discretas","seq":"002","cr":6},{"code":"MAT-14301","name":"Álgebra Superior II","seq":"002","cr":0}],"teacherId":"t26","roomId":"r0","sessions":[]},{"id":"g74","items":[{"code":"MAT-14310","name":"Álgebra Lineal II","seq":"001","cr":8}],"teacherId":"t18","roomId":"r14","sessions":[{"d":1,"s":18,"len":4},{"d":3,"s":18,"len":4}]},{"id":"g75","items":[{"code":"MAT-14390","name":"Matemáticas Computacionales","seq":"001","cr":0},{"code":"MAT-24406","name":"Análisis Numérico I","seq":"001","cr":8}],"teacherId":"t8","roomId":"r5","sessions":[{"d":1,"s":16,"len":4},{"d":3,"s":16,"len":4}]},{"id":"g76","items":[{"code":"MAT-14400","name":"Cálculo Numérico I (Act. Eco.)","seq":"001","cr":8}],"teacherId":"t8","roomId":"r15","sessions":[{"d":1,"s":6,"len":4},{"d":3,"s":6,"len":4}]},{"id":"g77","items":[{"code":"MAT-14400","name":"Cálculo Numérico I (Act. Eco.)","seq":"002","cr":8},{"code":"MAT-24407","name":"Cálculo Numérico I (MAT)","seq":"001","cr":8}],"teacherId":"t9","roomId":"r5","sessions":[{"d":0,"s":10,"len":4},{"d":2,"s":10,"len":4}]},{"id":"g78","items":[{"code":"MAT-14850","name":"Modelos Matemáticos I","seq":"001","cr":6}],"teacherId":"t37","roomId":"r13","sessions":[{"d":0,"s":16,"len":3},{"d":2,"s":16,"len":3}]},{"id":"g79","items":[{"code":"MAT-14850","name":"Modelos Matemáticos I","seq":"001","cr":6}],"teacherId":"t45","roomId":"r13","sessions":[{"d":0,"s":16,"len":3},{"d":2,"s":16,"len":3}]},{"id":"g80","items":[{"code":"MAT-22600","name":"Matemáticas Financieras 1","seq":"001","cr":0}],"teacherId":null,"roomId":null,"sessions":[]},{"id":"g81","items":[{"code":"MAT-22600","name":"Matemáticas Financieras 1","seq":"002","cr":0}],"teacherId":null,"roomId":null,"sessions":[]},{"id":"g82","items":[{"code":"MAT-24100","name":"Principios de Análisis Real","seq":"001","cr":6}],"teacherId":"t4","roomId":"r4","sessions":[{"d":1,"s":8,"len":3},{"d":3,"s":8,"len":3}]},{"id":"g83","items":[{"code":"MAT-24110","name":"Análisis Matemático I","seq":"001","cr":6}],"teacherId":"t4","roomId":null,"sessions":[{"d":1,"s":8,"len":3},{"d":3,"s":8,"len":3}]},{"id":"g84","items":[{"code":"MAT-24101","name":"Análisis Real","seq":"001","cr":6},{"code":"MAT-24111","name":"Análisis Matemático II","seq":"001","cr":6}],"teacherId":"t4","roomId":null,"sessions":[{"d":1,"s":4,"len":3},{"d":3,"s":4,"len":3}]},{"id":"g85","items":[{"code":"MAT-24211","name":"Sistemas Dinámicos II","seq":"001","cr":6}],"teacherId":"t2","roomId":"r7","sessions":[{"d":0,"s":8,"len":3},{"d":2,"s":8,"len":3}]},{"id":"g86","items":[{"code":"MAT-24220","name":"Ecuaciones Diferenciales Parciales","seq":"001","cr":6}],"teacherId":"t43","roomId":"r16","sessions":[{"d":1,"s":10,"len":5},{"d":3,"s":10,"len":5}]},{"id":"g87","items":[{"code":"MAT-24410","name":"Programación Lineal","seq":"001","cr":6}],"teacherId":"t38","roomId":"r15","sessions":[{"d":1,"s":3,"len":3},{"d":3,"s":3,"len":3}]},{"id":"g88","items":[{"code":"MAT-24430","name":"Análisis Aplicado I","seq":"001","cr":6}],"teacherId":"t38","roomId":"r5","sessions":[{"d":1,"s":10,"len":3},{"d":3,"s":10,"len":3}]},{"id":"g89","items":[{"code":"MAT-24431","name":"Optimización Numérica I","seq":"001","cr":8}],"teacherId":"t9","roomId":"r15","sessions":[]},{"id":"g90","items":[{"code":"MAT-24433","name":"Optimización Numérica 1 (6 créditos)","seq":"001","cr":0}],"teacherId":"t38","roomId":null,"sessions":[{"d":1,"s":10,"len":3},{"d":3,"s":10,"len":3}]},{"id":"g91","items":[{"code":"MAT-24500","name":"Investigación de Operaciones I","seq":"001","cr":6}],"teacherId":"t10","roomId":null,"sessions":[]},{"id":"g92","items":[{"code":"MAT-24630","name":"Matemáticas Aplicadas a la Economía","seq":"001","cr":6},{"code":"MAT-24632","name":"Métodos Dinámicos para la Economía","seq":"001","cr":6}],"teacherId":"t6","roomId":"r4","sessions":[{"d":1,"s":5,"len":3},{"d":3,"s":5,"len":3}]},{"id":"g93","items":[{"code":"MAT-24630","name":"Matemáticas Aplicadas a la Economía","seq":"002","cr":6},{"code":"MAT-24632","name":"Métodos Dinámicos para la Economía","seq":"002","cr":6}],"teacherId":"t20","roomId":"r12","sessions":[{"d":0,"s":11,"len":3},{"d":2,"s":11,"len":3}]}]};</script>
+<script>
+(() => {
+'use strict';
+// ---------- Constantes ----------
+const DAYS = ['Lunes','Martes','Miércoles','Jueves','Viernes'];
+const DS = ['Lun','Mar','Mié','Jue','Vie'];
+const NS = 24, BLOCKED = 15, POST = 16;
+const pad = n => String(n).padStart(2,'0');
+const slotLabel = s => { let h = 7 + Math.floor(s/2); if (h >= 15) h += 1; return pad(h) + ':' + (s % 2 ? '30' : '00'); };
+const endLabel = e => e >= NS ? '20:00' : (e === POST ? '15:00' : slotLabel(e));
+const range = (s, len) => slotLabel(s) + '–' + endLabel(s + len);
+const titleCase = s => (s || '').toLowerCase().replace(/(^|[\s.\-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+
+// ---------- Datos ----------
+const T = Object.fromEntries(DATA.teachers.map(t => [t.id, t]));
+const R = Object.fromEntries(DATA.rooms.map(r => [r.id, r]));
+const tName = id => id && T[id] ? titleCase(T[id].short) : 'Sin profesor';
+const tFull = id => id && T[id] ? titleCase(T[id].full) : 'Sin profesor';
+const rName = id => id && R[id] ? R[id].name : 'Sin salón';
+const natural = (a, b) => a.localeCompare(b, 'es', { numeric: true });
+const ROOMS = [...DATA.rooms].sort((a, b) => {
+  const na = /^\d/.test(a.name), nb = /^\d/.test(b.name);
+  return na !== nb ? (na ? -1 : 1) : natural(a.name, b.name);
+});
+const ORIGINAL = JSON.stringify(DATA.groups);
+let groups = JSON.parse(ORIGINAL);
+let byId = {};
+const reindex = () => { byId = Object.fromEntries(groups.map(g => [g.id, g])); };
+reindex();
+
+const gCode = g => g.items[0].code + (g.items.length > 1 ? ' + ' + g.items.slice(1).map(i => i.code.slice(4)).join(' + ') : '');
+const gLabel = g => gCode(g) + ' · ' + g.items[0].seq;
+const gName = g => g.items[0].name;
+const gFull = g => `<b>${g.items.map(i => i.name).filter((v, i, a) => a.indexOf(v) === i).join(' / ')}</b> (${gLabel(g)})`;
+const hue = g => { const c = g.items[0].code; let h = 0; for (const ch of c) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+const daysTxt = ds => ds.map(d => DS[d]).join(', ');
+const sesTxt = g => {
+  const m = {};
+  for (const s of g.sessions) (m[range(s.s, s.len)] ??= []).push(s.d);
+  return Object.entries(m).map(([r, ds]) => daysTxt(ds) + ' ' + r).join(' · ');
+};
+
+// ---------- Forma de un grupo nuevo o sin horario ----------
+const SHAPES = {
+  '2x3': { n: 2, len: 3, label: '2 sesiones de 1 h 30 (Lun–Mié o Mar–Jue)' },
+  '3x3': { n: 3, len: 3, label: '3 sesiones de 1 h 30 (Lun–Mié–Vie)' },
+  '2x4': { n: 2, len: 4, label: '2 sesiones de 2 h (Lun–Mié o Mar–Jue)' },
+  '3x2': { n: 3, len: 2, label: '3 sesiones de 1 h (Lun–Mié–Vie)' },
+  '1x6': { n: 1, len: 6, label: '1 sesión de 3 h' },
+};
+const shapeByCredits = cr => cr >= 9 ? '3x3' : cr === 8 ? '2x4' : '2x3';
+const shapeOfGroup = g => SHAPES[g.shape || shapeByCredits(g.items[0].cr)];
+
+// ---------- Estado de UI ----------
+const ui = { newForm: null, side: true, view: 'salon', day: 0, sel: null, profs: new Set(), rooms: new Set(), mats: new Set(), showAllCf: false };
+const undoStack = [];
+const pushUndo = () => { undoStack.push(JSON.stringify(groups)); if (undoStack.length > 100) undoStack.shift(); };
+
+// ---------- Detección de choques ----------
+function analyze(gs) {
+  const cell = new Map();
+  for (const g of gs) for (const se of g.sessions) for (let k = 0; k < se.len; k++) {
+    const key = se.d * 100 + se.s + k;
+    if (!cell.has(key)) cell.set(key, []);
+    cell.get(key).push(g);
+  }
+  const pairs = new Map();
+  const add = (type, a, b, key) => {
+    const [x, y] = a.id < b.id ? [a, b] : [b, a];
+    const k = type + '|' + x.id + '|' + y.id;
+    if (!pairs.has(k)) pairs.set(k, { type, sev: 'hard', a: x.id, b: y.id, cells: [] });
+    pairs.get(k).cells.push(key);
+  };
+  for (const [key, list] of cell) {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const A = list[i], B = list[j];
+      if (A.teacherId && A.teacherId === B.teacherId) add('prof', A, B, key);
+      if (A.roomId && A.roomId === B.roomId) add('salon', A, B, key);
+    }
+  }
+  const list = [...pairs.values()];
+  for (const g of gs) {
+    if (!g.sessions.length) continue;
+    const t = g.teacherId && T[g.teacherId];
+    if (t && t.prefs) {
+      const cells = [];
+      for (const se of g.sessions) for (let k = 0; k < se.len; k++) if (t.prefs[se.d]?.[se.s + k] === 0) cells.push(se.d * 100 + se.s + k);
+      if (cells.length) list.push({ type: 'disp', sev: 'soft', a: g.id, cells });
+    }
+    if (!g.roomId) list.push({ type: 'sinsalon', sev: 'soft', a: g.id, cells: g.sessions.map(se => se.d * 100 + se.s) });
+    if (!g.teacherId) list.push({ type: 'sinprof', sev: 'soft', a: g.id, cells: g.sessions.map(se => se.d * 100 + se.s) });
+  }
+  const per = new Map();
+  for (const c of list) for (const id of [c.a, c.b]) {
+    if (!id) continue;
+    if (!per.has(id)) per.set(id, { hard: [], soft: [] });
+    per.get(id)[c.sev].push(c);
+  }
+  list.sort((x, y) => (x.sev === y.sev ? 0 : x.sev === 'hard' ? -1 : 1) || Math.min(...x.cells) - Math.min(...y.cells));
+  return { list, per };
+}
+const cellsTxt = cells => {
+  const by = {};
+  for (const c of cells) (by[Math.floor(c / 100)] ??= []).push(c % 100);
+  const m = {};
+  for (const d of Object.keys(by).map(Number).sort()) {
+    const a = by[d].sort((x, y) => x - y); const r = range(a[0], a[a.length - 1] - a[0] + 1);
+    (m[r] ??= []).push(d);
+  }
+  return Object.entries(m).map(([r, ds]) => daysTxt(ds) + ' ' + r).join(' · ');
+};
+function cfText(c) {
+  const A = byId[c.a] || dragProposal(c.a), B = c.b && (byId[c.b]);
+  switch (c.type) {
+    case 'prof': return { t: `${tName(A.teacherId)} está en dos grupos a la vez`, s: `${gFull(A)} en ${rName(A.roomId)} y ${gFull(B)} en ${rName(B.roomId)} · ${cellsTxt(c.cells)}` };
+    case 'salon': return { t: `Salón ${rName(A.roomId)} ocupado dos veces`, s: `${gFull(A)} de ${tName(A.teacherId)} y ${gFull(B)} de ${tName(B.teacherId)} · ${cellsTxt(c.cells)}` };
+    case 'disp': return { t: `Fuera de la disponibilidad de ${tName(A.teacherId)}`, s: `${gLabel(A)} · ${cellsTxt(c.cells)}` };
+    case 'sinsalon': return { t: `${gLabel(A)} no tiene salón`, s: `${gName(A)} · ${tName(A.teacherId)}` };
+    case 'sinprof': return { t: `${gLabel(A)} no tiene profesor`, s: `${gName(A)} · ${rName(A.roomId)}` };
+  }
+}
+let dragProposal = () => null;
+
+// ---------- Geometría ----------
+const gb = document.getElementById('gridbody');
+const ch = document.getElementById('colhead');
+const wrap = document.getElementById('gridwrap');
+let geo = { row: 26, gap: 22, colW: 100, cols: [] };
+const GUT = 58;
+const RS = 0; // franja de salones libres por día (vista semana)
+const oneProf = () => ui.profs.size === 1 ? [...ui.profs][0] : null;
+const availT = () => oneProf() || (ui.sel && byId[ui.sel] ? byId[ui.sel].teacherId : null);
+const TOP = 10;
+const yOf = s => TOP + s * geo.row + (s >= POST ? geo.gap : 0);
+const totalH = () => yOf(NS - 1) + geo.row;
+function slotFromY(y) {
+  y -= TOP;
+  if (y < POST * geo.row) return Math.max(0, Math.floor(y / geo.row));
+  if (y < POST * geo.row + geo.gap) return POST;
+  return Math.min(NS - 1, POST + Math.floor((y - POST * geo.row - geo.gap) / geo.row));
+}
+function snap(s, len) {
+  s = Math.max(0, Math.min(NS - len, s));
+  if (s <= BLOCKED && s + len > BLOCKED) {
+    const up = BLOCKED - len;
+    s = (up >= 0 && Math.abs(s - up) <= Math.abs(s - POST)) ? up : POST;
+  }
+  return s;
+}
+function columns() {
+  if (ui.view === 'salon') {
+    const cols = ROOMS.filter(r => !ui.rooms.size || ui.rooms.has(r.id)).map(r => ({ key: r.id, roomId: r.id, title: r.name, sub: r.cap ? 'cap. ' + r.cap : '' }));
+    if (!ui.rooms.size && groups.some(g => !g.roomId && g.sessions.some(s => s.d === ui.day))) cols.push({ key: 'none', roomId: null, title: 'Sin salón', sub: 'por definir', nosalon: true });
+    return cols;
+  }
+  return DAYS.map((d, i) => ({ key: 'd' + i, day: i, title: d, sub: '' }));
+}
+function measure() {
+  const h = wrap.clientHeight - 44 - TOP;
+  geo.gap = 22;
+  geo.row = Math.max(18, Math.min(34, Math.floor((h - geo.gap - 4) / NS)));
+  geo.cols = columns();
+  const avail = wrap.clientWidth - GUT - 2;
+  const min = ui.view === 'salon' ? 96 : 170;
+  geo.colW = Math.max(min, Math.floor(avail / geo.cols.length));
+}
+
+// ---------- Capas de fondo ----------
+function availHTML(tid, z) {
+  const t = tid && T[tid];
+  if (!t || !t.prefs) return '';
+  let h = '';
+  const zs = z ? 'z-index:' + z + ';' : '';
+  if (ui.view === 'semana') {
+    for (let d = 0; d < 5; d++) for (let s = 0; s < NS; s++) {
+      if (s === BLOCKED) continue;
+      h += `<div class="avail p${t.prefs[d][s]}" style="${zs}left:${GUT + d * geo.colW + 1}px;width:${geo.colW - 1 - RS}px;top:${yOf(s)}px;height:${geo.row}px"></div>`;
+    }
+  } else {
+    const W = geo.cols.length * geo.colW;
+    for (let s = 0; s < NS; s++) {
+      if (s === BLOCKED) continue;
+      h += `<div class="avail p${t.prefs[ui.day][s]}" style="${zs}left:${GUT}px;width:${W}px;top:${yOf(s)}px;height:${geo.row}px"></div>`;
+    }
+  }
+  return h;
+}
+function freeRoomsAt(d, s, exceptId) {
+  const busy = new Set();
+  for (const g of groups) {
+    if (g.id === exceptId || !g.roomId) continue;
+    for (const se of g.sessions) if (se.d === d && s >= se.s && s < se.s + se.len) busy.add(g.roomId);
+  }
+  return ROOMS.filter(r => !busy.has(r.id));
+}
+function roomStripHTML(exceptId) {
+  let h = '';
+  for (let d = 0; d < 5; d++) {
+    const x = GUT + (d + 1) * geo.colW - RS;
+    for (let s = 0; s < NS; s++) {
+      if (s === BLOCKED) continue;
+      const n = freeRoomsAt(d, s, exceptId).length, f = n / ROOMS.length;
+      h += `<div class="rs ${n ? '' : 'zero'}" style="left:${x}px;width:${RS}px;top:${yOf(s)}px;height:${geo.row}px;line-height:${geo.row}px;${n ? 'background:rgba(37,99,235,' + (0.06 + f * 0.42).toFixed(2) + ')' : ''}">${n}</div>`;
+    }
+  }
+  return h;
+}
+const roomsTxt = rs => rs.length ? rs.slice(0, 9).map(r => r.name).join(', ') + (rs.length > 9 ? ' y ' + (rs.length - 9) + ' más' : '') : 'ninguno';
+
+// ---------- Filtros ----------
+const matches = g => {
+  if (ui.profs.size && !ui.profs.has(g.teacherId)) return false;
+  if (ui.rooms.size && !ui.rooms.has(g.roomId)) return false;
+  if (ui.mats.size && !g.items.some(i => ui.mats.has(i.code))) return false;
+  return true;
+};
+const filtering = () => !!(ui.profs.size || ui.rooms.size || ui.mats.size);
+
+// ---------- Layout de carriles ----------
+function lanes(items) {
+  items.sort((a, b) => a.start - b.start || b.end - a.end);
+  let cluster = [], cEnd = -1, ends = [];
+  const flush = () => { const n = ends.length; cluster.forEach(it => it.nl = n); cluster = []; ends = []; cEnd = -1; };
+  for (const it of items) {
+    if (cluster.length && it.start >= cEnd) flush();
+    let l = ends.findIndex(e => e <= it.start);
+    if (l < 0) { l = ends.length; ends.push(it.end); } else ends[l] = it.end;
+    it.lane = l; cluster.push(it); cEnd = Math.max(cEnd, it.end);
+  }
+  flush();
+}
+
+// ---------- Render ----------
+let A = analyze(groups);
+function render() {
+  reindex();
+  A = analyze(groups);
+  renderHeader();
+  renderToolbar();
+  renderSide();
+  renderGrid();
+  if (cardId) drawCard();
+  syncFilters();
+}
+
+function renderHeader() {
+  const sched = groups.filter(g => g.sessions.length);
+  const hard = A.list.filter(c => c.sev === 'hard').length;
+  const soft = A.list.filter(c => c.sev === 'soft').length;
+  const pend = groups.length - sched.length;
+  const items = sched.reduce((n, g) => n + g.items.length, 0);
+  document.getElementById('semLbl').textContent = DATA.semester + ' · ' + items + ' grupos (' + sched.length + ' bloques en la malla, contando grupos espejo juntos)';
+  document.getElementById('stats').innerHTML =
+    `<div class="stat"><b>${sched.length}</b> en la malla</div>` +
+    `<div class="stat ${hard ? 'bad' : 'ok'}"><b>${hard}</b> choques</div>` +
+    `<div class="stat ${soft ? 'warn' : 'ok'}"><b>${soft}</b> avisos</div>` +
+    `<div class="stat ${pend ? 'warn' : 'ok'}"><b>${pend}</b> por asignar</div>`;
+  document.getElementById('undoBtn').disabled = !undoStack.length;
+}
+
+function renderToolbar() {
+  document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === ui.view));
+  const dp = document.getElementById('dayPills');
+  dp.style.display = ui.view === 'salon' ? '' : 'none';
+  const perDay = [0,0,0,0,0];
+  for (const c of A.list) if (c.sev === 'hard') new Set(c.cells.map(x => Math.floor(x / 100))).forEach(d => perDay[d]++);
+  dp.innerHTML = DS.map((d, i) => `<button data-d="${i}" class="${i === ui.day ? 'on' : ''}">${DAYS[i]}${perDay[i] ? `<span class="badge">${perDay[i]}</span>` : ''}</button>`).join('');
+  document.getElementById('hint').textContent = ui.view === 'salon'
+    ? 'Arrastra un grupo a otro salón u otra hora (se mueven juntas todas sus sesiones). Clic en un grupo para ver con qué choca y qué salones están libres. Si marcas salones arriba, solo se muestran esas columnas.'
+    : 'Arrastra un grupo para cambiarlo de día u hora. Clic en un grupo para ver con qué choca y qué salones están libres. Marca profesores, salones o materias arriba para ver solo esos grupos.';
+}
+
+function renderGrid() {
+  measure();
+  const cols = geo.cols, W = GUT + cols.length * geo.colW, H = totalH();
+  ch.innerHTML = `<div class="sp"></div>` + cols.map(c => `<div class="ch ${c.nosalon ? 'nosalon' : ''}" style="width:${geo.colW}px;position:relative"><b title="${c.title}">${c.title}</b><small>${c.sub || (ui.view === 'semana' ? '' : '&nbsp;')}</small></div>`).join('');
+  ch.style.width = W + 'px';
+  gb.style.width = W + 'px';
+  gb.style.height = H + 'px';
+  let h = '';
+  // filas
+  for (let s = 0; s < NS; s++) {
+    h += `<div class="row ${s % 2 === 0 ? 'hour' : ''} ${s === BLOCKED ? 'blocked' : ''}" style="top:${yOf(s)}px;height:${geo.row}px"></div>`;
+    h += `<div class="tl ${s % 2 === 0 ? 'hour' : ''}" style="top:${yOf(s)}px">${slotLabel(s)}</div>`;
+  }
+  h += `<div class="gapband" style="top:${TOP + POST * geo.row}px;height:${geo.gap}px;left:${GUT}px">15:00 – 16:00 · sin clases</div>`;
+  h += ``;
+  cols.forEach((c, i) => { h += `<div class="vline" style="left:${GUT + i * geo.colW}px"></div>`; });
+  // disponibilidad del profe (profe filtrado o el del grupo seleccionado)
+
+  // salones libres en cada media hora (vista semana)
+
+  h += '<div id="ov"></div>';
+  // bloques
+  const vis = [];
+  for (const g of groups) for (let si = 0; si < g.sessions.length; si++) {
+    const se = g.sessions[si];
+    let col;
+    if (ui.view === 'salon') {
+      if (se.d !== ui.day) continue;
+      col = cols.findIndex(c => c.roomId === (g.roomId || null));
+    } else {
+      if (filtering() && !matches(g)) continue;
+      col = se.d;
+    }
+    if (col < 0) continue;
+    vis.push({ g, si, col, start: se.s, end: se.s + se.len });
+  }
+  const byCol = {};
+  vis.forEach(v => (byCol[v.col] ??= []).push(v));
+  Object.values(byCol).forEach(lanes);
+  for (const v of vis) {
+    const g = v.g, st = A.per.get(g.id) || { hard: [], soft: [] };
+    const inner = geo.colW - 6 - (ui.view === 'semana' ? RS : 0), base = GUT + v.col * geo.colW + 3;
+    let w = inner, x = base, strip = 0;
+    if (v.nl > 1) {
+      // cascada: tarjetas de ancho legible, encimadas y semitransparentes
+      w = ui.view === 'semana'
+        ? Math.max(110, Math.min(Math.max(130, inner * 0.55), inner - (v.nl - 1) * 20))
+        : Math.min(inner, Math.max(70, inner * 0.55));
+      w = Math.min(w, inner);
+      const step = (inner - w) / (v.nl - 1);
+      x = base + v.lane * step;
+      const cover = vis.reduce((m, o) => o.col === v.col && o.lane > v.lane && o.start < v.end && o.end > v.start ? Math.min(m, o.lane - v.lane) : m, Infinity);
+      if (cover !== Infinity) strip = cover * step;
+    }
+    const y = yOf(v.start) + 1, hh = yOf(v.end - 1) + geo.row - yOf(v.start) - 2;
+    const hu = hue(g);
+    const cls = ['blk'];
+    if (st.hard.length) cls.push('hard'); else if (st.soft.length) cls.push('soft');
+    if (w < 64) cls.push('tiny');
+    if (v.nl > 1) cls.push('stack');
+    if (strip && strip < 64) cls.push(strip >= 15 ? 'strip' : 'strip mute');
+    if (ui.view === 'salon' && (ui.profs.size || ui.mats.size) && !matches(g)) cls.push('dim');
+    if (ui.sel === g.id) cls.push('sel');
+    const flag = st.hard.length || st.soft.length ? `<div class="flag">!</div>` : '';
+    const code = w < 64 ? g.items[0].code.slice(4) : g.items.map(i => i.code.slice(4)).join('+') + ' · ' + g.items[0].seq;
+    const third = ui.view === 'salon' ? tName(g.teacherId) : tName(g.teacherId) + ' · ' + rName(g.roomId);
+    h += `<div class="${cls.join(' ')}" data-g="${g.id}" data-si="${v.si}" style="left:${x}px;top:${y}px;width:${w - 2}px;height:${hh}px;--z:${5 + v.lane};--in:${strip ? Math.max(0, strip - 12) + 'px' : 'auto'};--bg-c:hsl(${hu} 70% 95%);--bgt-c:hsl(${hu} 70% 92% / .62);--bd-c:hsl(${hu} 45% 82%);--st-c:hsl(${hu} 55% 48%)">
+      ${flag}<div class="vc">${g.items[0].code.slice(4)}</div><div class="in"><div class="c">${code}</div><div class="n">${gName(g)}</div><div class="p ${g.teacherId ? '' : 'none'}">${third}</div></div></div>`;
+  }
+  h += '<div id="pv"></div>';
+  gb.innerHTML = h;
+}
+
+function renderSide() {
+  const side = document.getElementById('side');
+  side.classList.toggle('collapsed', !ui.side);
+  const tgl = `<button class="side-toggle" id="sideTgl" title="${ui.side ? 'Ocultar panel' : 'Mostrar panel'}">${ui.side ? '«' : '»'}</button>`;
+  if (!ui.side) {
+    const nh = A.list.filter(c => c.sev === 'hard').length, ns = A.list.length - nh, np = groups.filter(g => !g.sessions.length).length;
+    side.innerHTML = tgl + `<div class="vside" id="vside"><span class="r">${nh} choques</span><span class="a">${ns} avisos</span><span>${np} por asignar</span></div>`;
+    document.getElementById('sideTgl').onclick = document.getElementById('vside').onclick = () => toggleSide(true);
+    return;
+  }
+  if (ui.newForm) { side.innerHTML = tgl + newFormHTML(); bindNewForm(); bindTgl(); return; }
+  if (ui.sel && byId[ui.sel]) { side.innerHTML = tgl + detailHTML(byId[ui.sel]); bindDetail(); bindTgl(); return; }
+  let h = '';
+  if (oneProf() && T[oneProf()]) h += profCard(oneProf());
+  const hard = A.list.filter(c => c.sev === 'hard'), soft = A.list.filter(c => c.sev === 'soft');
+  h += `<h3>Choques <span class="n">${hard.length}</span></h3>`;
+  h += hard.length ? hard.map(cfItem).join('') : `<div class="empty">✓ Sin choques de profesor ni de salón</div>`;
+  h += `<h3>Avisos <span class="n">${soft.length}</span></h3>`;
+  const softShown = ui.showAllCf ? soft : soft.slice(0, 5);
+  h += softShown.map(cfItem).join('') || `<div class="empty">✓ Sin avisos</div>`;
+  if (soft.length > softShown.length) h += `<button class="more" id="moreCf">Ver los ${soft.length} avisos</button>`;
+  const pend = groups.filter(g => !g.sessions.length);
+  h += `<h3>Por asignar horario <span class="n">${pend.length}</span></h3>`;
+  h += `<button class="btn add" data-add="" style="margin:0 0 8px">+ Agregar grupo nuevo</button>`;
+  h += pend.length ? `<div class="tray">${pend.map(g => `<div class="tcard" data-g="${g.id}"><b>${gLabel(g)}</b><div>${gName(g)}</div><div class="s">${tName(g.teacherId)} · ${rName(g.roomId)}</div></div>`).join('')}</div>
+     <div class="hint" style="margin-top:6px">Arrástralos a la malla para darles horario.</div>` : `<div class="empty">✓ Todos los grupos tienen horario</div>`;
+  h += `<h3>Leyenda</h3><div class="legend">
+    <div><i style="background:#fff;border:2px solid var(--red)"></i>Choque: mismo profesor o mismo salón a la misma hora</div>
+    <div><i style="background:#fff;border:2px solid var(--amber)"></i>Aviso: fuera de disponibilidad, sin salón o sin profesor</div>
+    <div><i style="background:hsl(210 70% 95%);border-left:4px solid hsl(210 55% 48%)"></i>Grupo (el color identifica la materia)</div>
+    <div><i style="background:repeating-linear-gradient(135deg,#eef0f3 0 4px,#f7f8fa 4px 8px)"></i>Franja sin clases</div></div>`;
+  side.innerHTML = tgl + h;
+  bindTgl();
+  side.querySelectorAll('.cf').forEach(el => el.onclick = () => goTo(A.list[+el.dataset.i]));
+  side.querySelectorAll('.tg').forEach(el => el.onclick = () => { ui.sel = el.dataset.g; render(); });
+  side.querySelectorAll('[data-add]').forEach(b => b.onclick = () => openNewForm(b.dataset.add));
+  const cp = document.getElementById('clearProf'); if (cp) cp.onclick = () => { ui.profs.clear(); render(); };
+  const m = document.getElementById('moreCf'); if (m) m.onclick = () => { ui.showAllCf = true; renderSide(); };
+  side.querySelectorAll('.tcard').forEach(el => el.addEventListener('pointerdown', e => startDrag(e, el.dataset.g, null, true)));
+}
+function newFormHTML() {
+  const f = ui.newForm;
+  const cOpts = COURSES.map(c => `<option value="${c.code}" ${c.code === f.code ? 'selected' : ''}>${c.name} — ${c.code}</option>`).join('');
+  const pOpts = [...DATA.teachers].sort((a, b) => natural(titleCase(a.short), titleCase(b.short)))
+    .map(x => `<option value="${x.id}" ${x.id === f.teacherId ? 'selected' : ''}>${titleCase(x.short)} — ${titleCase(x.full)}</option>`).join('');
+  const sOpts = Object.entries(SHAPES).map(([k, s]) => `<option value="${k}" ${k === f.shape ? 'selected' : ''}>${s.label}</option>`).join('');
+  const rOpts = ROOMS.map(r => `<option value="${r.id}" ${r.id === f.roomId ? 'selected' : ''}>${r.name}${r.cap ? ' (cap. ' + r.cap + ')' : ''}</option>`).join('');
+  return `<div class="det">
+    <button class="det-back" id="nfBack">← Cancelar</button>
+    <h2>Agregar grupo</h2>
+    <div class="sub">Se crea sin horario. Después lo arrastras a la malla, al día y hora que quieras.</div>
+    <div class="field"><label>Materia</label><select id="nfCourse"><option value="">— Elige una materia —</option>${cOpts}</select></div>
+    <div class="field"><label>Profesor</label><select id="nfProf"><option value="">— Sin profesor —</option>${pOpts}</select></div>
+    <div class="field"><label>Sesiones</label><select id="nfShape">${sOpts}</select></div>
+    <div class="field"><label>Salón (opcional)</label><select id="nfRoom"><option value="">— Lo elijo al colocarlo —</option>${rOpts}</select></div>
+    <button class="btn primary" id="nfOk" ${f.code ? '' : 'disabled'}>Crear grupo</button>
+  </div>`;
+}
+function bindNewForm() {
+  const f = ui.newForm;
+  document.getElementById('nfBack').onclick = () => { ui.newForm = null; render(); };
+  document.getElementById('nfCourse').onchange = e => {
+    f.code = e.target.value;
+    const c = COURSES.find(x => x.code === f.code); if (c) f.shape = shapeByCredits(c.cr);
+    renderSide();
+  };
+  document.getElementById('nfProf').onchange = e => { f.teacherId = e.target.value || null; };
+  document.getElementById('nfShape').onchange = e => { f.shape = e.target.value; };
+  document.getElementById('nfRoom').onchange = e => { f.roomId = e.target.value || null; };
+  document.getElementById('nfOk').onclick = () => {
+    const c = COURSES.find(x => x.code === f.code); if (!c) return;
+    const seqs = groups.flatMap(g => g.items.filter(i => i.code === c.code).map(i => +i.seq || 0));
+    const seq = String((seqs.length ? Math.max(...seqs) : 0) + 1).padStart(3, '0');
+    pushUndo();
+    const g = { id: 'n' + Date.now(), items: [{ code: c.code, name: c.name, seq, cr: c.cr }], teacherId: f.teacherId, roomId: f.roomId, sessions: [], shape: f.shape };
+    groups.push(g);
+    if (ui.profs.size && g.teacherId) ui.profs.add(g.teacherId);
+    if (ui.mats.size) ui.mats.add(c.code);
+    ui.newForm = null; ui.sel = g.id;
+    render();
+  };
+}
+const openNewForm = teacherId => { ui.newForm = { teacherId: teacherId || null, code: '', shape: '2x3', roomId: null }; ui.sel = null; ui.side = true; render(); };
+function bindTgl() { document.getElementById('sideTgl').onclick = () => toggleSide(false); }
+function toggleSide(open) { ui.side = open; renderSide(); setTimeout(renderGrid, 170); }
+function profCard(tid) {
+  const t = T[tid];
+  const mine = groups.filter(g => g.teacherId === tid && g.sessions.length).sort((a, b) => a.sessions[0].d - b.sessions[0].d || a.sessions[0].s - b.sessions[0].s);
+  const hrs = mine.reduce((n, g) => n + g.sessions.reduce((m, s) => m + s.len, 0), 0) / 2;
+  const availH = t.prefs ? t.prefs.flat().filter(v => v > 0).length / 2 : null;
+  const pending = groups.filter(g => g.teacherId === tid && !g.sessions.length).length;
+  return `<div class="tcardp"><h2>${tName(tid)}</h2><div class="sub">${titleCase(t.full)}</div>
+    <div class="sb"><div><b>${mine.length}</b>grupos en la malla</div><div><b>${hrs} h</b>de clase por semana</div>
+    <div><b>${availH == null ? '—' : availH + ' h'}</b>${availH == null ? 'sin disponibilidad capturada' : 'disponibles por semana'}</div><div><b>${pending}</b>sin horario</div></div>
+    ${mine.map(g => { const hu = hue(g), st = A.per.get(g.id); return `<div class="tg ${st && st.hard.length ? 'hard' : ''}" data-g="${g.id}" style="--bg-c:hsl(${hu} 70% 95%);--st-c:hsl(${hu} 55% 48%)"><div><b>${gLabel(g)}</b><div style="color:var(--ink2);font-size:11.5px">${gName(g)} · ${rName(g.roomId)}</div></div><div class="s">${sesTxt(g).replace(' · ', '<br>')}</div></div>`; }).join('')}
+    ${groups.filter(g => g.teacherId === tid && !g.sessions.length).map(g => `<div class="tcard mini" data-g="${g.id}"><b>${gLabel(g)}</b> · sin horario<div>${gName(g)}</div><div class="s">Arrástralo a la malla</div></div>`).join('')}
+    <button class="btn add" data-add="${tid}">+ Agregar grupo a ${tName(tid)}</button>
+    <button class="btn wide" id="clearProf">Ver todos los profesores</button></div>`;
+}
+function cfItem(c) {
+  const t = cfText(c);
+  return `<div class="cf ${c.sev}" data-i="${A.list.indexOf(c)}"><span class="dot"></span><div><div class="t">${t.t}</div><div class="s">${t.s}</div></div></div>`;
+}
+function goTo(c) {
+  const g = byId[c.a];
+  ui.sel = c.a;
+  if (ui.view === 'salon' && c.cells.length) ui.day = Math.floor(Math.min(...c.cells) / 100);
+  render();
+  const ids = [c.a, c.b].filter(Boolean);
+  ids.forEach(id => gb.querySelectorAll(`.blk[data-g="${id}"]`).forEach(el => { el.classList.add('flash'); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }));
+  if (c.b) gb.querySelectorAll(`.blk[data-g="${c.b}"]`).forEach(el => el.classList.add('partner'));
+}
+
+function detailHTML(g) {
+  const st = A.per.get(g.id) || { hard: [], soft: [] };
+  const profOpts = [...DATA.teachers].sort((a, b) => natural(titleCase(a.short), titleCase(b.short)))
+    .map(t => `<option value="${t.id}" ${t.id === g.teacherId ? 'selected' : ''}>${titleCase(t.short)} — ${titleCase(t.full)}</option>`).join('');
+  const roomBusyBy = {};
+  for (const x of groups) {
+    if (x.id === g.id || !x.roomId) continue;
+    if (x.sessions.some(a => g.sessions.some(b => a.d === b.d && a.s < b.s + b.len && b.s < a.s + a.len))) roomBusyBy[x.roomId] = x;
+  }
+  const roomOpts = ROOMS.map(r => `<option value="${r.id}" ${r.id === g.roomId ? 'selected' : ''}>${roomBusyBy[r.id] ? '✕' : '✓'} ${r.name}${r.cap ? ' (cap. ' + r.cap + ')' : ''}${g.sessions.length ? (roomBusyBy[r.id] ? ' — ocupado: ' + gLabel(roomBusyBy[r.id]) : ' — libre') : ''}</option>`).join('');
+  const nFree = ROOMS.filter(r => !roomBusyBy[r.id]).length;
+  const t = g.teacherId && T[g.teacherId];
+  const load = groups.filter(x => x.teacherId && x.teacherId === g.teacherId && x.sessions.length);
+  const hrs = load.reduce((n, x) => n + x.sessions.reduce((m, s) => m + s.len, 0), 0) / 2;
+  let mini = '';
+  if (t) {
+    const own = new Set(); g.sessions.forEach(se => { for (let k = 0; k < se.len; k++) own.add(se.d * 100 + se.s + k); });
+    mini = `<div class="minigrid"><div></div>${DS.map(d => `<div class="h">${d}</div>`).join('')}`;
+    for (let s = 0; s < NS; s++) {
+      if (s === BLOCKED) continue;
+      mini += `<div style="font-size:9px;line-height:7px">${s % 4 === 0 ? slotLabel(s).slice(0, 2) : ''}</div>`;
+      for (let d = 0; d < 5; d++) mini += `<div class="c ${t.prefs ? 'mg' + t.prefs[d][s] : 'mgx'} ${own.has(d * 100 + s) ? 'on' : ''}"></div>`;
+    }
+    mini += '</div>';
+  }
+  return `<div class="det">
+    <button class="det-back" id="back">← Resumen de la malla</button>
+    <div class="codes">${g.items.map(i => `<span>${i.code} · ${i.seq}</span>`).join('')}</div>
+    <h2>${gName(g)}</h2>
+    <div class="sub">${g.items.length > 1 ? 'Grupo espejo: ' + g.items.map(i => i.name).filter((v, i, a) => a.indexOf(v) === i).join(' / ') + ' · ' : ''}${g.items[0].cr ?? '–'} créditos</div>
+    <div class="field"><label>Profesor</label><select id="dProf"><option value="">— Sin profesor —</option>${profOpts}</select></div>
+    <div class="field"><label>Salón ${g.sessions.length ? '· ' + nFree + ' libres en este horario' : ''}</label><select id="dRoom"><option value="">— Sin salón —</option>${roomOpts}</select></div>
+    ${g.teacherId && oneProf() !== g.teacherId ? `<button class="btn wide" id="seeProf" style="margin-bottom:12px">Ver la semana de ${tName(g.teacherId)}</button>` : ''}
+    ${g.sessions.length ? '' : `<div class="tcard big" id="dragMe" data-g="${g.id}">Arrastra esta tarjeta a la malla<small>${shapeOfGroup(g).label}</small></div>`}
+    <div class="field"><label>Horario</label><div class="sched">${g.sessions.length ? g.sessions.map(s => `<div><span>${DAYS[s.d]}</span><b>${range(s.s, s.len)}</b></div>`).join('') : '<div><span>Sin horario</span></div>'}</div></div>
+    ${st.hard.length || st.soft.length ? `<h3 style="margin-top:14px">Problemas de este grupo</h3>${[...st.hard, ...st.soft].map(cfItem).join('')}` : `<div class="empty" style="margin:10px 0">✓ Este grupo no choca con nada</div>`}
+    ${t ? `<h3 style="margin-top:16px">${tName(g.teacherId)} <span class="n">${load.length} grupos · ${hrs} h/sem</span></h3>
+      <div class="hint">Disponibilidad declarada${t.prefs ? '' : ' (sin capturar)'} · el contorno marca este grupo</div>${mini}` : ''}
+    ${g.sessions.length ? `<button class="btn" id="unsched" style="margin-top:16px;width:100%">Quitar horario (mandar a «por asignar»)</button>` : ''}
+  </div>`;
+}
+function bindDetail() {
+  const g = byId[ui.sel];
+  document.getElementById('back').onclick = () => { ui.sel = null; render(); };
+  document.getElementById('dProf').onchange = e => { pushUndo(); g.teacherId = e.target.value || null; render(); };
+  document.getElementById('dRoom').onchange = e => { pushUndo(); g.roomId = e.target.value || null; render(); };
+  const sp = document.getElementById('seeProf'); if (sp) sp.onclick = () => { ui.profs.clear(); ui.profs.add(g.teacherId); ui.view = 'semana'; render(); };
+  const u = document.getElementById('unsched'); if (u) u.onclick = () => { pushUndo(); g.sessions = []; render(); };
+  const dm = document.getElementById('dragMe'); if (dm) dm.addEventListener('pointerdown', e => startDrag(e, g.id, null, true));
+  document.querySelectorAll('#side .cf').forEach(el => el.onclick = () => goTo(A.list[+el.dataset.i]));
+}
+
+// ---------- Hover: resaltar con qué choca ----------
+const tip = document.getElementById('tip');
+function showTip(x, y, html) {
+  tip.innerHTML = html; tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  let left = x + 16, top = y + 16;
+  if (left + r.width > innerWidth - 8) left = x - r.width - 16;
+  if (top + r.height > innerHeight - 8) top = y - r.height - 16;
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+const hideTip = () => { tip.style.display = 'none'; };
+function hoverHTML(g) {
+  const st = A.per.get(g.id) || { hard: [], soft: [] };
+  let h = `<div class="h">${gLabel(g)}</div><div>${g.items.map(i => i.name).filter((v, i, a) => a.indexOf(v) === i).join(' / ')}</div>
+    <div class="mut">${tFull(g.teacherId)} · Salón ${rName(g.roomId)}</div><div class="mut">${sesTxt(g)}</div>`;
+  if (st.hard.length) h += st.hard.map(c => { const o = byId[c.a === g.id ? c.b : c.a]; return `<div class="bad">✕ ${cfText(c).t}<br><span class="mut">choca con ${gFull(o)} · ${tName(o.teacherId)}</span></div>`; }).join('');
+  if (st.soft.length) h += st.soft.map(c => `<div class="warn">! ${cfText(c).t}</div>`).join('');
+  if (!st.hard.length && !st.soft.length) h += `<div class="ok">✓ Sin choques</div>`;
+  return h;
+}
+gb.addEventListener('pointerover', e => {
+  if (drag) return;
+  const el = e.target.closest('.blk'); if (!el) return;
+  const g = byId[el.dataset.g];
+  const st = A.per.get(g.id) || { hard: [], soft: [] };
+  const partners = new Set(st.hard.map(c => c.a === g.id ? c.b : c.a));
+  if (partners.size) gb.querySelectorAll('.blk').forEach(b => { if (partners.has(b.dataset.g)) b.classList.add('partner'); });
+});
+gb.addEventListener('pointermove', e => {
+  if (drag) return;
+  const el = e.target.closest('.blk');
+  if (!el) { hideTip(); return; }
+  showTip(e.clientX, e.clientY, hoverHTML(byId[el.dataset.g]));
+});
+gb.addEventListener('pointerout', e => {
+  if (drag) return;
+  const el = e.target.closest('.blk');
+  if (el && !el.contains(e.relatedTarget)) { gb.querySelectorAll('.blk.partner').forEach(b => b.classList.remove('partner')); hideTip(); }
+});
+gb.addEventListener('pointerdown', e => {
+  const el = e.target.closest('.blk'); if (!el || e.button !== 0) return;
+  startDrag(e, el.dataset.g, +el.dataset.si, false);
+});
+
+// ---------- Arrastrar y soltar ----------
+let drag = null;
+function startDrag(e, gid, si, fromTray) {
+  e.preventDefault();
+  const g = byId[gid];
+  const se = si != null ? g.sessions[si] : null;
+  const rect = gb.getBoundingClientRect();
+  const grab = se ? slotFromY(e.clientY - rect.top) - se.s : 1;
+  drag = { gid, si, fromTray, grab: Math.max(0, grab), x0: e.clientX, y0: e.clientY, active: false, prop: null, el: e.target.closest('.blk,.tcard') };
+  addEventListener('pointermove', onDragMove);
+  addEventListener('pointerup', onDragEnd, { once: true });
+}
+function proposal(e) {
+  const g = byId[drag.gid];
+  const rect = gb.getBoundingClientRect();
+  const x = e.clientX - rect.left - GUT, y = e.clientY - rect.top;
+  const wr = wrap.getBoundingClientRect();
+  if (e.clientX < wr.left || e.clientX > wr.right || e.clientY < wr.top || e.clientY > wr.bottom || x < 0 || y < 0 || y > totalH()) return null;
+  const col = Math.floor(x / geo.colW);
+  if (col < 0 || col >= geo.cols.length) return null;
+  const slot = slotFromY(y);
+  const p = { ...g, sessions: g.sessions.map(s => ({ ...s })) };
+  if (drag.fromTray) {
+    const sh = shapeOfGroup(g), len = sh.len, s = snap(slot - drag.grab, len);
+    const d = ui.view === 'salon' ? ui.day : col;
+    const days = sh.n === 1 ? [d] : sh.n === 3 ? [0, 2, 4] : (d === 4 ? [2, 4] : d % 2 === 0 ? [0, 2] : [1, 3]);
+    p.sessions = days.map(dd => ({ d: dd, s, len }));
+    if (ui.view === 'salon') p.roomId = geo.cols[col].roomId;
+  } else {
+    const ref = g.sessions[drag.si];
+    const s = snap(slot - drag.grab, ref.len);
+    const ds = s - ref.s;
+    let dd = 0;
+    if (ui.view === 'salon') p.roomId = geo.cols[col].roomId;
+    else {
+      dd = col - ref.d;
+      const min = Math.min(...g.sessions.map(x => x.d)), max = Math.max(...g.sessions.map(x => x.d));
+      dd = Math.max(-min, Math.min(4 - max, dd));
+    }
+    p.sessions = g.sessions.map(x => ({ d: x.d + dd, s: snap(x.s + ds, x.len), len: x.len }));
+  }
+  return p;
+}
+function onDragMove(e) {
+  if (!drag) return;
+  if (!drag.active) {
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+    drag.active = true;
+    hideTip();
+    gb.querySelectorAll(`.blk[data-g="${drag.gid}"]`).forEach(b => b.classList.add('dragging'));
+    document.body.style.cursor = 'grabbing';
+  }
+  // auto-scroll cerca de los bordes
+  const wr = wrap.getBoundingClientRect();
+  if (e.clientY > wr.bottom - 30) wrap.scrollTop += 12; else if (e.clientY < wr.top + 50) wrap.scrollTop -= 12;
+  if (e.clientX > wr.right - 30) wrap.scrollLeft += 12; else if (e.clientX < wr.left + 70) wrap.scrollLeft -= 12;
+
+  const p = proposal(e);
+  drag.prop = p;
+  const pv = document.getElementById('pv'), ov = document.getElementById('ov');
+  if (!p) { pv.innerHTML = ''; ov.innerHTML = ''; showTip(e.clientX, e.clientY, `<div class="mut">Suelta sobre la malla</div>`); return; }
+  const others = groups.map(x => x.id === p.id ? p : x);
+  const saveById = byId; byId = Object.fromEntries(others.map(x => [x.id, x]));
+  const an = analyze(others);
+  const st = an.per.get(p.id) || { hard: [], soft: [] };
+  const sev = st.hard.length ? 'hard' : st.soft.length ? 'soft' : '';
+  // vista previa
+  let h = '';
+  const colsW = geo.colW - 6;
+  for (const se of p.sessions) {
+    let col;
+    if (ui.view === 'salon') { if (se.d !== ui.day) continue; col = geo.cols.findIndex(c => c.roomId === (p.roomId || null)); if (col < 0) continue; }
+    else col = se.d;
+    const y = yOf(se.s) + 1, hh = yOf(se.s + se.len - 1) + geo.row - yOf(se.s) - 2;
+    h += `<div class="pv ${sev}" style="left:${GUT + col * geo.colW + 3}px;top:${y}px;width:${colsW}px;height:${hh}px">${gLabel(p)}</div>`;
+  }
+  pv.innerHTML = h;
+  // dónde ya está ocupado el profesor (franjas rojas)
+  let o = '';
+  if (p.teacherId) {
+    const W = geo.cols.length * geo.colW;
+    for (const x of groups) {
+      if (x.id === p.id || x.teacherId !== p.teacherId) continue;
+      for (const se of x.sessions) {
+        if (ui.view === 'salon') {
+          if (se.d !== ui.day) continue;
+          o += `<div class="busy" style="left:${GUT}px;width:${W}px;top:${yOf(se.s)}px;height:${yOf(se.s + se.len - 1) + geo.row - yOf(se.s)}px">${tName(p.teacherId)} ya da ${gLabel(x)}</div>`;
+        } else {
+          o += `<div class="busy" style="left:${GUT + se.d * geo.colW}px;width:${geo.colW}px;top:${yOf(se.s)}px;height:${yOf(se.s + se.len - 1) + geo.row - yOf(se.s)}px"></div>`;
+        }
+      }
+    }
+
+  }
+  ov.innerHTML = o;
+  // tooltip
+  let tt = `<div class="h">${gLabel(p)} → ${ui.view === 'salon' ? 'Salón ' + rName(p.roomId) : rName(p.roomId)}</div><div class="mut">${sesTxt(p)}</div>`;
+  if (st.hard.length) tt += st.hard.map(c => { const o = byId[c.a === p.id ? c.b : c.a]; return `<div class="bad">✕ ${cfText(c).t}<br><span class="mut">choca con ${gFull(o)} · ${tName(o.teacherId)}</span></div>`; }).join('');
+  if (st.soft.length) tt += st.soft.map(c => `<div class="warn">! ${cfText(c).t}</div>`).join('');
+  if (!sev) tt += `<div class="ok">✓ Aquí no choca con nada</div>`;
+  const pt = p.teacherId && T[p.teacherId];
+  if (pt && pt.prefs) {
+    const v = []; p.sessions.forEach(se => { for (let k = 0; k < se.len; k++) v.push(pt.prefs[se.d][se.s + k]); });
+    tt += `<div class="mut">Disponibilidad de ${tName(p.teacherId)}: ${['no disponible', 'poco preferido', 'preferido', 'muy preferido'][Math.min(...v)]}</div>`;
+  }
+  const fr = ROOMS.filter(r => p.sessions.every(se => { for (let k = 0; k < se.len; k++) if (!freeRoomsAt(se.d, se.s + k, p.id).some(x => x.id === r.id)) return false; return true; }));
+  tt += `<div style="margin-top:4px"><b>Salones libres en ese horario (${fr.length}):</b><br>${fr.length ? fr.map(r => r.name + (r.cap ? ' <span class="mut">(' + r.cap + ')</span>' : '')).join(' · ') : 'ninguno'}</div>`;
+  byId = saveById;
+  showTip(e.clientX, e.clientY, tt);
+}
+function onDragEnd() {
+  removeEventListener('pointermove', onDragMove);
+  document.body.style.cursor = '';
+  const d = drag; drag = null; hideTip();
+  if (!d) return;
+  if (!d.active) {
+    ui.newForm = null; ui.sel = d.gid; render(); openCard(d.gid);
+    return;
+  }
+  if (d.prop) {
+    pushUndo();
+    const g = byId[d.gid];
+    g.sessions = d.prop.sessions; g.roomId = d.prop.roomId;
+    ui.sel = d.gid;
+  }
+  render();
+  if (d.prop) openCard(d.gid);
+}
+
+// ---------- Tarjeta del grupo ----------
+const card = document.getElementById('card');
+let cardId = null;
+function freeRoomsFor(g) {
+  return ROOMS.filter(r => !groups.some(x => x.id !== g.id && x.roomId === r.id &&
+    x.sessions.some(a => g.sessions.some(b => a.d === b.d && a.s < b.s + b.len && b.s < a.s + a.len))));
+}
+function openCard(gid) { cardId = gid; drawCard(); }
+function closeCard() { cardId = null; card.style.display = 'none'; }
+function drawCard() {
+  const g = cardId && byId[cardId];
+  if (!g || !g.sessions.length) { closeCard(); return; }
+  const st = A.per.get(g.id) || { hard: [], soft: [] };
+  const free = freeRoomsFor(g);
+  const names = g.items.map(i => i.name).filter((v, i, a) => a.indexOf(v) === i).join(' / ');
+  let h = `<button class="x" id="cardX" title="Cerrar">×</button>
+    <div class="cd">${g.items.map(i => i.code + ' · ' + i.seq).join('  +  ')}</div>
+    <h4>${names}</h4>
+    <div class="meta"><span>Profesor</span><b>${tFull(g.teacherId)}</b><span>Horario</span><b>${sesTxt(g)}</b><span>Salón</span><b>${rName(g.roomId)}${g.roomId && R[g.roomId].cap ? ' (cap. ' + R[g.roomId].cap + ')' : ''}</b></div>`;
+  if (st.hard.length || st.soft.length) {
+    h += `<div class="sec">Choques</div>`;
+    h += st.hard.map(c => { const o = byId[c.a === g.id ? c.b : c.a]; return `<div class="ch1"><div class="t">${cfText(c).t}</div>Choca con ${gFull(o)} de ${tName(o.teacherId)}${c.type === 'prof' ? ' en ' + rName(o.roomId) : ''} · ${cellsTxt(c.cells)}</div>`; }).join('');
+    h += st.soft.map(c => `<div class="ch1 soft"><div class="t">${cfText(c).t}</div>${c.type === 'disp' ? cellsTxt(c.cells) : ''}</div>`).join('');
+  } else h += `<div class="okc">✓ No choca con nada</div>`;
+  h += `<div class="sec">Salones libres en este horario (${free.filter(r => r.id !== g.roomId).length})</div>`;
+  h += free.length ? `<div class="rooms">${free.map(r => `<button data-room="${r.id}" class="${r.id === g.roomId ? 'cur' : ''}">${r.name}<small>${r.id === g.roomId ? 'actual' : (r.cap ? 'cap. ' + r.cap : '&nbsp;')}</small></button>`).join('')}</div>
+    <div class="note">Clic en un salón para cambiar el grupo ahí.</div>` : `<div class="note">No hay ningún salón libre en este horario.</div>`;
+  card.innerHTML = h;
+  card.style.display = 'block';
+  document.getElementById('cardX').onclick = closeCard;
+  card.querySelectorAll('[data-room]').forEach(b => b.onclick = () => {
+    if (b.dataset.room === g.roomId) return;
+    pushUndo(); g.roomId = b.dataset.room; render();
+  });
+  placeCard();
+}
+function placeCard() {
+  if (!cardId || card.style.display === 'none') return;
+  const els = [...gb.querySelectorAll(`.blk[data-g="${cardId}"]`)];
+  const wr = wrap.getBoundingClientRect();
+  const el = els.find(e => { const r = e.getBoundingClientRect(); return r.right > wr.left && r.left < wr.right && r.bottom > wr.top && r.top < wr.bottom; }) || els[0];
+  const cw = card.offsetWidth, chh = card.offsetHeight;
+  let left, top;
+  if (el) {
+    const r = el.getBoundingClientRect();
+    left = r.right + 10; if (left + cw > innerWidth - 8) left = r.left - cw - 10;
+    if (left < 8) left = Math.min(innerWidth - cw - 8, r.left + 20);
+    top = r.top;
+  } else { left = wr.right - cw - 12; top = wr.top + 12; }
+  top = Math.max(8, Math.min(innerHeight - chh - 8, top));
+  card.style.left = left + 'px'; card.style.top = top + 'px';
+}
+wrap.addEventListener('scroll', placeCard);
+gb.addEventListener('pointerdown', e => { if (!e.target.closest('.blk')) closeCard(); });
+
+// ---------- Controles ----------
+document.getElementById('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; render(); };
+document.getElementById('dayPills').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.day = +b.dataset.d; render(); };
+// Menú de selección múltiple con casillas y buscador
+const msAll = [];
+function multiSelect(rootId, label, getItems, set) {
+  const root = document.getElementById(rootId);
+  root.innerHTML = `<button class="ms-btn" type="button"></button>
+    <div class="ms-pop" hidden><input class="ms-q" type="search" placeholder="Buscar…">
+    <div class="ms-acts"><button type="button" data-a="all">Marcar todos</button><button type="button" data-a="none">Limpiar</button></div>
+    <div class="ms-list"></div></div>`;
+  const btn = root.querySelector('.ms-btn'), pop = root.querySelector('.ms-pop'), q = root.querySelector('.ms-q'), list = root.querySelector('.ms-list');
+  const shown = () => { const qq = q.value.trim().toLowerCase(); return getItems().filter(it => !qq || (it.label + ' ' + (it.sub || '')).toLowerCase().includes(qq)); };
+  const draw = () => {
+    list.innerHTML = shown().map(it => `<label class="ms-it"><input type="checkbox" value="${it.id}" ${set.has(it.id) ? 'checked' : ''}><span>${it.label}${it.sub ? `<small>${it.sub}</small>` : ''}</span></label>`).join('') || '<div class="ms-empty">Sin resultados</div>';
+  };
+  const sync = () => {
+    const n = set.size;
+    btn.innerHTML = `${label}${n ? ` <span class="cnt">${n}</span>` : ''} <span class="car">▾</span>`;
+    btn.classList.toggle('on', n > 0);
+    if (!pop.hidden) draw();
+  };
+  btn.onclick = () => { const open = pop.hidden; msAll.forEach(m => m.close()); if (open) { pop.hidden = false; q.value = ''; draw(); q.focus(); } };
+  q.oninput = draw;
+  list.onchange = e => { const v = e.target.value; if (e.target.checked) set.add(v); else set.delete(v); render(); };
+  root.querySelector('.ms-acts').onclick = e => {
+    const a = e.target.dataset.a; if (!a) return;
+    if (a === 'all') shown().forEach(it => set.add(it.id)); else set.clear();
+    render();
+  };
+  const m = { sync, close: () => { pop.hidden = true; } };
+  msAll.push(m);
+  return m;
+}
+const nGroups = f => groups.filter(g => g.sessions.length && f(g)).length;
+multiSelect('msProf', 'Profesores', () => [...DATA.teachers]
+  .filter(t => groups.some(g => g.teacherId === t.id))
+  .sort((a, b) => natural(titleCase(a.short), titleCase(b.short)))
+  .map(t => { const n = nGroups(g => g.teacherId === t.id); return { id: t.id, label: titleCase(t.short), sub: titleCase(t.full) + ' · ' + n + ' grupo' + (n === 1 ? '' : 's') }; }), ui.profs);
+multiSelect('msRoom', 'Salones', () => ROOMS.map(r => { const n = nGroups(g => g.roomId === r.id); return { id: r.id, label: 'Salón ' + r.name, sub: (r.cap ? 'cap. ' + r.cap + ' · ' : '') + n + ' grupo' + (n === 1 ? '' : 's') }; }), ui.rooms);
+const COURSES = (() => {
+  const m = new Map();
+  for (const g of groups) for (const i of g.items) { if (!m.has(i.code)) m.set(i.code, { code: i.code, name: i.name, cr: i.cr, n: 0 }); m.get(i.code).n++; }
+  return [...m.values()].sort((a, b) => natural(a.name, b.name));
+})();
+multiSelect('msMat', 'Materias', () => COURSES.map(c => ({ id: c.code, label: c.name, sub: c.code + ' · ' + c.n + ' grupo' + (c.n === 1 ? '' : 's') })), ui.mats);
+document.addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('.ms'))) msAll.forEach(m => m.close()); });
+document.getElementById('clearF').onclick = () => { ui.profs.clear(); ui.rooms.clear(); ui.mats.clear(); render(); };
+function syncFilters() { msAll.forEach(m => m.sync()); document.getElementById('clearF').hidden = !filtering(); }
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('resetBtn').onclick = () => { if (!undoStack.length) return; pushUndo(); groups = JSON.parse(ORIGINAL); ui.sel = null; render(); };
+function undo() { if (!undoStack.length) return; groups = JSON.parse(undoStack.pop()); reindex(); if (ui.sel && !byId[ui.sel]) ui.sel = null; render(); }
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !/INPUT|SELECT/.test(e.target.tagName)) { e.preventDefault(); undo(); }
+  if (e.key === 'Escape' && true) msAll.forEach(m => m.close());
+  if (e.key === 'Escape' && cardId) { closeCard(); return; }
+  if (e.key === 'Escape' && ui.sel) { ui.sel = null; render(); }
+});
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { renderGrid(); placeCard(); }, 80); });
+
+render();
+})();
+</script>
+</body>
+</html>

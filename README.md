@@ -44,14 +44,17 @@ malla-horarios-web/
 │   ├── PROCESO-ACTUAL.md                — estado actual del proceso de asignación (as-is)
 │   ├── investigacion_asignacion_horarios.md — estado del arte académico (UCTP)
 │   ├── esquema de pizarron.jpeg         — boceto original del modelo de datos y del flujo de asignación
-│   └── mockup/                          — validación de contenido/flujo con los Jefes de Departamento
+│   └── mockup/                          — mockups / prototipos navegables (aquí son lo mismo): HTML/JS
+│       │                                   puro, sin backend ni base de datos, para validar contenido y
+│       │                                   flujo con los Jefes de Departamento antes de construirlo
 │       ├── cuestionario-profesores.md   — especificación del cuestionario de preferencias de profesores
 │       │                                   (materias y horarios, Tiempo Completo vs. Asignatura, y el
 │       │                                   contrato de datos propuesto hacia el backend)
-│       └── mockup-cuestionario.html     — mockup navegable de ese cuestionario (HTML/JS puro, sin
-│                                           backend ni base de datos, con login simulado y borrador
-│                                           guardado en el navegador) — ya reemplazado por `frontend/`
-│                                           como la app real; se conserva como referencia de contenido
+│       ├── mockup-cuestionario.html     — mockup del cuestionario (login simulado, borrador en el
+│       │                                   navegador) — ya reemplazado por `frontend/`; se conserva
+│       │                                   como referencia de contenido
+│       └── mockup-vista-malla.html      — mockup de la vista de la malla para la jefatura (Otoño 2026):
+│                                           grupos por día y franja, choques, avisos y grupos por asignar
 ├── frontend/                            — app real (React), servida desde horariosdace.itam.mx
 ├── api/                                 — API en PHP 7.4: login, formulario, respuestas, demanda,
 │                                           semestres; la autorización vive aquí (ver su README)
@@ -72,8 +75,8 @@ tomen esas decisiones.
 - [`docs/investigacion_asignacion_horarios.md`](docs/investigacion_asignacion_horarios.md) — estado del
   arte académico sobre asignación de horarios universitarios (UCTP), enfoques de solución y sistemas de
   referencia como UniTime.
-- [`docs/mockup/`](docs/mockup/) — especificación y mockup navegable del cuestionario de preferencias,
-  usados para validar contenido/flujo antes de construir `frontend/`.
+- [`docs/mockup/`](docs/mockup/) — mockups navegables: el del cuestionario de preferencias (con su
+  especificación) y el de la vista de la malla para la jefatura.
 
 ## Esquema original
 

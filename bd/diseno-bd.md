@@ -8,6 +8,13 @@
 > Referencias a `REQUERIMIENTOS.md`/`GUIA-DECISIONES.md`/`BITACORA.md` que aparezcan más abajo son a
 > documentos de trabajo internos que no viven en este repo — no hacen falta para entender el esquema en
 > sí, son solo contexto de por qué se tomó cada decisión.
+>
+> **Motor real (desde 2026-09-25): MySQL (MariaDB 5.5) en el servidor del ITAM**, no Postgres en la
+> nube. Las tablas de §6 conservan la notación de Postgres con la que se diseñaron (`serial`,
+> `boolean`, `timestamptz`…) porque el razonamiento sigue siendo el mismo; el DDL que corre de verdad
+> es [`mysql/schema-mysql.sql`](mysql/schema-mysql.sql). Lo que cambió con la migración está en §14,
+> y los cambios posteriores (correo y recuperación de contraseña, franjas por día y por
+> departamento, número de cursos opcional) en §15.
 
 ## 1. Contexto y fuentes
 
@@ -22,7 +29,7 @@ Este diseño se construyó cruzando:
   separar restricciones duras (disponibilidad) de blandas (preferencias) desde el modelo de datos, y
   confirma que el caso de ITAM es CB-CTP (basado en currícula), no PE-CTP (inscripción individual) —
   no hace falta modelar inscripción real de alumnos para construir la malla.
-- El cuestionario de profesores (`malla-horarios/interfaz/cuestionario-profesores.md` + su mockup) y
+- El cuestionario de profesores (`../docs/mockup/cuestionario-profesores.md` + su mockup) y
   el precedente Mat·Scheduler (`V1-Cheque/` = `CHEQUE/`), que dan el contrato de datos de Profesor,
   Preferencia, Materia y Grupo/Imparte.
 - **Documentos reales de Servicios Escolares** (`Info servicios escolares/`), revisados directamente
@@ -73,12 +80,19 @@ lado y que sí cambian el esquema:
 - **Franja horaria: tope confirmado a las 20:00.** Los reportes reales de grupos muestran clases hasta
   las 22:00, pero es una restricción de política del departamento (no de disponibilidad de salones)
   que **no se quiere seguir permitiendo** — el catálogo de franjas se queda 07:00–14:00 y 16:00–20:00,
-  22 franjas de 30 min, igual que ya tenía el mockup del cuestionario.
+  22 franjas de 30 min, igual que ya tenía el mockup del cuestionario. **Matizado después (§15):**
+  desde 2026-10-02 hay una franja 14:00–14:30 solo martes y jueves, y desde 2026-10-06 Estadística
+  (y solo Estadística) llega hasta las 22:00 — 27 franjas en total.
 - **Normalización explícita**: no se guardan columnas duplicadas (profesor/salón/semestre) solo para
   simplificar una restricción — las reglas de no-doble-booking se aplican con triggers (ver
   `triggers.sql`), no con columnas denormalizadas.
 
 ## 4. Dónde vive la base de datos — RESUELTO 2026-09-21: un proveedor de base de datos en la nube + GitHub Pages
+
+> **Superado el 2026-09-25 (ver §14):** el sistema se mudó al servidor del ITAM
+> (`horariosdace.itam.mx`, MariaDB 5.5 + PHP 7.4), con un API propio en PHP entre el navegador y la
+> base. Ya no hay RLS ni Edge Functions: las 38 políticas se volvieron autorización explícita en los
+> endpoints. Esta sección y sus subsecciones quedan como registro de la decisión anterior.
 
 `Investigacion/investigacion_tecnologias_sistema.md` y `BITACORA.md` (2026-08-07) habían decidido
 originalmente RNF04/RNF05: PostgreSQL en una PC propia de la oficina, Linux, con Docker, acceso solo
@@ -277,12 +291,13 @@ clases — ver §4.1. Un admin/Servicios Escolares/Nómina que no dé clases tam
 | cu | varchar(10) UNIQUE NOT NULL | Clave Única — login para cualquier rol; evita duplicados por fuzzy-match de nombre (bug detectado en Mat·Scheduler, `generate_data.py`). También es la contraseña inicial (decisión 2026-09-21, cambiarla es opcional) |
 | password_hash | text NOT NULL | hash (bcrypt), nunca texto plano; se inicializa como `hash(cu)` |
 | nombre | text NOT NULL | |
-| correo | varchar(255) NULL | **Agregada 2026-10-02.** Opcional; lo captura la persona en "Mi perfil" o al darse de alta (`api/perfil.php`, `api/registro.php`). Se guarda en minúsculas y se valida como correo. Para que la jefatura pueda contactar a cada profesor (cartas de asignación) |
+| correo | varchar(191) NULL UNIQUE | **Agregada 2026-10-02.** Lo captura la persona en "Mi perfil" o al darse de alta. Se guarda en minúsculas y se valida como correo. Para que la jefatura pueda contactar a cada profesor (cartas de asignación) y para **recuperar la contraseña** (§15): por eso es único — un correo señala a una sola cuenta. La base admite NULL (el roster cargado no trae correos), pero el API lo exige: a quien no lo tiene, la app se lo pide al entrar. 191 y no 255 por el tope de índice de InnoDB con utf8mb4 |
 | rol | rol_enum NOT NULL DEFAULT 'profesor' | `profesor` \| `jefe_departamento` \| `jefe_division` \| `servicios_escolares` \| `nomina` \| `admin` — se firma directo como claim en el JWT de login, no se consulta en cada política RLS (más barato). **`jefe_division` se agregó 2026-09-25**: la División Académica (DACE) está arriba de los departamentos, así que su alcance son los 3 (Matemáticas, Actuaría, Estadística). Tiene el mismo alcance que `admin` pero no es lo mismo: admin administra el sistema, jefe_division dirige la división y sigue dando clases. En el código la pregunta se hace por comportamiento (`ve_todos_los_departamentos()` en `api/lib/auth.php`), nunca comparando contra un rol concreto. **Desde 2026-10-02, temporalmente, `jefe_division` ve solo su propio departamento** (Matemáticas) y conserva el manejo de semestres (`DIVISION_SOLO_SU_DEPARTAMENTO` y `administra_semestres()` en `api/lib/auth.php`) |
 | departamento_id | int NULL FK → departamento | NULL solo si rol ∈ {admin, servicios_escolares, nomina}; obligatorio para profesor/jefe_departamento/jefe_division (ambos dan clases, confirmado 2026-08-21 que un profesor puede impartir materias de OTROS departamentos aunque pertenezca a uno solo) |
 | tipo_contrato | tipo_contrato_enum NULL | `tiempo_completo` \| `asignatura` — taxonomía de 2 valores del cuestionario actual (autoritativa; la de 3 valores `hours`/`half-time`/`full-time` de Mat·Scheduler queda obsoleta). NULL bajo la misma condición que `departamento_id` |
 | modo_materias_elegibles | modo_materias_enum NOT NULL DEFAULT 'todas' | `todas` \| `personalizada` \| `ninguna` — qué ve el profesor en su cuestionario; solo aplica a quien realmente da clases. **Eliminada 2026-09-28** (ver §12) |
 | password_predeterminada | boolean NOT NULL DEFAULT true | true = sigue usando `cu` como contraseña, no la ha cambiado — informativo para admin/Jefe, no bloquea nada |
+| estado_especial | text NULL | sabático/licencia/jubilación. Distinto de `activo`, que dice si la cuenta sirve para entrar |
 | activo | boolean NOT NULL DEFAULT true | |
 | CHECK | | `rol IN ('admin','servicios_escolares','nomina') OR (departamento_id IS NOT NULL AND tipo_contrato IS NOT NULL)` |
 
@@ -370,7 +385,9 @@ inventar el catálogo de equivalencias de cero.
 | id | serial PK | |
 | tipo | tipo_semestre_enum NOT NULL | `primavera` \| `verano` \| `otono` |
 | anio | int NOT NULL | |
-| etiqueta | text GENERATED (`tipo || '-' || anio`) | p.ej. 'otono-2026' |
+| etiqueta | text GENERATED (`tipo || '-' || anio`) | p.ej. 'otono-2026'. **En MySQL ya no es columna** (§14): se arma al leerla |
+| estado | enum NOT NULL DEFAULT 'cerrado' | `activo` \| `cerrado`. **Exactamente uno activo** (§13), el que se está planeando |
+| abierto_at / abierto_por / cerrado_at | datetime / int FK → profesor / datetime | cuándo y quién lo activó, cuándo se cerró (UTC) |
 | UNIQUE(tipo, anio) | | |
 
 ### `departamento_semestre_config` (nueva, 2026-09-21)
@@ -383,6 +400,8 @@ departamento) o admin (de cualquiera) — ver política `departamento_config_esc
 | semestre_id | int FK → semestre | |
 | mostrar_seleccion_materias | boolean NOT NULL DEFAULT true | `false` = el cuestionario de ese departamento ese semestre NO muestra selección de materias — el profesor solo declara disponibilidad de horario. **Obsoleta desde 2026-09-28**: no tener secciones de materias en `cuestionario_seccion` significa lo mismo (§12) |
 | horas_minimas_verde | numeric(5,2) NOT NULL DEFAULT 10 | resuelve D18 de `GUIA-DECISIONES.md` con un valor por defecto, configurable por departamento |
+| texto_introduccion | text NULL | texto de arriba del formulario; NULL = el de siempre (§12) |
+| publicado / publicado_at / publicado_por | boolean DEFAULT false / datetime / int FK → profesor | sin publicar, los profesores no ven el formulario y el API rechaza guardar (§12) |
 | PK(departamento_id, semestre_id) | | |
 
 ### `estimacion_demanda` (antes `Estimación_Demanda` del boceto de 2026-08-11 — dispara la creación de `grupo`)
@@ -397,7 +416,7 @@ Estructura tomada directamente de los reportes reales de Servicios Escolares
 | nuevo_ingreso | int NOT NULL DEFAULT 0 | columna "N.I." |
 | pct_baja | numeric(5,2) NULL | |
 | pct_reprobacion | numeric(5,2) NULL | |
-| con_prerrequisito | int NOT NULL DEFAULT 0 | alumnos que ya cubrieron el prerrequisito |
+| con_prerrequisito | numeric(8,2) NOT NULL DEFAULT 0 | alumnos que ya cubrieron el prerrequisito. Era `int`; pasó a decimal el 2026-09-29 porque Actuaría la trae con decimales (§13) |
 | demanda_ajustada | numeric(8,2) NULL | columna "Suma" del reporte real — demanda ya ajustada por Servicios Escolares, se guarda tal cual, no se recalcula |
 | capacidad_planeacion | int NULL | columna "Cap." — cupo de referencia usado para estimar `grupos_sugeridos`; constante (30) en los 3 reportes revisados, pero se guarda por fila por si cambia |
 | grupos_periodo_anterior | int NOT NULL DEFAULT 0 | columna "2025" del reporte (offering previo) |
@@ -411,15 +430,18 @@ revisadas — es derivable, no se guarda (evita redundancia mantenida a mano, ve
 upsert) y la normalización de clave (Matemáticas usa guion, Actuaría/Estadística no).
 
 ### `franja_horaria` (catálogo fijo de bloques de 30 min — hace estructuralmente imposible violar la regla de comida)
-Se pre-carga una sola vez con Lunes–Viernes 07:00–14:00 y 16:00–20:00 (22 franjas, igual que el
-mockup del cuestionario); **nunca** se inserta una franja entre 14:00–16:00 (RN05). Tope confirmado a
-las 20:00 — ver §3.
+Se pre-carga con Lunes–Viernes 07:00–14:00 y 16:00–20:00 (22 franjas, igual que el mockup del
+cuestionario) y **dos excepciones acotadas** (§15): 14:00–14:30 solo martes y jueves, y 20:00–22:00
+solo para Estadística. 27 franjas en total. Fuera de esa media hora, nunca hay franja entre
+14:00–16:00 (RN05).
 | Columna | Tipo | Notas |
 |---|---|---|
 | id | serial PK | |
 | hora_inicio | time NOT NULL UNIQUE | |
 | hora_fin | time NOT NULL | |
 | orden | int NOT NULL | para ordenar en UI |
+| dias | set de días NULL | **Agregada 2026-10-02.** NULL = todos los días. La franja de 14:00 lleva `martes,jueves`: la rejilla la muestra bloqueada los demás días y el API descarta esas celdas |
+| departamento_id | int NULL FK → departamento | **Agregada 2026-10-06.** NULL = todos los departamentos. Las 4 franjas de 20:00–22:00 llevan el id de Estadística: solo su formulario las muestra, el API descarta las celdas de quien no es de ese departamento, y solo Estadística tiene filas en `salon_disponibilidad_departamento` para ellas (así el trigger de `imparte_horario` rechaza asignarle esas horas a otro departamento) |
 
 ### `salon`
 | Columna | Tipo | Notas |
@@ -516,11 +538,11 @@ Reglas de negocio validadas vía trigger/aplicación (agregados, no expresables 
 | id | serial PK | |
 | profesor_id | int NOT NULL FK → profesor | |
 | semestre_id | int NOT NULL FK → semestre | |
-| num_cursos_max | int NOT NULL CHECK (num_cursos_max BETWEEN 1 AND 6) | |
+| num_cursos_max | int NULL CHECK (num_cursos_max BETWEEN 1 AND 6) | **NULL desde 2026-10-02**: la pregunta "Número de cursos" es opcional y la jefatura la puede quitar de su formulario; quien contesta un formulario sin ella guarda NULL (§15) |
 | otro_curso | text NULL | |
-| horarios_otro_depto | text NULL | solo relevante si `profesor.tipo_contrato = 'asignatura'` (RN03: tope 10 hrs/semana cruzando departamentos) |
-| observaciones_cursos | text NULL | |
-| observaciones_horarios | text NULL | |
+| horarios_otro_depto | text NULL | solo relevante si `profesor.tipo_contrato = 'asignatura'` (RN03: tope 10 hrs/semana cruzando departamentos). **Obsoleta desde 2026-09-28**: ahora es una pregunta abierta (`preferencia_respuesta`, §12) |
+| observaciones_cursos | text NULL | **Obsoleta desde 2026-09-28**, igual que la anterior |
+| observaciones_horarios | text NULL | **Obsoleta desde 2026-09-28**, igual que la anterior |
 | estado | estado_preferencia_enum NOT NULL DEFAULT 'borrador' | `borrador` \| `enviado` |
 | enviado_at | timestamptz NULL | |
 | UNIQUE(profesor_id, semestre_id) | | |
@@ -552,6 +574,83 @@ Las opciones que ve el profesor salen del formulario de su departamento (`cuesti
 sin definir, depende de la junta de Jefes de Departamento. No bloquea el esquema (es una validación de
 aplicación al momento de enviar, no una columna).
 
+### `cuestionario_seccion` (nueva 2026-09-28 — el formulario editable, ver §12)
+Bloques del formulario de un departamento/semestre, en orden. Sin filas, el editor siembra una
+plantilla la primera vez que se abre.
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| departamento_id | int NOT NULL FK → departamento | |
+| semestre_id | int NOT NULL FK → semestre | |
+| tipo | enum NOT NULL | `num_cursos` \| `materias` \| `disponibilidad` \| `abierta`. `disponibilidad`: exactamente una; `num_cursos`: a lo más una, y opcional desde 2026-10-02 (se valida en el API) |
+| titulo | text NOT NULL | |
+| descripcion | text NULL | |
+| audiencia | enum NOT NULL DEFAULT 'todos' | `todos` \| `tiempo_completo_medio` \| `asignatura` |
+| minimo_verdes | int NULL | solo tipo `materias`; NULL = sin mínimo |
+| cobertura_departamental | boolean NOT NULL DEFAULT false | solo tipo `materias`; se copia a `preferencia_materia.cobertura_departamental` |
+| obligatoria | boolean NOT NULL DEFAULT false | solo tipo `abierta` |
+| orden | int NOT NULL | |
+| activa | boolean NOT NULL DEFAULT true | borrado suave: `preferencia_respuesta` la referencia |
+
+### `materia_cuestionario` (qué materias ve el formulario y en qué sección)
+| Columna | Tipo | Notas |
+|---|---|---|
+| materia_id | int FK → materia | |
+| semestre_id | int FK → semestre | |
+| seccion_id | int NULL FK → cuestionario_seccion | NULL = oculta. **Sin fila** = cae en la primera sección de materias para todos (fail-open) |
+| alias_de_id | int NULL FK → materia | esta materia es el nombre viejo de otra; se muestra "(antes …)". Se cura a mano, no se deriva de `materia_co_oferta`. CHECK: distinto de `materia_id`, y si hay alias la fila va oculta |
+| etiqueta | text NULL | nombre a mostrar cuando `materia.nombre` no sirve tal cual |
+| orden | int NULL | |
+| revisado | boolean NOT NULL DEFAULT false | false = la puso un seed automático y la jefatura no la ha confirmado |
+| PK(materia_id, semestre_id) | | |
+
+Ejemplo real del patrón de alias (2026-10-06, Matemáticas): MAT-24410 Programación Lineal y
+MAT-24430 Análisis Aplicado I ahora son MAT-24433 Optimización Numérica I; MAT-24431 pasa a
+MAT-24435 Optimización Numérica II; MAT-24500 pasa a MAT-24505 Investigación de Operaciones I. La
+clave nueva ocupa la sección de la vieja, la vieja queda oculta con `alias_de_id` a la nueva, la
+co-oferta se guarda en ambas direcciones y las respuestas ya dadas con la clave vieja se mueven a la
+nueva. Es un cambio de datos, no de esquema.
+
+### `preferencia_respuesta` (nueva 2026-09-28 — respuestas a preguntas abiertas)
+| Columna | Tipo | Notas |
+|---|---|---|
+| preferencia_id | int FK → preferencia (ON DELETE CASCADE) | |
+| seccion_id | int FK → cuestionario_seccion | una sección de tipo `abierta` |
+| texto | text NOT NULL | |
+| PK(preferencia_id, seccion_id) | | |
+
+### `bloqueo_profesor_materia` (nueva 2026-09-28 — restricción DURA puesta por la jefatura)
+Capa aparte a propósito: la respuesta del profesor se conserva intacta, al desbloquear vuelve a contar,
+y el profesor nunca ve el bloqueo.
+| Columna | Tipo | Notas |
+|---|---|---|
+| profesor_id | int FK → profesor | |
+| materia_id | int FK → materia | |
+| semestre_id | int FK → semestre | |
+| bloqueado_por | int NOT NULL FK → profesor | quién de la jefatura lo bloqueó |
+| bloqueado_at | datetime NOT NULL | UTC |
+| PK(profesor_id, materia_id, semestre_id) | | |
+
+### `intento_login` (infraestructura del API — solo existe en MySQL, ver §14)
+Límite de intentos de login. PHP no guarda estado entre peticiones, así que el contador vive aquí.
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| llave | varchar(64) NOT NULL | el `cu` en el login, el `profesor_id` en el cambio de contraseña, con prefijo para no mezclarlos |
+| momento | datetime NOT NULL | UTC. Ventana de 5 min: 8 intentos para login, 5 para cambio de contraseña. Cada consulta borra lo más viejo que la ventana |
+
+### `recuperacion_password` (nueva 2026-10-02 — "olvidé mi contraseña", ver §15)
+Un token de un solo uso por solicitud. Se guarda el **SHA-256 del token, nunca el token**: quien lea
+la tabla (un respaldo, phpMyAdmin) no puede usarla para entrar a ninguna cuenta.
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| profesor_id | int NOT NULL FK → profesor (ON DELETE CASCADE) | |
+| token_hash | char(64) NOT NULL UNIQUE | SHA-256 en hex del token que va en el enlace |
+| creado_at | datetime NOT NULL | UTC |
+| expira_at | datetime NOT NULL | UTC, una hora después de `creado_at` |
+| usado_at | datetime NULL | se llena al restablecer; un token usado no vuelve a servir |
+
 ## 7. Resumen de relaciones
 
 - `departamento` 1—N `profesor`, `materia`
@@ -573,6 +672,11 @@ aplicación al momento de enviar, no una columna).
 - `profesor` N—1 `departamento` (NULL si rol ∈ {admin, servicios_escolares, nomina}) — ya no hay una
   tabla `usuario` aparte, el rol vive en `profesor.rol` (ver §4.1/§4.3)
 - `departamento` 1—N `departamento_semestre_config` (por semestre); `semestre` 1—N `departamento_semestre_config`
+- `departamento` + `semestre` 1—N `cuestionario_seccion`; `cuestionario_seccion` 1—N
+  `materia_cuestionario` y 1—N `preferencia_respuesta`; `preferencia` 1—N `preferencia_respuesta` (§12)
+- `materia_cuestionario` N—1 `materia` vía `alias_de_id` (nombre viejo → nombre nuevo)
+- `departamento` 1—N `franja_horaria` (opcional: solo las franjas exclusivas de un departamento, §15)
+- `profesor` 1—N `recuperacion_password` (§15)
 
 Ver también [`diagrama-er.md`](diagrama-er.md) para la versión visual (Mermaid).
 
@@ -583,11 +687,14 @@ Ver también [`diagrama-er.md`](diagrama-er.md) para la versión visual (Mermaid
 | Sin traslape de profesor | trigger sobre `imparte_horario`, vía `imparte_profesor` + `imparte`→`grupo`→`semestre_id` |
 | Sin traslape de salón (RN02) | trigger sobre `imparte_horario`, mismo semestre/día/franja |
 | Salón asignado solo a departamentos autorizados | validación de aplicación/trigger contra `salon_disponibilidad_departamento` (sin restricción real en V1, ver §2/§3) |
-| Bloque de comida 14:00–16:00 nunca ofertado (RN05) | estructural: esas franjas no existen en `franja_horaria` |
+| Bloque de comida 14:00–16:00 nunca ofertado (RN05) | estructural: esas franjas no existen en `franja_horaria`, salvo la excepción 14:00–14:30 martes y jueves (`franja_horaria.dias`, §15) |
+| Horario extendido 20:00–22:00 solo para Estadística | `franja_horaria.departamento_id` + filas de `salon_disponibilidad_departamento` solo para Estadística (§15); el API descarta esas celdas para otros departamentos |
+| Un solo semestre activo | API (transacción en `api/semestres.php`): MariaDB 5.5 no tiene índices parciales (§13) |
+| Recuperación de contraseña segura | `recuperacion_password`: token hasheado, de un solo uso, vence en una hora; `profesor.correo` UNIQUE (§15) |
 | Sin medias horas sueltas (RN06) | validación de aplicación sobre la malla completa del día (no es un CHECK por fila) |
 | Suma de créditos de un grupo | validación de aplicación: `COUNT(imparte_horario) * 0.5 = materia.creditos` |
 | Tope de horas Asignatura ≤10 hrs/semana cruzando departamentos (RN03) | validación de aplicación: `SUM` de franjas vía `imparte_horario`+`imparte_profesor` por `profesor_id`+`semestre_id` |
-| Asignación por tipo de contrato: TC por curso, Asignatura por hora (RN04) | interpretación de aplicación sobre `preferencia.num_cursos_max` según `profesor.tipo_contrato` |
+| Asignación por tipo de contrato: TC por curso, Asignatura por hora (RN04) | interpretación de aplicación sobre `preferencia.num_cursos_max` según `profesor.tipo_contrato` (NULL si el formulario no tenía la pregunta) |
 | Cupo de salón vs. tamaño de grupo | validación de aplicación al asignar `salon_id` en `imparte_horario`: `grupo.cupo_maximo <= salon.capacidad` |
 | Salón con equipo requerido (ej. sala de cómputo) | trigger sobre `imparte_horario`: `materia.tipo_salon_requerido` debe igualar `salon.tipo` cuando no es NULL |
 | No cambio de salón tras publicar (RN09) | `grupo.publicado`, validación de aplicación al editar `imparte_horario` |
@@ -835,19 +942,23 @@ qué, aplicable también a esta pantalla de carga de catálogo.
 - [`README.md`](README.md) — índice de la carpeta.
 - **`diseno-bd.md`** (este archivo) — el diseño completo.
 - [`diagrama-er.md`](diagrama-er.md) — diagrama entidad-relación en Mermaid.
-- [`schema.sql`](schema.sql) — DDL de Postgres (enums + tablas + constraints).
-- [`rls-policies.sql`](rls-policies.sql) — políticas de Row Level Security (obligatorio
-  antes de recolectar datos reales, ver §4.1).
-- [`seed.sql`](seed.sql) — datos semilla (departamentos, franjas horarias, salones de ejemplo,
-  disponibilidad compartida entre los 3 departamentos).
-- [`triggers.sql`](triggers.sql) — funciones/triggers para las restricciones duras que no caben en un
-  CHECK simple.
+- [`motor-asignacion.md`](motor-asignacion.md) — qué lee y qué escribe el motor de asignación.
+- **[`mysql/`](mysql/) — el esquema que corre hoy** (MariaDB 5.5, §14):
+  - [`schema-mysql.sql`](mysql/schema-mysql.sql) — DDL, ya en su estado final (incluye todo lo de §15).
+  - [`checks-como-triggers.sql`](mysql/checks-como-triggers.sql) — **obligatorio**: MariaDB 5.5
+    ignora los `CHECK`, estos triggers hacen su trabajo.
+  - [`triggers-mysql.sql`](mysql/triggers-mysql.sql) — las restricciones duras que no caben en un
+    CHECK simple (traslapes de profesor/salón, salón autorizado, tipo de salón).
+  - [`seed-mysql.sql`](mysql/seed-mysql.sql) — catálogo base: departamentos, las 27 franjas,
+    semestres, salones de ejemplo y su disponibilidad.
+  - Las migraciones fechadas (`migracion-*.sql`) y los datos reales traducidos (`datos-*.sql`,
+    `cargar-profesores.php`): ver [`mysql/README.md`](mysql/README.md) para el orden de cada uno.
+- **Postgres, histórico** (el diseño original, antes de la migración):
+  [`schema.sql`](schema.sql), [`triggers.sql`](triggers.sql), [`rls-policies.sql`](rls-policies.sql),
+  [`seed.sql`](seed.sql). No incluyen los cambios de §15.
 
-**Nota de alcance:** el hosting ya está decidido (§4: un proveedor de base de datos en la nube + GitHub Pages), pero estos `.sql`
-todavía no se han ejecutado contra ningún proyecto real. Falta: crear el proyecto,
-correr `schema.sql` → `triggers.sql` → `rls-policies.sql` → `seed.sql` en ese orden, configurar
-el sistema de autenticación nativo del proveedor para el login de profesores, y construir el frontend real que reemplace al mockup
-(hoy `mockup-cuestionario.html` no llama a ningún backend).
+La copia de `malla-horarios/bd/` trae solo el esquema y el catálogo base: no lleva las migraciones
+ni los datos reales.
 
 ## 12. Formulario editable por jefatura (2026-09-28)
 
@@ -905,3 +1016,73 @@ partir la tabla en cuatro — el formulario se lee siempre completo y en orden.
   conservando el nombre del catálogo. El código de periodo del archivo (`202603`) es año + 01
   primavera / 02 verano / 03 otoño, confirmado con el encabezado "Otoño 2026" del PDF de Actuaría.
   Subir la estimación **reemplaza** la anterior del departamento y semestre.
+
+## 14. Migración a MySQL en el servidor del ITAM (2026-09-25)
+
+El sistema dejó el proveedor de base de datos en la nube y GitHub Pages: ahora vive en
+`horariosdace.itam.mx`, un servidor del ITAM con **MariaDB 5.5.68 + PHP 7.4**. El navegador ya no le
+habla a la base directamente sino a un API propio en PHP. El diseño lógico (tablas, llaves,
+relaciones, formas normales) **no cambió**; lo que cambió es cómo se escribe y dónde se protege.
+
+**Seguridad: de RLS a autorización en el API.** MySQL no tiene Row Level Security. Las 38 políticas
+de `rls-policies.sql` se volvieron chequeos explícitos en los endpoints (cada uno nombra en su
+encabezado la política que reemplaza). Los roles son los mismos de `profesor.rol`, y el alcance se
+pregunta por comportamiento ("¿ve todos los departamentos?"), nunca comparando contra el nombre de un
+rol. `password_hash` ya no necesita privilegios por columna: solo lo seleccionan dos
+endpoints (login y cambio de contraseña), y ninguna respuesta del API lo incluye.
+
+**Lo que MariaDB 5.5 no tiene, y qué se hizo:**
+
+| Falta en 5.5 | Qué se hizo |
+|---|---|
+| `CHECK` real (llegó en 10.2): se parsea y se **ignora en silencio** | Los `CHECK` se quedan escritos como documentación, pero lo que protege es `checks-como-triggers.sql` (obligatorio) más la validación en PHP |
+| Columnas calculadas con la sintaxis usual | `semestre.etiqueta` deja de ser columna; se arma al leerla |
+| Tipo `JSON` | `imparte.overrides` es `LONGTEXT` (vacía hoy) |
+| Varios `TIMESTAMP` automáticos por tabla | `imparte.updated_at` es el automático (`ON UPDATE CURRENT_TIMESTAMP`); `created_at` lo escribe la aplicación. Todas las fechas se guardan en UTC |
+| Índices parciales | "un solo semestre activo" lo garantiza el API en una transacción |
+
+**Traducciones mecánicas:** los enums de Postgres pasan a `ENUM(...)` en cada columna (agregar un
+valor obliga a un `ALTER` por tabla); `text` con `UNIQUE` pasa a `VARCHAR(191)` por el tope de índice
+de InnoDB con utf8mb4; todo es `utf8mb4_unicode_ci`.
+
+**Un bug que la traducción hizo visible:** `materia_prerequisito` y `materia_equivalencia` tenían
+`plan_estudio_id` nullable ("aplica en todos los planes") **dentro de la llave primaria**. Ningún
+motor admite NULL en una PK, así que esas filas nunca se pudieron guardar. En MySQL se arregló con un
+`id` propio más `UNIQUE (…, plan_estudio_id)`. Salvedad: el `UNIQUE` admite varios NULL, así que no
+impide dos filas "aplica a todos" idénticas. El `schema.sql` de Postgres sigue con el bug.
+
+**Tabla nueva:** `intento_login` (§6). Antes el límite de intentos vivía en memoria de la Edge
+Function; PHP no conserva estado entre peticiones.
+
+## 15. Cambios del 2026-10-02 y 2026-10-06
+
+Todos ya están en `mysql/schema-mysql.sql` y en `mysql/seed-mysql.sql`. En una base que ya existía
+se aplicaron como migraciones aditivas, antes de desplegar el API que las lee.
+
+**2026-10-02**
+
+- **Correo del profesor.** `profesor.correo` (nueva). Primero opcional; el mismo día pasó a
+  **UNIQUE** y obligatorio en el API (registro y "Mi perfil"), porque con él se recupera la
+  contraseña. La base sigue admitiendo NULL para el roster que todavía no lo captura: a esas personas
+  la app les pide el correo al entrar.
+- **Recuperar la contraseña.** Tabla `recuperacion_password` (§6): el profesor pide un enlace con su
+  correo, el enlace lleva un token de un solo uso que vence en una hora, y en la base solo queda el
+  hash del token.
+- **"Número de cursos" es opcional.** La jefatura puede quitar esa sección de su formulario, así que
+  `preferencia.num_cursos_max` acepta NULL. El trigger que valida el rango 1–6 deja pasar el NULL y
+  sigue rechazando 0, 7, etc.
+- **Franja 14:00–14:30 solo martes y jueves.** `franja_horaria.dias` (nueva, NULL = todos los días).
+  Excepción acotada a RN05, pedida para todos los departamentos. Se insertó en el lugar 15 del orden
+  (las de la tarde bajaron una posición) con su disponibilidad de salones solo martes y jueves.
+- **Alcance de la jefatura de división.** Temporalmente, `jefe_division` ve solo su propio
+  departamento (Matemáticas) y conserva el manejo de semestres. Es una regla del API, no del esquema.
+
+**2026-10-06**
+
+- **Franjas 20:00–22:00 solo para Estadística.** `franja_horaria.departamento_id` (nueva, NULL = todos
+  los departamentos). Cuatro franjas nuevas (orden 24 a 27) con el id de Estadística, y disponibilidad
+  de salones solo para ese departamento. Matemáticas y Actuaría siguen terminando a las 20:00. Esto
+  matiza el "tope a las 20:00" de §3: el tope sigue para dos departamentos, no para los tres.
+- **Claves nuevas de Matemáticas** (Optimización Numérica I y II, Investigación de Operaciones I).
+  Es un cambio de datos que usa el patrón de alias de `materia_cuestionario` (ver el ejemplo en §6);
+  no cambia el esquema.
