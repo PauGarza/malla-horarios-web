@@ -9,18 +9,20 @@ para quien construya el motor de asignación (profesores–horarios–salones).
   primero — resume exactamente qué tablas leer, qué escribir, y qué reglas hay que respetar. No hace
   falta leer todo `diseno-bd.md` para empezar.
 - **¿Necesitas el detalle completo de una tabla** (columnas, tipos, por qué existe)?
-  [`diseno-bd.md`](diseno-bd.md).
+  [`diseno-bd.md`](diseno-bd.md). Los cambios más recientes están en sus §14 (migración a MySQL) y
+  §15 (2026-10-02 y 2026-10-06).
 - **¿Prefieres verlo como diagrama?** [`diagrama-er.md`](diagrama-er.md) (Mermaid, se renderiza en
   GitHub/VS Code directo).
-- **¿Vas a levantar la base de datos?** `schema.sql` → `triggers.sql` → `rls-policies.sql` →
-  `seed.sql`, en ese orden.
+- **¿Vas a levantar la base de datos?** Usa la de MySQL: [`mysql/README.md`](mysql/README.md) tiene el
+  orden de carga, las migraciones y los datos reales.
 
 ## Estado
 
-Los `.sql` ya corrieron contra la base real y el backend de autenticación (`../backend/`) está
-desplegado y en uso. A partir de 2026-09-24 hay datos reales cargados: un departamento completo
-(catálogo de materias, co-ofertas y roster de profesores) y el cuestionario de preferencias
-configurado para el siguiente semestre.
+Desde el 2026-09-25 la base que corre es **MariaDB 5.5 en `horariosdace.itam.mx`**, con el API en PHP
+de `../api/` (ya no Supabase ni GitHub Pages). Hay datos reales cargados: catálogos de Matemáticas y
+Estadística, roster de profesores y los formularios del semestre activo. Los `.sql` de Postgres de
+esta carpeta (`schema.sql`, `triggers.sql`, `rls-policies.sql`, `seed.sql`) son el diseño original y
+quedan como histórico; no incluyen los cambios del 2026-10-02 en adelante.
 
 ## Esta es una copia
 

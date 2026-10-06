@@ -1,11 +1,10 @@
 # Diagrama entidad-relación — Autoplanear
 
 > Ver [`diseno-bd.md`](diseno-bd.md) para el detalle de columnas/constraints de cada tabla. Este
-> diagrama es la versión visual, agrupada por dominio. Sustituye como diseño confirmado al borrador
-> `../diagrama-modelo-datos-2026-08-21.drawio` (explícitamente marcado como borrador de trabajo, no
-> definitivo, en `../BITACORA.md`). Para quien construya el motor de asignación: la copia pública de
-> esta carpeta en `../malla-horarios/bd/` incluye `motor-asignacion.md`, un resumen de qué leer/
-> escribir en cada tabla.
+> diagrama es la versión visual, agrupada por dominio, y refleja el esquema que corre hoy
+> ([`mysql/schema-mysql.sql`](mysql/schema-mysql.sql), al 2026-10-06). Los tipos se escriben de forma
+> genérica (`text`, `boolean`…); los reales de MySQL están en el `.sql`. Para quien construya el motor
+> de asignación: [`motor-asignacion.md`](motor-asignacion.md) resume qué leer/escribir en cada tabla.
 
 ## Vista completa
 
@@ -57,9 +56,16 @@ erDiagram
     PREFERENCIA ||--o{ DISPONIBILIDAD : ""
     PREFERENCIA ||--o{ PREFERENCIA_RESPUESTA : ""
     DEPARTAMENTO ||--o{ CUESTIONARIO_SECCION : ""
+    SEMESTRE ||--o{ CUESTIONARIO_SECCION : ""
     CUESTIONARIO_SECCION ||--o{ MATERIA_CUESTIONARIO : ""
     CUESTIONARIO_SECCION ||--o{ PREFERENCIA_RESPUESTA : ""
+
+    DEPARTAMENTO |o--o{ FRANJA_HORARIA : "franjas exclusivas (20:00-22:00 Estadística)"
+    PROFESOR ||--o{ RECUPERACION_PASSWORD : "olvidé mi contraseña"
 ```
+
+`INTENTO_LOGIN` no aparece en el diagrama: no tiene llaves foráneas (es el contador del límite de
+intentos de login, ver `diseno-bd.md` §6 y §14).
 
 ## Dominio: catálogo académico
 
@@ -133,12 +139,14 @@ erDiagram
         int id PK
         text tipo
         int anio
+        text estado "activo | cerrado; exactamente uno activo"
     }
     ESTIMACION_DEMANDA {
         int id PK
         int materia_id FK
         int semestre_id FK
         int alumnos_total
+        numeric con_prerrequisito
         numeric demanda_ajustada "columna Suma del reporte real"
         int capacidad_planeacion "columna Cap."
         int grupos_periodo_anterior
@@ -190,6 +198,8 @@ erDiagram
         int id PK
         time hora_inicio
         time hora_fin
+        set dias "NULL = todos; 14:00 solo mar/jue"
+        int departamento_id FK "NULL = todos; 20:00-22:00 solo EST"
     }
 
     MATERIA ||--o{ ESTIMACION_DEMANDA : ""
@@ -247,15 +257,17 @@ erDiagram
         int materia_id FK
         int semestre_id FK
         int seccion_id FK "NULL = oculta"
-        int alias_de_id FK
+        int alias_de_id FK "nombre viejo de otra materia"
         text etiqueta
+        int orden
+        boolean revisado
     }
     PREFERENCIA {
         int id PK
         int profesor_id FK
         int semestre_id FK
-        int num_cursos_max
-        text estado
+        int num_cursos_max "NULL si el formulario no tenía la pregunta"
+        text estado "borrador | enviado"
     }
     PREFERENCIA_MATERIA {
         int id PK
@@ -284,12 +296,16 @@ erDiagram
     }
     FRANJA_HORARIA {
         int id PK
+        set dias
+        int departamento_id FK
     }
 
     DEPARTAMENTO ||--o{ CUESTIONARIO_SECCION : "su formulario"
     SEMESTRE ||--o{ CUESTIONARIO_SECCION : ""
     CUESTIONARIO_SECCION ||--o{ MATERIA_CUESTIONARIO : "agrupa"
     MATERIA ||--o{ MATERIA_CUESTIONARIO : ""
+    MATERIA |o--o{ MATERIA_CUESTIONARIO : "alias_de"
+    DEPARTAMENTO |o--o{ FRANJA_HORARIA : "exclusiva de"
     PROFESOR ||--o{ PREFERENCIA : "declara"
     SEMESTRE ||--o{ PREFERENCIA : ""
     PREFERENCIA ||--o{ PREFERENCIA_MATERIA : "(soft)"
@@ -305,8 +321,9 @@ erDiagram
 ## Dominio: salones, roles y configuración por departamento
 
 Login unificado (2026-09-21): no existe una tabla `USUARIO` separada — `PROFESOR.rol` es la identidad
-de cualquier rol (profesor, Jefe de Departamento, Servicios Escolares, Nómina, admin). Ver
-`diseno-bd.md` §4.1/§4.3.
+de cualquier rol (profesor, Jefe de Departamento, jefa de división, Servicios Escolares, Nómina,
+admin). Desde 2026-10-02 cada cuenta tiene un correo único, con el que se recupera la contraseña
+(`RECUPERACION_PASSWORD`). Ver `diseno-bd.md` §4.3 y §15.
 
 ```mermaid
 erDiagram
@@ -344,8 +361,19 @@ erDiagram
     PROFESOR {
         int id PK
         varchar cu UK
+        varchar correo UK "nullable en la base, obligatorio en el API"
         text rol
         int departamento_id FK "nullable si admin/servicios_escolares/nomina"
+        text tipo_contrato
+        boolean password_predeterminada
+        boolean activo
+    }
+    RECUPERACION_PASSWORD {
+        int id PK
+        int profesor_id FK
+        char token_hash UK "SHA-256, nunca el token"
+        datetime expira_at "una hora"
+        datetime usado_at "un solo uso"
     }
 
     SALON ||--o{ SALON_DISPONIBILIDAD_DEPARTAMENTO : ""
@@ -355,4 +383,6 @@ erDiagram
     DEPARTAMENTO ||--o{ DEPARTAMENTO_SEMESTRE_CONFIG : ""
     SEMESTRE ||--o{ DEPARTAMENTO_SEMESTRE_CONFIG : ""
     DEPARTAMENTO ||--o{ PROFESOR : "pertenece a (o dirige, si jefe_departamento)"
+    PROFESOR ||--o{ RECUPERACION_PASSWORD : ""
+    DEPARTAMENTO |o--o{ FRANJA_HORARIA : "exclusiva de"
 ```
