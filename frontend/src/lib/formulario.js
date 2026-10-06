@@ -78,3 +78,11 @@ export const DIAS = [
 export function claveDisponibilidad(dia, franjaId) {
   return `${dia}-${franjaId}`;
 }
+
+/**
+ * Las franjas que ve un departamento: las de todos (departamento_id null) más
+ * las suyas (2026-10-06: 20:00-22:00 solo Estadística).
+ */
+export function franjasDeDepartamento(franjas, departamentoId) {
+  return franjas.filter((f) => f.departamento_id == null || f.departamento_id === departamentoId);
+}

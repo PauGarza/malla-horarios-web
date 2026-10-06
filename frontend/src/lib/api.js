@@ -95,8 +95,18 @@ export const departamentosRegistro = () => pedir('registro.php', null);
 /** Alta de cuenta con rol profesor; no requiere sesión. */
 export const registrar = (datos) => post('registro.php', null, datos);
 
-/** Lo editable del perfil propio; hoy solo el correo ('' lo borra). */
+/** Lo editable del perfil propio; hoy solo el correo (obligatorio, no se puede borrar). */
 export const guardarCorreo = (token, correo) => post('perfil.php', token, { correo });
+
+/**
+ * "Olvidé mi contraseña"; no requiere sesión. Responde lo mismo exista o no
+ * una cuenta con ese correo, a propósito (ver api/olvide-password.php).
+ */
+export const olvidePassword = (correo) => post('olvide-password.php', null, { correo });
+
+/** Canjea el enlace del correo; devuelve { ok, cu } para entrar de una vez. */
+export const restablecerPassword = (token, passwordNueva) =>
+  post('restablecer-password.php', null, { token, password_nueva: passwordNueva });
 
 export const cambiarPassword = (token, passwordActual, passwordNueva) =>
   post('cambiar-password.php', token, {

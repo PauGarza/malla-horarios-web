@@ -39,6 +39,16 @@ INSERT INTO franja_horaria (hora_inicio, hora_fin, orden, dias) VALUES
     ('16:00','16:30',16, NULL), ('16:30','17:00',17, NULL), ('17:00','17:30',18, NULL), ('17:30','18:00',19, NULL),
     ('18:00','18:30',20, NULL), ('18:30','19:00',21, NULL), ('19:00','19:30',22, NULL), ('19:30','20:00',23, NULL);
 
+-- 2026-10-06: de 20:00 a 22:00 solo para Estadística. Ver
+-- migracion-2026-10-06-franjas-2000-2200-estadistica.sql.
+INSERT INTO franja_horaria (hora_inicio, hora_fin, orden, dias, departamento_id)
+SELECT h.ini, h.fin, h.orden, NULL, d.id
+  FROM departamento d
+ CROSS JOIN (SELECT '20:00' AS ini, '20:30' AS fin, 24 AS orden UNION ALL
+             SELECT '20:30', '21:00', 25 UNION ALL SELECT '21:00', '21:30', 26 UNION ALL
+             SELECT '21:30', '22:00', 27) h
+ WHERE d.clave_prefijo = 'EST';
+
 -- -----------------------------------------------------------------------------
 -- Semestres.
 --
@@ -82,7 +92,8 @@ INSERT INTO salon (nombre, edificio, capacidad, tipo) VALUES
 -- permisivo por datos de "act salones *.pdf".
 --
 -- 7 salones x 3 deptos x 2 semestres x 5 dias x 22 franjas = 4 620 filas, mas
--- la franja de 14:00 solo martes y jueves (x 2 dias = 84 filas): 4 704.
+-- la franja de 14:00 solo martes y jueves (x 2 dias = 84 filas), mas las 4 de
+-- 20:00-22:00 solo para Estadistica (7 x 1 x 2 x 5 x 4 = 280 filas): 4 984.
 -- Se usa un derivado con UNION ALL y no VALUES ROW(), que es 8.0.19+.
 -- -----------------------------------------------------------------------------
 
@@ -94,4 +105,5 @@ SELECT s.id, d.id, sem.id, dias.valor, f.id
  CROSS JOIN (SELECT 'lunes' AS valor UNION ALL SELECT 'martes' UNION ALL
              SELECT 'miercoles' UNION ALL SELECT 'jueves' UNION ALL SELECT 'viernes') dias
  CROSS JOIN franja_horaria f
- WHERE f.dias IS NULL OR FIND_IN_SET(dias.valor, f.dias) > 0;
+ WHERE (f.dias IS NULL OR FIND_IN_SET(dias.valor, f.dias) > 0)
+   AND (f.departamento_id IS NULL OR f.departamento_id = d.id);

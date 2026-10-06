@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useAuth } from '../context/AuthContext';
 import { guardarFormulario, leerFormulario, publicarFormulario } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
-import { AUDIENCIAS, vistaParaContrato } from '../lib/formulario';
+import { AUDIENCIAS, franjasDeDepartamento, vistaParaContrato } from '../lib/formulario';
 import {
   LeyendaDisponibilidad,
   MateriaInfo,
@@ -99,10 +99,16 @@ function TextoAuto({ className, ...props }) {
 }
 
 export default function EditorCuestionario({ onVolver }) {
-  const { token, profesor, departamentos, semestre, franjas, recargarPerfil } = useAuth();
+  const { token, profesor, departamentos, semestre, franjas: todasLasFranjas, recargarPerfil } = useAuth();
 
   const [departamentoId, setDepartamentoId] = useState(() =>
     departamentoInicial(profesor, departamentos),
+  );
+  // La vista previa muestra las franjas del departamento que se edita, no las
+  // de quien tiene la sesión (2026-10-06: 20:00-22:00 solo Estadística).
+  const franjas = useMemo(
+    () => franjasDeDepartamento(todasLasFranjas, departamentoId),
+    [todasLasFranjas, departamentoId],
   );
   const [form, setForm] = useState(null);
   // Lo último que vino del servidor, para "Descartar cambios".

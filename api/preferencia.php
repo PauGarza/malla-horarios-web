@@ -128,9 +128,16 @@ if (isset($body['materias']) && is_array($body['materias'])) {
 // martes y jueves). Una celda de un día en que su franja no existe se descarta
 // en silencio, igual que las materias que no están en el formulario; una
 // franja que no existe en el catálogo es un error.
-$diasDeFranja = [];
-foreach ($pdo->query('SELECT id, dias FROM franja_horaria') as $f) {
+//
+// Lo mismo con el departamento (2026-10-06: 20:00-22:00 solo Estadística): una
+// celda de una franja que no es del departamento de quien contesta se descarta.
+$miDepartamento = mi_perfil()['departamento_id'];
+$diasDeFranja   = [];
+$franjaAjena    = [];
+foreach ($pdo->query('SELECT id, dias, departamento_id FROM franja_horaria') as $f) {
     $diasDeFranja[(int) $f['id']] = ($f['dias'] === null || $f['dias'] === '') ? null : explode(',', $f['dias']);
+    $franjaAjena[(int) $f['id']]  = $f['departamento_id'] !== null
+        && (int) $f['departamento_id'] !== (int) $miDepartamento;
 }
 
 $celdas     = [];
@@ -149,7 +156,7 @@ if (isset($body['disponibilidad']) && is_array($body['disponibilidad'])) {
             error_json('Hay una celda de disponibilidad con datos inválidos', 400);
         }
         $permitidos = $diasDeFranja[(int) $franjaId];
-        if ($permitidos !== null && !in_array($dia, $permitidos, true)) {
+        if (($permitidos !== null && !in_array($dia, $permitidos, true)) || $franjaAjena[(int) $franjaId]) {
             continue;
         }
         $celdas[$dia . '-' . $franjaId] = [$dia, (int) $franjaId, $nivel];

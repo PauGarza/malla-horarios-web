@@ -36,12 +36,17 @@ $departamentos = $pdo->query('SELECT id, nombre FROM departamento ORDER BY id')-
 // `dias`: null = todos los días; si no, la lista de días en que la franja
 // existe (2026-10-02: 14:00-14:30 solo martes y jueves). En la base es un SET
 // de MySQL, que llega como "martes,jueves".
+// `departamento_id`: null = todos los departamentos; si no, la franja solo
+// existe para ese departamento (2026-10-06: 20:00-22:00 solo Estadística). Se
+// mandan todas y el frontend filtra según el formulario que dibuja: la jefa de
+// división edita formularios de varios departamentos con la misma sesión.
 $franjas = array_map(
     static function (array $f): array {
         $f['dias'] = ($f['dias'] === null || $f['dias'] === '') ? null : explode(',', $f['dias']);
+        $f['departamento_id'] = $f['departamento_id'] === null ? null : (int) $f['departamento_id'];
         return $f;
     },
-    $pdo->query('SELECT id, hora_inicio, hora_fin, orden, dias FROM franja_horaria ORDER BY orden')->fetchAll()
+    $pdo->query('SELECT id, hora_inicio, hora_fin, orden, dias, departamento_id FROM franja_horaria ORDER BY orden')->fetchAll()
 );
 
 // El semestre en el que se trabaja: el ACTIVO (semestre.estado, desde

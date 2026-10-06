@@ -1,7 +1,7 @@
 <?php
 // =============================================================================
 // GET  -> { departamentos: [{id, nombre}] }
-// POST { cu, nombre, password, departamento_id, tipo_contrato[, correo] }
+// POST { cu, nombre, correo, password, departamento_id, tipo_contrato }
 //      -> { ok: true }   (201)
 //
 // Alta de cuenta desde la pantalla de login. Igual que login.php, no hay sesión
@@ -61,12 +61,11 @@ $nombre         = trim((string) (isset($body['nombre']) ? $body['nombre'] : ''))
 $password       = (string) (isset($body['password']) ? $body['password'] : '');
 $departamentoId = filter_var(isset($body['departamento_id']) ? $body['departamento_id'] : null, FILTER_VALIDATE_INT);
 $tipoContrato   = (string) (isset($body['tipo_contrato']) ? $body['tipo_contrato'] : '');
-// Opcional (2026-10-02); se puede capturar después en Mi perfil.
-$correo         = normalizar_correo(isset($body['correo']) ? $body['correo'] : '');
-
 if ($cu === '' || $nombre === '' || $password === '' || $departamentoId === false || $tipoContrato === '') {
     error_json('Faltan datos obligatorios', 400);
 }
+// Obligatorio desde el 2026-10-02: sin correo no hay cómo recuperar la contraseña.
+$correo = normalizar_correo(isset($body['correo']) ? $body['correo'] : '');
 if (!preg_match('/^[0-9]{1,10}$/', $cu)) {
     error_json('La Clave Única solo puede tener números (máximo 10)', 400);
 }
@@ -94,6 +93,10 @@ if ($password === $cu) {
     error_json('La contraseña no puede ser tu Clave Única', 400);
 }
 
+if (correo_de_otra_cuenta($correo)) {
+    error_json('Ese correo ya está registrado en otra cuenta', 409, 'correo_existente');
+}
+
 $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => COSTO]);
 if (!is_string($hash)) {
     error_log('registro.php: password_hash devolvió algo que no es una cadena');
@@ -112,9 +115,13 @@ try {
          VALUES (?, ?, ?, ?, 'profesor', ?, ?, 0, NULL, 1)"
     )->execute([$cu, $hash, $nombre, $correo, $departamentoId, $tipoContrato]);
 } catch (PDOException $e) {
-    // 23000 = violación de integridad; con los datos ya validados, la única
-    // posible es el UNIQUE de cu.
+    // 23000 = violación de integridad; con los datos ya validados, solo puede
+    // ser un UNIQUE: el de correo (si alguien lo tomó entre el SELECT de arriba
+    // y este INSERT, y el mensaje de MySQL nombra la llave) o el de cu.
     if ($e->getCode() === '23000') {
+        if (strpos($e->getMessage(), 'uq_profesor_correo') !== false) {
+            error_json('Ese correo ya está registrado en otra cuenta', 409, 'correo_existente');
+        }
         error_json('Ya existe una cuenta con esa Clave Única', 409, 'cuenta_existente');
     }
     fallo_interno('registro.php', $e, 'No se pudo crear la cuenta');

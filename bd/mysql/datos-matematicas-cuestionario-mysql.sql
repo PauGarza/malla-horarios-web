@@ -16,7 +16,7 @@
 -- una sola fila y borraria la seccion entera (verificado con SQL 2026-09-24).
 -- La lista esta curada a mano cruzando el mockup contra el catalogo real.
 --
--- Las 8 filas con revisado = 0 son las que el cruce NO pudo resolver: las tiene
+-- Las 6 filas con revisado = 0 son las que el cruce NO pudo resolver: las tiene
 -- que confirmar la Jefa desde su vista de configuracion. Entran como
 -- catalogo_general a proposito (fail-open): es preferible que sobre una materia
 -- a que a alguien le falte.
@@ -61,7 +61,7 @@ WHERE d.clave_prefijo = 'MAT' AND s.tipo = 'primavera' AND s.anio = 2027
   );
 
 -- v.seccion sigue escrita con los nombres del enum viejo para no reescribir
--- las 51 filas: el CASE del JOIN la traduce a la seccion sembrada arriba, y
+-- las 53 filas: el CASE del JOIN la traduce a la seccion sembrada arriba, y
 -- 'oculta' no encuentra ninguna (seccion_id NULL = oculta).
 INSERT IGNORE INTO materia_cuestionario
        (materia_id, semestre_id, seccion_id, alias_de_id, etiqueta, orden, revisado)
@@ -80,6 +80,13 @@ FROM (
   UNION ALL SELECT 'MAT-14200', 'oculta', 'MAT-14250', NULL, NULL, 1
   UNION ALL SELECT 'MAT-24632', 'oculta', 'MAT-24630', NULL, NULL, 1
   UNION ALL SELECT 'MAT-12210', 'oculta', 'MAT-24210', NULL, NULL, 1
+  -- 2026-10-06, claves nuevas: la vieja queda oculta como alias de la nueva.
+  -- La etiqueta lleva la clave porque dos nombres viejos son iguales al nuevo.
+  -- Ver migracion-2026-10-06-optimizacion-numerica.sql.
+  UNION ALL SELECT 'MAT-24410', 'oculta', 'MAT-24433', 'MAT-24410 Programación Lineal', NULL, 1
+  UNION ALL SELECT 'MAT-24430', 'oculta', 'MAT-24433', 'MAT-24430 Análisis Aplicado I', NULL, 1
+  UNION ALL SELECT 'MAT-24431', 'oculta', 'MAT-24435', 'MAT-24431 Optimización Numérica I', NULL, 1
+  UNION ALL SELECT 'MAT-24500', 'oculta', 'MAT-24505', 'MAT-24500 Investigación de Operaciones I', NULL, 1
   UNION ALL SELECT 'MAT-10101', 'catalogo_general', NULL, 'Métodos Cuantitativos para Derecho', NULL, 1
   UNION ALL SELECT 'MAT-11100', 'catalogo_general', NULL, NULL, NULL, 1
   UNION ALL SELECT 'MAT-11101', 'catalogo_general', NULL, NULL, NULL, 1
@@ -106,13 +113,11 @@ FROM (
   UNION ALL SELECT 'MAT-24220', 'catalogo_general', NULL, NULL, NULL, 1
   UNION ALL SELECT 'MAT-24406', 'catalogo_general', NULL, 'Análisis Numérico I', NULL, 1
   UNION ALL SELECT 'MAT-24407', 'catalogo_general', NULL, 'Análisis Numérico II', NULL, 1
-  UNION ALL SELECT 'MAT-24410', 'catalogo_general', NULL, NULL, NULL, 1
-  UNION ALL SELECT 'MAT-24430', 'catalogo_general', NULL, NULL, NULL, 1
-  UNION ALL SELECT 'MAT-24500', 'catalogo_general', NULL, NULL, NULL, 1
+  UNION ALL SELECT 'MAT-24433', 'catalogo_general', NULL, NULL, NULL, 1
+  UNION ALL SELECT 'MAT-24435', 'catalogo_general', NULL, NULL, NULL, 1
+  UNION ALL SELECT 'MAT-24505', 'catalogo_general', NULL, NULL, NULL, 1
   UNION ALL SELECT 'MAT-24630', 'catalogo_general', NULL, 'Matemáticas Aplicadas a la Economía', NULL, 1
   UNION ALL SELECT 'MAT-14310', 'catalogo_general', NULL, 'Álgebra Lineal', NULL, 0
-  UNION ALL SELECT 'MAT-24431', 'catalogo_general', NULL, 'Optimización Numérica I (8 créditos)', NULL, 0
-  UNION ALL SELECT 'MAT-24433', 'catalogo_general', NULL, 'Optimización Numérica I (6 créditos)', NULL, 0
   UNION ALL SELECT 'MAT-24101', 'catalogo_general', NULL, NULL, NULL, 0
   UNION ALL SELECT 'MAT-14201', 'catalogo_general', NULL, 'Geometría Analítica II', NULL, 0
   UNION ALL SELECT 'MAT-22211', 'catalogo_general', NULL, NULL, NULL, 0
@@ -138,9 +143,9 @@ COMMIT;
 --     LEFT JOIN cuestionario_seccion cs ON cs.id = mc.seccion_id
 --    WHERE m.clave LIKE 'MAT-%'
 --    GROUP BY cs.titulo;
---   -- esperado: cobertura departamental 5, catalogo 38, NULL (ocultas) 8
+--   -- esperado: cobertura departamental 5, catalogo 36, NULL (ocultas) 12
 --
---   SELECT COUNT(*) FROM materia_cuestionario WHERE revisado = 0;  -- esperado: 8
+--   SELECT COUNT(*) FROM materia_cuestionario WHERE revisado = 0;  -- esperado: 6
 --
 --   -- ninguna materia MAT activa se queda sin fila (esperado: 0):
 --   SELECT COUNT(*) FROM materia m
