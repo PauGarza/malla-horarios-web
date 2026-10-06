@@ -56,8 +56,9 @@ CREATE TABLE profesor (
     password_hash           VARCHAR(255) NOT NULL
                             COMMENT 'bcrypt, manejado por la app. NUNCA se selecciona fuera de login.php / cambiar-password.php.',
     nombre                  VARCHAR(255) NOT NULL,
-    correo                  VARCHAR(255) NULL
-                            COMMENT 'Opcional (2026-10-02). Lo captura la persona en Mi perfil o al darse de alta. En minusculas.',
+    -- VARCHAR(191) por el UNIQUE: InnoDB de 5.5 topa el indice en 767 bytes.
+    correo                  VARCHAR(191) NULL
+                            COMMENT 'Obligatorio en el API desde 2026-10-02 (registro y Mi perfil); NULL solo en el roster que aun no lo captura. Unico: con el se recupera la contrasena. En minusculas.',
     -- jefe_division se agrego 2026-09-25: la division academica (DACE) esta
     -- arriba de los departamentos, asi que su alcance son los 3 (Matematicas,
     -- Actuaria, Estadistica). Es un rol academico y NO es lo mismo que admin,
@@ -76,6 +77,7 @@ CREATE TABLE profesor (
     estado_especial         VARCHAR(255) NULL
                             COMMENT 'Sabatico/licencia/jubilacion. Distinto de activo, que es si la cuenta sirve para entrar.',
     activo                  TINYINT(1) NOT NULL DEFAULT 1,
+    UNIQUE KEY uq_profesor_correo (correo),
     CONSTRAINT fk_profesor_departamento FOREIGN KEY (departamento_id) REFERENCES departamento(id),
     CONSTRAINT chk_profesor_depto CHECK (
         rol IN ('admin','servicios_escolares','nomina')
@@ -316,9 +318,12 @@ CREATE TABLE franja_horaria (
     hora_fin    TIME NOT NULL,
     orden       INT  NOT NULL,
     dias        SET('lunes','martes','miercoles','jueves','viernes') NULL
-                COMMENT 'NULL = todos los dias. 2026-10-02: 14:00-14:30 solo martes y jueves.'
+                COMMENT 'NULL = todos los dias. 2026-10-02: 14:00-14:30 solo martes y jueves.',
+    departamento_id INT NULL
+                COMMENT 'NULL = todos los departamentos. 2026-10-06: 20:00-22:00 solo Estadistica.',
+    CONSTRAINT fk_franja_departamento FOREIGN KEY (departamento_id) REFERENCES departamento(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Catalogo fijo: 07:00-14:00 y 16:00-20:00 en bloques de 30 min, mas 14:00-14:30 solo mar/jue (23 franjas). RN05 + esa excepcion.';
+  COMMENT='Catalogo fijo: 07:00-14:00 y 16:00-20:00 en bloques de 30 min, mas 14:00-14:30 solo mar/jue y 20:00-22:00 solo Estadistica (27 franjas). RN05 + esas excepciones.';
 
 CREATE TABLE salon (
     id        INT AUTO_INCREMENT PRIMARY KEY,
@@ -532,3 +537,18 @@ CREATE TABLE intento_login (
     KEY idx_intento_llave_momento (llave, momento)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Rate limiting del login. Se limpia sola: cada consulta borra lo mas viejo que la ventana.';
+
+-- "Olvide mi contrasena" (2026-10-02). Se guarda el SHA-256 del token, nunca el
+-- token: quien lea esta tabla no puede usarla para entrar a ninguna cuenta.
+CREATE TABLE recuperacion_password (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    profesor_id INT NOT NULL,
+    token_hash  CHAR(64) NOT NULL COMMENT 'SHA-256 en hex del token que va en el enlace.',
+    creado_at   DATETIME NOT NULL COMMENT 'UTC.',
+    expira_at   DATETIME NOT NULL COMMENT 'UTC. Una hora despues de creado_at.',
+    usado_at    DATETIME NULL     COMMENT 'UTC. Se llena al restablecer; un token usado no vuelve a servir.',
+    UNIQUE KEY uq_recuperacion_token (token_hash),
+    KEY idx_recuperacion_profesor (profesor_id),
+    CONSTRAINT fk_recuperacion_profesor FOREIGN KEY (profesor_id) REFERENCES profesor(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Enlaces de "olvide mi contrasena". Se limpia sola: cada solicitud borra los vencidos.';

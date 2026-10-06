@@ -30,8 +30,8 @@ export default function PerfilUsuario({ onVolver }) {
     setGuardandoCorreo(true);
     try {
       const r = await guardarCorreo(token, correo.trim());
-      setCorreo(r.correo ?? '');
-      setMensajeCorreo(r.correo ? 'Listo: guardamos tu correo.' : 'Listo: quitamos tu correo.');
+      setCorreo(r.correo);
+      setMensajeCorreo('Listo: guardamos tu correo.');
     } catch (err) {
       setErrorCorreo(err.message);
       setGuardandoCorreo(false);
@@ -121,13 +121,15 @@ export default function PerfilUsuario({ onVolver }) {
             id="correo"
             type="email"
             autoComplete="email"
-            maxLength={255}
+            maxLength={191}
             placeholder="nombre@itam.mx"
+            required
             value={correo}
             onChange={(e) => setCorreo(e.target.value)}
           />
           <p className="formulario-nota">
-            Para que la jefatura pueda contactarte sobre tu asignación. Déjalo vacío para quitarlo.
+            Obligatorio: ahí te llega el enlace si olvidas tu contraseña, y la jefatura lo usa para
+            contactarte sobre tu asignación.
           </p>
           {errorCorreo && (
             <p className="formulario-error" role="alert">
@@ -143,7 +145,9 @@ export default function PerfilUsuario({ onVolver }) {
             <button
               type="submit"
               className="btn-primary"
-              disabled={guardandoCorreo || correo.trim() === (profesor.correo ?? '')}
+              disabled={
+                guardandoCorreo || correo.trim() === '' || correo.trim() === (profesor.correo ?? '')
+              }
             >
               {guardandoCorreo ? 'Guardando…' : 'Guardar correo'}
             </button>

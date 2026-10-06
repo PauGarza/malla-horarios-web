@@ -368,20 +368,35 @@ function departamento_objetivo(): int
 }
 
 /**
- * El correo de un profesor tal como se guarda: sin espacios, en minúsculas, o
- * null si viene vacío (es opcional). Corta con 400 si no parece un correo.
- * Lo usan perfil.php y registro.php.
+ * El correo de un profesor tal como se guarda: sin espacios y en minúsculas.
+ * Corta con 400 si viene vacío o no parece un correo.
+ *
+ * Obligatorio desde el 2026-10-02 (antes era opcional): es lo único con lo que
+ * se recupera la contraseña (olvide-password.php). Lo usan perfil.php,
+ * registro.php y olvide-password.php. 191 por el UNIQUE de profesor.correo.
  */
-function normalizar_correo($valor): ?string
+function normalizar_correo($valor): string
 {
     $correo = strtolower(trim((string) $valor));
     if ($correo === '') {
-        return null;
+        error_json('El correo es obligatorio', 400, 'correo_obligatorio');
     }
-    if (strlen($correo) > 255 || filter_var($correo, FILTER_VALIDATE_EMAIL) === false) {
+    if (strlen($correo) > 191 || filter_var($correo, FILTER_VALIDATE_EMAIL) === false) {
         error_json('El correo no es válido', 400, 'correo_invalido');
     }
     return $correo;
+}
+
+/**
+ * ¿Ese correo ya es de OTRA cuenta? Para dar un 409 claro antes de que el
+ * UNIQUE de profesor.correo lo rechace con un 23000 que no dice cuál columna.
+ */
+function correo_de_otra_cuenta(string $correo, ?int $excepto = null): bool
+{
+    $st = db()->prepare('SELECT id FROM profesor WHERE correo = ?');
+    $st->execute([$correo]);
+    $id = $st->fetchColumn();
+    return $id !== false && (int) $id !== $excepto;
 }
 
 /** El departamento al que pertenece una materia, o null si no existe. */

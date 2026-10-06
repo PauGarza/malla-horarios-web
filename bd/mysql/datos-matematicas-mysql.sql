@@ -31,7 +31,7 @@ SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 START TRANSACTION;
 
 -- -----------------------------------------------------------------------------
--- 1. Materias del catalogo de Matematicas (51)
+-- 1. Materias del catalogo de Matematicas (53)
 --
 -- Los nombres se cargan tal como los reporta Servicios Escolares, INCLUIDOS SUS
 -- TYPOS (ej. 'Mètodos Cuantitativos para Der.'), para poder cotejar contra el
@@ -90,7 +90,11 @@ FROM (
   UNION ALL SELECT 'MAT-24430', 'Análisis Aplicado I', 6
   UNION ALL SELECT 'MAT-24431', 'Optimización Numérica I', 8
   UNION ALL SELECT 'MAT-24433', 'Optimización Numérica I', 6
+  -- Agregadas 2026-10-06 (no vienen en Cursos.xlsx): claves nuevas de
+  -- MAT-24431 y MAT-24500. Ver migracion-2026-10-06-optimizacion-numerica.sql.
+  UNION ALL SELECT 'MAT-24435', 'Optimización Numérica II', 6
   UNION ALL SELECT 'MAT-24500', 'Investigación de Operaciones I', 6
+  UNION ALL SELECT 'MAT-24505', 'Investigación de Operaciones I', 8
   UNION ALL SELECT 'MAT-24630', 'Mat. Aplicadas a la Economía', 6
   UNION ALL SELECT 'MAT-24632', 'Métodos Dinámicos para la Economía', 6
 ) v
@@ -98,7 +102,7 @@ CROSS JOIN departamento d
 WHERE d.clave_prefijo = 'MAT';
 
 -- -----------------------------------------------------------------------------
--- 2. Co-oferta: claves distintas que son la misma clase (54 pares dirigidos)
+-- 2. Co-oferta: claves distintas que son la misma clase (62 pares dirigidos)
 --
 -- Derivado del reporte 'Profesores de licenciatura con el mismo horario': dentro
 -- de un bloque, la materia con 100% de responsabilidad y la(s) de 0% comparten
@@ -159,8 +163,19 @@ FROM (
   UNION ALL SELECT 'MAT-24210', 'MAT-12210'
   UNION ALL SELECT 'MAT-24406', 'MAT-14390'
   UNION ALL SELECT 'MAT-24407', 'MAT-14400'
+  -- 2026-10-06, claves nuevas: MAT-24410 y MAT-24430 ahora son MAT-24433
+  -- (las tres son la misma clase), MAT-24431 ahora es MAT-24435 y MAT-24500
+  -- ahora es MAT-24505. Ver migracion-2026-10-06-optimizacion-numerica.sql.
+  UNION ALL SELECT 'MAT-24410', 'MAT-24430'
+  UNION ALL SELECT 'MAT-24410', 'MAT-24433'
+  UNION ALL SELECT 'MAT-24430', 'MAT-24410'
   UNION ALL SELECT 'MAT-24430', 'MAT-24433'
+  UNION ALL SELECT 'MAT-24433', 'MAT-24410'
   UNION ALL SELECT 'MAT-24433', 'MAT-24430'
+  UNION ALL SELECT 'MAT-24431', 'MAT-24435'
+  UNION ALL SELECT 'MAT-24435', 'MAT-24431'
+  UNION ALL SELECT 'MAT-24500', 'MAT-24505'
+  UNION ALL SELECT 'MAT-24505', 'MAT-24500'
   UNION ALL SELECT 'MAT-24630', 'MAT-24632'
   UNION ALL SELECT 'MAT-24632', 'MAT-24630'
 ) v
@@ -177,5 +192,5 @@ COMMIT;
 -- -----------------------------------------------------------------------------
 -- Verificacion
 -- -----------------------------------------------------------------------------
---   SELECT COUNT(*) FROM materia WHERE clave LIKE 'MAT-%';   -- esperado: 51
---   SELECT COUNT(*) FROM materia_co_oferta;                  -- esperado: 54
+--   SELECT COUNT(*) FROM materia WHERE clave LIKE 'MAT-%';   -- esperado: 53
+--   SELECT COUNT(*) FROM materia_co_oferta;                  -- esperado: 62

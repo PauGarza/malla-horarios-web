@@ -50,4 +50,20 @@ return [
 
     // 12 horas, igual que TOKEN_TTL_SECONDS de la Edge Function de login.
     'token_ttl' => 12 * 60 * 60,
+
+    // --- Correo (2026-10-02, "olvidé mi contraseña") ------------------------
+    // Las cuatro son opcionales: lib/correo.php trae estos mismos defaults, así
+    // que un config.php de antes de esta fecha sigue funcionando sin tocarlo.
+    //
+    // De dónde sale el enlace del correo.
+    'url_publica'      => 'https://horariosdace.itam.mx',
+    // Remitente. Si los correos llegan a spam o no llegan, preguntarle a la
+    // DSTI qué remitente puede usar este servidor.
+    'correo_remitente' => 'no-responder@horariosdace.itam.mx',
+    'correo_nombre'    => 'Malla Horarios DACE',
+    // Vacío = mail() de PHP (el sendmail local del servidor). Llenar host solo
+    // si mail() no entrega; ej. con una cuenta institucional:
+    //   'smtp' => ['host' => 'smtp.office365.com', 'puerto' => 587,
+    //              'seguridad' => 'tls', 'usuario' => '...', 'password' => '...'],
+    'smtp'             => [],
 ];

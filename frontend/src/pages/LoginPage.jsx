@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import RegistroPage from './RegistroPage';
+import RecuperarPasswordPage from './RecuperarPasswordPage';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [registrando, setRegistrando] = useState(false);
+  const [recuperando, setRecuperando] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -24,6 +26,7 @@ export default function LoginPage() {
   }
 
   if (registrando) return <RegistroPage onVolver={() => setRegistrando(false)} />;
+  if (recuperando) return <RecuperarPasswordPage onVolver={() => setRecuperando(false)} />;
 
   return (
     <div className="login-screen">
@@ -57,6 +60,11 @@ export default function LoginPage() {
           {enviando ? 'Entrando…' : 'Entrar'}
         </button>
 
+        <p className="login-hint">
+          <button type="button" className="btn-link" onClick={() => setRecuperando(true)}>
+            ¿Olvidaste tu contraseña?
+          </button>
+        </p>
         <p className="login-hint">
           ¿No tienes cuenta?{' '}
           <button type="button" className="btn-link" onClick={() => setRegistrando(true)}>

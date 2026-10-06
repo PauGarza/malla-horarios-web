@@ -8,7 +8,12 @@ import {
 } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
 import { TIPO_CONTRATO_LABELS } from '../lib/roles';
-import { claveDisponibilidad, faltantesParaEnviar, minimoEfectivo } from '../lib/formulario';
+import {
+  claveDisponibilidad,
+  faltantesParaEnviar,
+  franjasDeDepartamento,
+  minimoEfectivo,
+} from '../lib/formulario';
 import {
   LeyendaDisponibilidad,
   MateriaInfo,
@@ -37,6 +42,10 @@ export default function FormularioPreferencias({
   // profesor desde el panel; en ese caso todo se arma alrededor de esa persona,
   // no de quien tiene la sesión abierta.
   const profesorForm = profesorObjetivo ?? profesor;
+  const franjasForm = useMemo(
+    () => franjasDeDepartamento(franjas, profesorForm.departamento_id),
+    [franjas, profesorForm.departamento_id],
+  );
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -396,7 +405,7 @@ export default function FormularioPreferencias({
             </p>
           )}
           <RejillaDisponibilidad
-            franjas={franjas}
+            franjas={franjasForm}
             niveles={nivelDisponibilidad}
             disabled={soloLectura}
             ayudaId="ayuda-rejilla"

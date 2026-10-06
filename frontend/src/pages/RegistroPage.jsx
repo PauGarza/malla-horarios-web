@@ -86,8 +86,19 @@ export default function RegistroPage({ onVolver }) {
         <label htmlFor="reg-nombre">Nombre completo</label>
         <input {...campo('nombre')} autoComplete="name" maxLength={255} required />
 
-        <label htmlFor="reg-correo">Correo electrónico (opcional)</label>
-        <input {...campo('correo')} type="email" autoComplete="email" maxLength={255} />
+        <label htmlFor="reg-correo">Correo electrónico</label>
+        <input
+          {...campo('correo')}
+          type="email"
+          autoComplete="email"
+          maxLength={191}
+          placeholder="nombre@itam.mx"
+          aria-describedby="reg-correo-ayuda"
+          required
+        />
+        <p className="login-hint" id="reg-correo-ayuda">
+          Obligatorio: es la única forma de recuperar tu contraseña si la olvidas.
+        </p>
 
         <label htmlFor="reg-departamento_id">Departamento</label>
         <select {...campo('departamento_id')} required>

@@ -44,6 +44,12 @@ migracion-2026-10-02-franja-1400-mar-jue.sql   franja_horaria.dias (NULL = todos
                                                14:00-14:30 solo martes y jueves, con su
                                                disponibilidad de salones. ADITIVA: correr ANTES
                                                de desplegar el API nuevo (catalogos.php lee dias).
+migracion-2026-10-06-franjas-2000-2200-estadistica.sql
+                                               franja_horaria.departamento_id (NULL = todos) y
+                                               las franjas 20:00-22:00 solo para Estadística,
+                                               con su disponibilidad de salones. ADITIVA: correr
+                                               ANTES de desplegar el API nuevo (catalogos.php y
+                                               preferencia.php leen departamento_id).
 ```
 
 Y dos archivos que no son migraciones de esquema:

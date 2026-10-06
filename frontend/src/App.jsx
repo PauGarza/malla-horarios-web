@@ -10,6 +10,8 @@ import CatalogoMaterias from './pages/CatalogoMaterias';
 import PerfilUsuario from './pages/PerfilUsuario';
 import CargaDemanda from './pages/CargaDemanda';
 import Semestres from './pages/Semestres';
+import RestablecerPasswordPage from './pages/RestablecerPasswordPage';
+import CapturarCorreoPage from './pages/CapturarCorreoPage';
 import BarraSuperior from './components/BarraSuperior';
 
 // Navegación por estado simple, sin librería de ruteo: con un puñado de
@@ -18,9 +20,31 @@ import BarraSuperior from './components/BarraSuperior';
 // llevar a quién; guardarlo en un useState aparte se desincronizaría.
 // Si se agregan más vistas reales (panel de Jefe grande, admin) vale la pena
 // revisar esto — hoy sería complejidad sin beneficio.
+// El enlace de "olvidé mi contraseña" llega como /#restablecer=<token> (ver
+// api/olvide-password.php). Es la única entrada a la app por URL.
+function tokenDelEnlace() {
+  const m = window.location.hash.match(/^#restablecer=([0-9a-f]{64})$/);
+  return m ? m[1] : null;
+}
+
 function Shell() {
   const { token, profesor, loading, errorCarga, reintentarCarga, logout } = useAuth();
   const [vista, setVista] = useState({ nombre: 'home' });
+  const [tokenRestablecer, setTokenRestablecer] = useState(tokenDelEnlace);
+
+  // Antes que todo lo demás: el enlace sirve aunque haya otra sesión abierta.
+  if (tokenRestablecer) {
+    return (
+      <RestablecerPasswordPage
+        token={tokenRestablecer}
+        onTerminar={() => {
+          // Quitar el token de la barra de direcciones y del historial.
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          setTokenRestablecer(null);
+        }}
+      />
+    );
+  }
 
   if (loading) return <div className="app-cargando">Cargando…</div>;
   // Sesión buena pero el servidor no respondió al arrancar: ofrecer reintentar
@@ -42,6 +66,8 @@ function Shell() {
     );
   }
   if (!token || !profesor) return <LoginPage />;
+  // Obligatorio desde el 2026-10-02; el roster cargado no lo trae.
+  if (!profesor.correo) return <CapturarCorreoPage />;
 
   // La barra va arriba de TODA vista autenticada: el menú de usuario (perfil,
   // cerrar sesión) tiene que estar a un clic desde cualquier pantalla.

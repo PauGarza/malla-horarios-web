@@ -74,9 +74,11 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 | Archivo | Métodos | Qué hace |
 |---|---|---|
 | `login.php` | POST | `{cu, password}` → `{token, expira_en, rol}` |
-| `registro.php` | GET / POST | GET → `{departamentos}`; POST `{cu, nombre, password, departamento_id, tipo_contrato[, correo]}` → `{ok}` (201). Sin sesión; el rol siempre es `profesor` y `estado_especial` queda NULL (solo lo captura un admin) |
+| `registro.php` | GET / POST | GET → `{departamentos}`; POST `{cu, nombre, correo, password, departamento_id, tipo_contrato}` → `{ok}` (201). Sin sesión; el rol siempre es `profesor` y `estado_especial` queda NULL (solo lo captura un admin). Correo obligatorio y único desde 2026-10-02 (409 `correo_existente`) |
 | `cambiar-password.php` | POST | `{password_actual, password_nueva}` → `{ok}` |
-| `perfil.php` | POST | `{correo}` → `{ok, correo}`. Lo editable del perfil propio; `""` borra el correo (2026-10-02) |
+| `perfil.php` | POST | `{correo}` → `{ok, correo}`. Lo editable del perfil propio. Desde 2026-10-02 el correo es obligatorio (no se puede borrar) y único |
+| `olvide-password.php` | POST | `{correo}` → `{ok}` **siempre**, exista o no la cuenta. Sin sesión. Si es de una cuenta activa, manda un enlace `/#restablecer=<token>` que vale 1 hora y una vez (2026-10-02) |
+| `restablecer-password.php` | POST | `{token, password_nueva}` → `{ok, cu}`. Sin sesión; canjea el enlace. 400 `token_invalido` si venció, ya se usó o no existe |
 | `catalogos.php` | GET | Perfil propio (con `correo`), departamentos, franjas, semestre actual y si el formulario propio está publicado |
 | `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado |
 | `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` solo se exige (1-6) si el formulario del profesor trae esa pregunta; si no, se guarda NULL (2026-10-02) |
@@ -119,6 +121,15 @@ departamento (sin publicar) y la disponibilidad de salones.
 que ve el profesor, lo que valida el servidor y lo que edita la jefatura no se desincronicen.
 Los bloqueos (`bloqueo_profesor_materia`) **solo** los lee `respuestas.php`: ningún endpoint que
 use un profesor los consulta, porque el profesor no debe enterarse.
+
+**Recuperar la contraseña (desde 2026-10-02).** `olvide-password.php` guarda en
+`recuperacion_password` el SHA-256 de un token de 256 bits y manda el token por correo; pedir
+otro invalida el anterior. Responde antes de mandar el correo (`fastcgi_finish_request`) para
+que el tiempo de respuesta no delate si la cuenta existe. Límites: 5 solicitudes / 5 min por IP y
+3 por correo. El correo sale por `lib/correo.php`: `mail()` del servidor por defecto, o SMTP si
+`config.php` trae `'smtp' => ['host' => …]` (ver `lib/config.example.php`). **No se ha comprobado
+todavía que `mail()` entregue desde este servidor**: si el enlace no llega, revisar el log de PHP
+(`correo.php: …`) y pasar a SMTP con una cuenta que dé la DSTI.
 
 ## Reglas que se respetan en todos
 

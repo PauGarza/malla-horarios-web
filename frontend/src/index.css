@@ -160,6 +160,16 @@ textarea {
   margin-top: 8px;
 }
 
+.login-ok {
+  background: var(--verde-bg);
+  color: var(--verde);
+  border: 1px solid var(--verde);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin: 0;
+}
+
 /* La liga "Créala aquí" va dentro del texto: sin el margen de los botones
    de la tarjeta y al tamaño de la letra de alrededor. */
 .login-hint .btn-link {
@@ -1521,6 +1531,11 @@ select.editor-mini {
 .demanda-subir {
   align-self: flex-start;
   cursor: pointer;
+}
+/* Es un <label>: sin esto gana el gris de .formulario-seccion label. */
+.formulario-seccion label.demanda-subir {
+  color: white;
+  font-size: 14px;
 }
 .demanda-leyenda {
   font-size: 12px;
