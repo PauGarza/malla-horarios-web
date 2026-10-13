@@ -20,7 +20,8 @@ para quien construya el motor de asignación (profesores–horarios–salones).
 
 Desde el 2026-09-25 la base que corre es **MariaDB 5.5 en `horariosdace.itam.mx`**, con el API en PHP
 de `../api/` (ya no Supabase ni GitHub Pages). Hay datos reales cargados: catálogos de Matemáticas y
-Estadística, roster de profesores y los formularios del semestre activo. Los `.sql` de Postgres de
+Estadística, las cuentas de profesores (cada quien crea la suya desde el 2026-10-02) y los
+formularios del semestre activo. Los `.sql` de Postgres de
 esta carpeta (`schema.sql`, `triggers.sql`, `rls-policies.sql`, `seed.sql`) son el diseño original y
 quedan como histórico; no incluyen los cambios del 2026-10-02 en adelante.
 

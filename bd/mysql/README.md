@@ -16,8 +16,13 @@ archivos son material nuevo y se editan aquí.
 4. seed-mysql.sql
 5. datos-matematicas-mysql.sql
 6. datos-matematicas-cuestionario-mysql.sql
-7. cargar-profesores.php         <- por SFTP, se abre una vez y se borra
+7. datos-estadistica-mysql.sql, datos-estadistica-co-oferta-mysql.sql
 ```
+
+No hay paso de profesores: desde el 2026-10-02 **cada profesor crea su propia cuenta** en "Crear
+cuenta" (con correo, para poder recuperar la contraseña). El roster precargado de Matemáticas
+(`cargar-profesores.php`) se borró de la base ese día y el archivo quedó vacío (ver "Por qué los
+profesores no son SQL", abajo). Las jefaturas y la cuenta admin se dan de alta a mano.
 
 `schema-mysql.sql` ya describe el estado final. Las **migraciones** son solo para una base que ya
 existía antes del cambio, y no se corren en una instalación desde cero:
@@ -37,6 +42,9 @@ migracion-2026-10-02-correo-y-roles.sql        profesor.correo, y reafirma los r
                                                dos en Matemáticas. ADITIVA: correr ANTES de
                                                desplegar el API nuevo (catalogos.php lee correo:
                                                al revés, todo el sitio da 500).
+migracion-2026-10-02-recuperar-password.sql    profesor.correo pasa a UNIQUE y tabla
+                                               recuperacion_password ("¿Olvidaste tu contraseña?").
+                                               ADITIVA: correr ANTES de desplegar el API nuevo.
 migracion-2026-10-02-num-cursos-opcional.sql   preferencia.num_cursos_max acepta NULL: la pregunta
                                                "Número de cursos" se puede quitar del formulario.
                                                ADITIVA: correr ANTES de desplegar el API nuevo.
@@ -50,12 +58,38 @@ migracion-2026-10-06-franjas-2000-2200-estadistica.sql
                                                con su disponibilidad de salones. ADITIVA: correr
                                                ANTES de desplegar el API nuevo (catalogos.php y
                                                preferencia.php leen departamento_id).
+migracion-2026-10-06-optimizacion-numerica.sql claves nuevas de Matemáticas: MAT-24433 Optimización
+                                               Numérica I (antes 24410 y 24430), MAT-24435
+                                               Optimización Numérica II (antes 24431) y MAT-24505
+                                               Investigación de Operaciones I (antes 24500). La
+                                               vieja queda como alias oculto de la nueva y las
+                                               respuestas ya dadas pasan a la nueva. Sirve en
+                                               base recién sembrada o con la primera versión
+                                               (al revés) ya corrida.
+migracion-2026-10-12-ajuste-num-cursos.sql     tabla ajuste_num_cursos (+ 2 triggers): la jefatura
+                                               sobreescribe el número de cursos de un profesor sin
+                                               tocar su preferencia. ADITIVA: correr ANTES de
+                                               desplegar el API nuevo (respuestas.php y
+                                               reporte.php la leen).
+migracion-2026-10-13-asignaciones-fijas.sql    tablas asignacion_fija y asignacion_fija_horario:
+                                               la jefatura fija profesor (y opcionalmente horario)
+                                               de un grupo antes de correr el motor. ADITIVA:
+                                               correr ANTES de desplegar el API nuevo.
+migracion-2026-10-13b-asignacion-maestria.sql  asignacion_fija.tipo ('maestria' = aparta horario,
+                                               no es curso) y departamento_id; materia_id acepta
+                                               NULL. DESPUÉS de la anterior y ANTES de desplegar
+                                               el API nuevo. Una sola vez.
 ```
 
-Y dos archivos que no son migraciones de esquema:
+**Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por
+bloque contra los créditos y pedía el doble de bloques; ahora es `COUNT(*) = creditos` (1 crédito =
+1 bloque de 30 min, D36). No tiene migración propia: se reemplazó con `DROP FUNCTION` + el
+`CREATE FUNCTION` de `triggers-mysql.sql`, que ya trae la versión corregida.
+
+Y archivos que no son migraciones de esquema:
 
 ```
-datos-estadistica-mysql.sql      las 26 materias de Estadística (ver abajo). Se puede correr en
+datos-estadistica-mysql.sql      las 27 materias de Estadística (ver abajo). Se puede correr en
                                  cualquier momento; es idempotente.
 datos-estadistica-co-oferta-mysql.sql
                                  20 filas de equivalencias de Estadística: 10 oficiales (columna
@@ -70,6 +104,15 @@ reinicio-2026-10-02-formulario-estadistica.sql
 limpieza-2026-10-02-prueba.sql   borra el formulario/cuenta de prueba que salía arriba de Beatriz
                                  en "Preferencias recibidas". En DOS pasos: primero identifica el
                                  CU, luego borra solo ese.
+limpieza-2026-10-02-roster-matematicas.sql
+                                 borra las cuentas con rol profesor de Matemáticas (el roster
+                                 precargado): cada quien crea la suya. En DOS pasos; no toca
+                                 jefaturas, admin ni otros departamentos.
+ajuste-2026-10-06-disponibilidad-estadistica.sql
+                                 colorea a mano 32 celdas de la malla de una profesora de
+                                 Estadística que contestó antes de las franjas de 20:00-22:00
+                                 (D32). DESPUÉS de esa migración. Solo toca esas celdas; es
+                                 idempotente. Sin el CU (repo público): hay que ponerlo en @cu.
 ```
 
 ### Los datos reales
@@ -81,7 +124,7 @@ los datos reales de Matemáticas, traducidos de los originales de PostgreSQL que
 ```
 5. datos-matematicas-mysql.sql               51 materias + 54 pares de co-oferta
 6. datos-matematicas-cuestionario-mysql.sql  51 filas de configuracion del cuestionario
-7. cargar-profesores.php                     los 45 profesores (NO es SQL, ver abajo)
+7. cargar-profesores.php                     VACÍO desde 2026-10-02 (ver abajo)
 ```
 
 **Los originales son los de `DACE/BD/`.** Si cambian los datos, se cambian allá y se vuelve a
@@ -136,9 +179,11 @@ MySQL no tiene bcrypt: ni función, ni extensión. La única forma de generar es
 desde la aplicación, y conviene que sea con `password_hash()` de PHP — la misma función cuyo
 `password_verify()` los lee después en `api/login.php`.
 
-`cargar-profesores.php` es de **un solo uso**: se sube a la raíz del sitio, se abre una vez, y
-se borra. Es idempotente (`INSERT IGNORE` por `cu`), así que correrlo dos veces no duplica ni
-pisa una contraseña ya cambiada.
+`cargar-profesores.php` era de **un solo uso**: se subía a la raíz del sitio, se abría una vez y
+se borraba. Cargó los 45 profesores de Matemáticas el 2026-09-25. **Desde el 2026-10-02 está
+vacío**: ese día se decidió que cada profesor cree su propia cuenta, se borró el roster de la base
+(`limpieza-2026-10-02-roster-matematicas.sql`) y se sacaron del archivo los CU, que no deben estar
+en un repo público.
 
 ### La trampa del semestre
 

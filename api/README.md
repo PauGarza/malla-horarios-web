@@ -1,6 +1,6 @@
 # `api/` — el backend en PHP
 
-Doce endpoints y seis archivos de librería que corren en
+Dieciocho endpoints y seis archivos de librería que corren en
 `https://horariosdace.itam.mx/api/`, contra el MySQL del ITAM
 (`../bd/mysql/`).
 
@@ -79,19 +79,21 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 | `perfil.php` | POST | `{correo}` → `{ok, correo}`. Lo editable del perfil propio. Desde 2026-10-02 el correo es obligatorio (no se puede borrar) y único |
 | `olvide-password.php` | POST | `{correo}` → `{ok}` **siempre**, exista o no la cuenta. Sin sesión. Si es de una cuenta activa, manda un enlace `/#restablecer=<token>` que vale 1 hora y una vez (2026-10-02) |
 | `restablecer-password.php` | POST | `{token, password_nueva}` → `{ok, cu}`. Sin sesión; canjea el enlace. 400 `token_invalido` si venció, ya se usó o no existe |
-| `catalogos.php` | GET | Perfil propio (con `correo`), departamentos, franjas, semestre actual y si el formulario propio está publicado |
+| `catalogos.php` | GET | Perfil propio (con `correo`), departamentos, franjas, semestre actual y si el formulario propio está publicado. Manda **todas** las franjas con `dias` (null = todos los días, D31) y `departamento_id` (null = todos los departamentos, D32); el frontend filtra según el formulario que dibuja |
 | `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado |
-| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` solo se exige (1-6) si el formulario del profesor trae esa pregunta; si no, se guarda NULL (2026-10-02) |
+| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` solo se exige (1-6) si el formulario del profesor trae esa pregunta; si no, se guarda NULL (2026-10-02). Las celdas de disponibilidad en un día o un departamento en que su franja no existe se descartan en silencio; una franja inexistente es 400 |
 | `panel.php` | GET | Roster + preferencia de cada quien (jefatura) |
 | `reabrir.php` | POST | `estado` → `borrador` (jefatura) |
 | `materias.php` | GET, POST, PATCH, PUT | Catálogo de materias y co-oferta (jefatura) |
 | `configuracion.php` | GET, PUT, POST | El editor del formulario: leerlo, guardarlo completo, publicarlo (jefatura). Exige una sección de disponibilidad y a lo más una de número de cursos (opcional desde 2026-10-02) |
-| `respuestas.php` | GET, POST | Matriz profesores × materias y bloqueos de jefatura (jefatura) |
+| `respuestas.php` | GET, POST | Matriz profesores × materias y bloqueos de jefatura (jefatura). `?recurso=num_cursos` `{profesor_id, num_cursos: 0-6 | null}`: la jefatura sobreescribe el número de cursos de un profesor en `ajuste_num_cursos` (null lo quita); `preferencia` no se toca y el profesor nunca lo ve (2026-10-12) |
+| `asignaciones.php` | GET, POST, PUT, DELETE | Asignaciones directas de la jefatura antes del motor (`asignacion_fija` + `asignacion_fija_horario`, 2026-10-13): materia + profesor + horario opcional. `tipo: 'maestria'` (sin `materia_id`) aparta horas del profesor sin contar como curso: horario obligatorio y sin atar a créditos. Rechaza par bloqueado, horario que no sume `materia.creditos`, franja inválida para el día/departamento y choques entre fijas del mismo profesor; lo demás (rojo en disponibilidad, exceso de cursos) solo lo avisa la vista. `?recurso=disponibilidad&profesor_id=` da la rejilla de un profesor (jefatura) |
+| `reporte.php` | GET | Por profesor: contrato, cursos solicitados, materias (con la lista) y horas en verde/amarillo/rojo (jefatura). Horas = suma de la duración de las franjas marcadas; sin bloqueos de jefatura. `?recurso=horas`: las celdas de disponibilidad de cada profesor, para el mapa de calor |
 | `demanda.php` | GET, POST | Estimación de demanda de Servicios Escolares: leerla y reemplazarla (jefatura). Las materias agregadas a mano en la pantalla llegan como filas normales con las columnas del reporte en 0 |
 | `semestres.php` | GET, POST | Ciclo de semestres: listar, abrir el siguiente, reactivar uno (admin y jefa de división) |
 
 Los que aceptan varias operaciones las distinguen con `?recurso=` (`materias.php?recurso=co_oferta`,
-`configuracion.php?recurso=formulario|publicar`, `respuestas.php?recurso=bloqueo`). Los de
+`configuracion.php?recurso=formulario|publicar`, `respuestas.php?recurso=bloqueo|num_cursos`, `reporte.php?recurso=horas`). Los de
 jefatura aceptan `&departamento_id=` para quien `ve_todos_los_departamentos()`; sin él usan el
 departamento propio.
 
@@ -108,7 +110,15 @@ departamento. Para devolverle los 3 se pone en `false` aquí **y** en `frontend/
 | Soto (`jefe_departamento`) | 200 | 403 | 403 | 403 |
 | admin | 200 | 200 | 200 | 200 |
 
-(Lo esperado tras el deploy; falta comprobarlo contra producción.)
+(Comprobado en el navegador con las cuentas de Rumbos y Soto; confirmado por la usuaria el 2026-10-13.)
+
+**Cuentas de admin (desde 2026-10-09).** `registro.php` siempre crea `profesor`, así que un admin
+se da de alta a mano en phpMyAdmin: `rol = 'admin'`, con `departamento_id`, `tipo_contrato` y `correo`
+en NULL (la app pide el correo en el primer inicio de sesión). Es la forma que describe
+`chk_profesor_depto` para admin, servicios escolares y nómina, pero MariaDB 5.5 ignora ese CHECK y
+nada lo valida. `password_hash` tiene que ser bcrypt: `php -r 'echo password_hash("…", PASSWORD_DEFAULT);'`
+en el servidor, o `bcryptjs` en Node (no hay PHP local). Hay una: CU `1`, creada el 2026-10-09 con
+contraseña temporal para cambiar al entrar.
 
 **Semestre activo (desde 2026-09-29).** Hay exactamente uno; `lib/semestre.php` lo resuelve y
 `exigir_semestre_activo()` hace que toda escritura que cuelga de un semestre (preferencias,
@@ -127,9 +137,11 @@ use un profesor los consulta, porque el profesor no debe enterarse.
 otro invalida el anterior. Responde antes de mandar el correo (`fastcgi_finish_request`) para
 que el tiempo de respuesta no delate si la cuenta existe. Límites: 5 solicitudes / 5 min por IP y
 3 por correo. El correo sale por `lib/correo.php`: `mail()` del servidor por defecto, o SMTP si
-`config.php` trae `'smtp' => ['host' => …]` (ver `lib/config.example.php`). **No se ha comprobado
-todavía que `mail()` entregue desde este servidor**: si el enlace no llega, revisar el log de PHP
-(`correo.php: …`) y pasar a SMTP con una cuenta que dé la DSTI.
+`config.php` trae `'smtp' => ['host' => …]` (ver `lib/config.example.php`). **`mail()` sí entrega** desde
+este servidor (probado el 2026-10-02), pero Outlook del ITAM lo manda a correo no deseado y lo
+marca como remitente externo. Pendiente con la DSTI: autorizar `horariosdace.itam.mx` como
+remitente (SPF/lista segura) o dar una cuenta SMTP institucional. Si un enlace no llega, revisar
+el log de PHP (`correo.php: …`).
 
 ## Reglas que se respetan en todos
 
