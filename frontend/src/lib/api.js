@@ -84,6 +84,7 @@ const conCuerpo = (metodo) => (ruta, token, cuerpo) =>
 const post = conCuerpo('POST');
 const put = conCuerpo('PUT');
 const patch = conCuerpo('PATCH');
+const borrar = (ruta, token) => pedir(ruta, token, { method: 'DELETE' });
 
 // --- Sesión -----------------------------------------------------------------
 
@@ -148,7 +149,10 @@ export const reabrirPreferencia = (token, preferenciaId) =>
 
 // --- Catálogo de materias ---------------------------------------------------
 
-export const listarMaterias = (token) => pedir('materias.php', token);
+// departamentoId opcional: sin él, el servidor usa el departamento propio
+// (jefe_departamento). El admin no tiene, así que siempre lo manda.
+export const listarMaterias = (token, departamentoId) =>
+  pedir(departamentoId ? `materias.php?departamento_id=${departamentoId}` : 'materias.php', token);
 
 export const crearMateria = (token, materia) => post('materias.php', token, materia);
 
@@ -189,6 +193,39 @@ export const cambiarBloqueo = (token, semestreId, departamentoId, profesorId, ma
     materia_id: materiaId,
     bloqueado,
   });
+
+/** numCursos null quita el ajuste: vuelve a valer lo que pidió el profesor. */
+export const ajustarNumCursos = (token, semestreId, departamentoId, profesorId, numCursos) =>
+  post(conDepto('respuestas.php?recurso=num_cursos', semestreId, departamentoId), token, {
+    profesor_id: profesorId,
+    num_cursos: numCursos,
+  });
+
+// --- Reporte de preferencias (jefatura) -------------------------------------
+
+export const leerReporte = (token, semestreId, departamentoId) =>
+  pedir(conDepto('reporte.php', semestreId, departamentoId), token);
+
+/** Las celdas de disponibilidad de cada profesor, para el mapa de calor. */
+export const leerReporteHoras = (token, semestreId, departamentoId) =>
+  pedir(conDepto('reporte.php?recurso=horas', semestreId, departamentoId), token);
+
+// --- Asignaciones directas (jefatura) ---------------------------------------
+
+export const leerAsignaciones = (token, semestreId, departamentoId) =>
+  pedir(conDepto('asignaciones.php', semestreId, departamentoId), token);
+
+export const leerDisponibilidadProfesor = (token, semestreId, departamentoId, profesorId) =>
+  pedir(conDepto(`asignaciones.php?recurso=disponibilidad&profesor_id=${profesorId}`, semestreId, departamentoId), token);
+
+/** asignacion: { materia_id, profesor_id, horario: [[dia, franja_id]], nota }. Sin id, la crea. */
+export const guardarAsignacion = (token, semestreId, departamentoId, asignacion, id = null) =>
+  id
+    ? put(conDepto(`asignaciones.php?id=${id}`, semestreId, departamentoId), token, asignacion)
+    : post(conDepto('asignaciones.php', semestreId, departamentoId), token, asignacion);
+
+export const quitarAsignacion = (token, semestreId, departamentoId, id) =>
+  borrar(conDepto(`asignaciones.php?id=${id}`, semestreId, departamentoId), token);
 
 // --- Semestres (admin y jefa de división) ----------------------------------
 

@@ -522,6 +522,68 @@ CREATE TABLE bloqueo_profesor_materia (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Restriccion DURA para el motor. Capa aparte: no toca preferencia_materia y el profesor nunca la ve.';
 
+-- La jefatura sobreescribe el numero de cursos que pidio un profesor
+-- (2026-10-12). Misma idea que bloqueo_profesor_materia: capa aparte, la
+-- respuesta del profesor queda intacta y el profesor nunca la ve. Para el
+-- motor: COALESCE(ajuste_num_cursos.num_cursos, preferencia.num_cursos_max).
+-- No cuelga de preferencia porque se puede ajustar a quien aun no contesta.
+CREATE TABLE ajuste_num_cursos (
+    profesor_id  INT NOT NULL,
+    semestre_id  INT NOT NULL,
+    num_cursos   INT NOT NULL COMMENT '0-6. 0 = no se le asignan cursos este semestre.',
+    ajustado_por INT NOT NULL,
+    ajustado_at  DATETIME NOT NULL COMMENT 'UTC.',
+    PRIMARY KEY (profesor_id, semestre_id),
+    KEY idx_anc_semestre (semestre_id),
+    CONSTRAINT fk_anc_profesor FOREIGN KEY (profesor_id)  REFERENCES profesor(id),
+    CONSTRAINT fk_anc_semestre FOREIGN KEY (semestre_id)  REFERENCES semestre(id),
+    CONSTRAINT fk_anc_por      FOREIGN KEY (ajustado_por) REFERENCES profesor(id),
+    CONSTRAINT chk_anc_cursos  CHECK (num_cursos BETWEEN 0 AND 6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Ajuste de jefatura a preferencia.num_cursos_max. Capa aparte: no toca la preferencia y el profesor nunca lo ve.';
+
+-- Asignaciones directas de la jefatura antes de correr el motor (2026-10-13):
+-- "este profesor da un grupo de esta materia", y opcionalmente cuándo. Una
+-- fila = un grupo. Capa aparte de grupo/imparte porque todavia no hay CRN ni
+-- salon. Las reglas entre filas (creditos = bloques, sin choques del mismo
+-- profesor, franja valida) las valida api/asignaciones.php.
+-- tipo = 'maestria' (2026-10-13 b): materia de maestria que no esta en el
+-- catalogo del departamento. Sin materia_id; solo aparta el horario del
+-- profesor (como rojo) y no cuenta como curso ni como grupo.
+CREATE TABLE asignacion_fija (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id INT NOT NULL,
+    tipo        ENUM('materia','maestria') NOT NULL DEFAULT 'materia'
+                COMMENT 'maestria = aparta horario del profesor; no es curso ni grupo del departamento.',
+    departamento_id INT NOT NULL,
+    materia_id  INT NULL COMMENT 'NULL solo con tipo = maestria.',
+    profesor_id INT NOT NULL,
+    nota        VARCHAR(500) NULL COMMENT 'Por qué se fijó; solo para la jefatura.',
+    creado_por  INT NOT NULL,
+    creado_at   DATETIME NOT NULL COMMENT 'UTC.',
+    KEY idx_af_semestre (semestre_id),
+    KEY idx_af_materia (materia_id),
+    KEY idx_af_profesor (profesor_id),
+    KEY idx_af_departamento (departamento_id),
+    CONSTRAINT fk_af_semestre FOREIGN KEY (semestre_id) REFERENCES semestre(id),
+    CONSTRAINT fk_af_departamento FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_af_materia  FOREIGN KEY (materia_id)  REFERENCES materia(id),
+    CONSTRAINT fk_af_profesor FOREIGN KEY (profesor_id) REFERENCES profesor(id),
+    CONSTRAINT fk_af_por      FOREIGN KEY (creado_por)  REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Restriccion DURA para el motor: un grupo de esta materia lo da este profesor. Una fila = un grupo.';
+
+CREATE TABLE asignacion_fija_horario (
+    asignacion_fija_id INT NOT NULL,
+    dia                ENUM('lunes','martes','miercoles','jueves','viernes') NOT NULL,
+    franja_id          INT NOT NULL,
+    PRIMARY KEY (asignacion_fija_id, dia, franja_id),
+    KEY idx_afh_franja (franja_id),
+    CONSTRAINT fk_afh_asignacion FOREIGN KEY (asignacion_fija_id) REFERENCES asignacion_fija(id) ON DELETE CASCADE,
+    CONSTRAINT fk_afh_franja     FOREIGN KEY (franja_id)          REFERENCES franja_horaria(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Horario fijado de una asignacion_fija, en bloques de 30 min. Sin filas = el motor elige el horario.';
+
 -- -----------------------------------------------------------------------------
 -- Infraestructura del API (no existe en el esquema de Postgres)
 -- -----------------------------------------------------------------------------
