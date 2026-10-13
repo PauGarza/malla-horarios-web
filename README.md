@@ -57,7 +57,8 @@ malla-horarios-web/
 │                                           grupos por día y franja, choques, avisos y grupos por asignar
 ├── frontend/                            — app real (React), servida desde horariosdace.itam.mx
 ├── api/                                 — API en PHP 7.4: login, formulario, respuestas, demanda,
-│                                           semestres; la autorización vive aquí (ver su README)
+│                                           semestres, reportes y asignaciones directas; la
+│                                           autorización vive aquí (ver su README)
 ├── backend/                             — backend ANTERIOR (funciones de Supabase), ya reemplazado
 │                                           por api/; se conserva como referencia
 └── bd/                                  — diseño de base de datos: esquema, diagrama, decisiones de
@@ -88,20 +89,32 @@ datos):
 ## Estado actual
 
 La app corre en **https://horariosdace.itam.mx/**: frontend en React (`frontend/`), API propio en
-PHP (`api/`) y MySQL del ITAM (`bd/mysql/`). Está cargado Matemáticas (materias, co-oferta y 45
-profesores). Lo que ya funciona:
+PHP (`api/`) y MySQL del ITAM (`bd/mysql/`). Están cargados los catálogos de Matemáticas y
+Estadística (materias y co-oferta); cada profesor crea su propia cuenta. Lo que ya funciona:
 
-- Login con clave única, perfil y cambio de contraseña.
+- Alta de cuenta con clave única y correo, login, perfil, cambio de contraseña y "¿Olvidaste tu
+  contraseña?" por correo.
 - **Ciclo de semestres**: un semestre activo; abrir el siguiente copia el formulario anterior.
 - **Formulario editable por jefatura**, "como un Google Forms" (secciones de materias, preguntas
   abiertas, textos, mínimos), que se publica cuando está listo. Todos los profesores de un
   departamento ven el mismo formulario.
 - **Respuestas y bloqueos**: matriz profesores × materias; la jefatura bloquea pares antes de
-  correr el algoritmo, sin que el profesor lo vea.
+  correr el algoritmo, sin que el profesor lo vea. Ahí mismo puede **ajustar el número de cursos**
+  de un profesor (queda marcado y el profesor no lo ve).
 - **Carga de la estimación de demanda** subiendo el PDF de Servicios Escolares.
+- **Asignaciones directas**: la jefatura fija qué profesor da qué materia (y si quiere, a qué hora)
+  antes de correr el algoritmo, que lo respetará tal cual. Incluye la "Materia de Maestría", que
+  aparta el horario del profesor sin contar como curso.
+- **Reportes para la jefatura**: por profesor (contrato, cursos solicitados, materias y horas en
+  verde/amarillo/rojo, con descarga en CSV) y un mapa de calor de las horas que pidieron.
+- **Perfil de administrador**: ve y edita los 3 departamentos, uno a la vez, con un selector de
+  departamento en cada vista de jefatura.
 
-Pendiente: el motor de asignación (`bd/motor-asignacion.md`), las cartas de asignación, y cargar
-Actuaría y Estadística. `backend/` es el backend anterior (Supabase), ya reemplazado por `api/`.
+Pendiente: conectar el motor de asignación. El contrato de datos (JSON que se descarga para el
+algoritmo y JSON que regresa) está en `docs/convencion-datos-motor.md` del repo del servicio social
+(`malla-horarios`), donde también vive el motor v0 (`optV0/`); aquí falta la descarga, la subida y
+la vista de malla. También las cartas de asignación, y cargar Actuaría. `backend/` es el backend
+anterior (Supabase), ya reemplazado por `api/`.
 
 ## Cómo contribuir
 

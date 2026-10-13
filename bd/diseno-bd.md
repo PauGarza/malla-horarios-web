@@ -651,6 +651,42 @@ la tabla (un respaldo, phpMyAdmin) no puede usarla para entrar a ninguna cuenta.
 | expira_at | datetime NOT NULL | UTC, una hora después de `creado_at` |
 | usado_at | datetime NULL | se llena al restablecer; un token usado no vuelve a servir |
 
+### `ajuste_num_cursos` (nueva 2026-10-12 — la jefatura sobreescribe el número de cursos, ver §16)
+Misma idea que `bloqueo_profesor_materia`: capa aparte, `preferencia.num_cursos_max` queda intacto y
+el profesor nunca la ve. No cuelga de `preferencia` porque se puede ajustar a quien aún no contesta.
+| Columna | Tipo | Notas |
+|---|---|---|
+| profesor_id | int FK → profesor | |
+| semestre_id | int FK → semestre | |
+| num_cursos | int NOT NULL | 0–6 (triggers `trg_anc_cursos_*`). 0 = este semestre no se le asignan cursos |
+| ajustado_por | int NOT NULL FK → profesor | quién de la jefatura lo ajustó |
+| ajustado_at | datetime NOT NULL | UTC |
+| PK(profesor_id, semestre_id) | | |
+
+### `asignacion_fija` (nueva 2026-10-13 — asignaciones directas antes del motor, ver §16)
+Restricción DURA: un grupo de esta materia lo da este profesor. **Una fila = un grupo.** Capa aparte
+de `grupo`/`imparte` porque a esta altura no hay CRN ni salón.
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | serial PK | |
+| semestre_id | int NOT NULL FK → semestre | |
+| tipo | enum(materia, maestria) NOT NULL | `maestria` = materia de maestría fuera del catálogo: aparta horario, no es curso |
+| departamento_id | int NOT NULL FK → departamento | el de la jefatura que la fijó (antes salía de la materia; con `maestria` no hay materia) |
+| materia_id | int NULL FK → materia | NULL solo con `tipo = maestria` (lo valida el API) |
+| profesor_id | int NOT NULL FK → profesor | |
+| nota | varchar(500) NULL | por qué se fijó o, en maestría, qué materia es; solo la ve la jefatura |
+| creado_por | int NOT NULL FK → profesor | |
+| creado_at | datetime NOT NULL | UTC |
+
+### `asignacion_fija_horario` (nueva 2026-10-13 — horario de una asignación fija)
+Bloques de 30 min. Sin filas = el motor elige el horario (no se permite con `tipo = maestria`).
+| Columna | Tipo | Notas |
+|---|---|---|
+| asignacion_fija_id | int FK → asignacion_fija (ON DELETE CASCADE) | |
+| dia | enum(lunes … viernes) | |
+| franja_id | int FK → franja_horaria | debe valer ese día y para ese departamento (lo valida el API) |
+| PK(asignacion_fija_id, dia, franja_id) | | con `tipo = materia` suman exactamente `materia.creditos` bloques |
+
 ## 7. Resumen de relaciones
 
 - `departamento` 1—N `profesor`, `materia`
@@ -1086,3 +1122,32 @@ se aplicaron como migraciones aditivas, antes de desplegar el API que las lee.
 - **Claves nuevas de Matemáticas** (Optimización Numérica I y II, Investigación de Operaciones I).
   Es un cambio de datos que usa el patrón de alias de `materia_cuestionario` (ver el ejemplo en §6);
   no cambia el esquema.
+
+## 16. Cambios del 2026-10-12 y 2026-10-13: decisiones de la jefatura antes del motor
+
+Ya están en `mysql/schema-mysql.sql`. En la base que corre se aplicaron
+el 2026-10-12/13 como migraciones aditivas, antes de desplegar el API que las lee (`migracion-2026-10-12-ajuste-num-cursos.sql`,
+`migracion-2026-10-13-asignaciones-fijas.sql` y `migracion-2026-10-13b-asignacion-maestria.sql`). Las
+tres siguen el patrón de `bloqueo_profesor_materia` (§12): **lo que decide la jefatura va en una
+tabla propia**, encima de lo que contestó el profesor, sin tocarlo y sin que él lo vea. Decisiones
+D33–D35 de `GUIA-DECISIONES.md`.
+
+- **Ajuste del número de cursos** (`ajuste_num_cursos`, D33). Desde Respuestas y bloqueos. Para el
+  motor manda el ajuste: `COALESCE(ajuste_num_cursos.num_cursos, preferencia.num_cursos_max)`.
+  Admite 0, que el profesor no puede pedir. Rango validado con triggers (MariaDB 5.5 ignora el
+  `CHECK`) y en el API. *Nota: el editor SQL de phpMyAdmin marca como error un `CONSTRAINT … CHECK`
+  dentro de un `CREATE TABLE`, así que la migración lo omite; el `schema-mysql.sql` lo conserva
+  como los demás.*
+- **Asignaciones directas** (`asignacion_fija` + `asignacion_fija_horario`, D34). Restricción dura
+  que el motor coloca primero y que **manda sobre la disponibilidad**. Las reglas que cruzan filas o
+  tablas no las fuerza la base sino `api/asignaciones.php`: el horario suma `materia.creditos`, la
+  franja vale para ese día y departamento, no hay choque con otra fija del mismo profesor (en
+  cualquier departamento), y no se fija un par bloqueado.
+- **Materia de Maestría** (`asignacion_fija.tipo = 'maestria'`, D35). Las materias de maestría (MCD,
+  MR) no están en el catálogo del departamento. Se modelan como un tipo de asignación fija **sin
+  `materia_id`**, no como una fila "dummy" en `materia`: una materia sin fila en
+  `materia_cuestionario` aparece por omisión en el formulario de todos los profesores (fail-open,
+  §12), y además saldría en el catálogo, la demanda y los reportes. Su horario es obligatorio y no se
+  ata a créditos; para el motor son horas ocupadas del profesor (como rojo) y **no cuentan como
+  curso**. Por la falta de `materia_id`, el departamento de una asignación fija pasó a ser columna
+  propia (`departamento_id`).

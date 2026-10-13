@@ -62,6 +62,15 @@ erDiagram
 
     DEPARTAMENTO |o--o{ FRANJA_HORARIA : "franjas exclusivas (20:00-22:00 Estadística)"
     PROFESOR ||--o{ RECUPERACION_PASSWORD : "olvidé mi contraseña"
+
+    PROFESOR ||--o{ AJUSTE_NUM_CURSOS : "ajuste de jefatura"
+    SEMESTRE ||--o{ AJUSTE_NUM_CURSOS : ""
+    PROFESOR ||--o{ ASIGNACION_FIJA : "fijado por jefatura"
+    MATERIA |o--o{ ASIGNACION_FIJA : "NULL si es de maestría"
+    SEMESTRE ||--o{ ASIGNACION_FIJA : ""
+    DEPARTAMENTO ||--o{ ASIGNACION_FIJA : ""
+    ASIGNACION_FIJA ||--o{ ASIGNACION_FIJA_HORARIO : ""
+    FRANJA_HORARIA ||--o{ ASIGNACION_FIJA_HORARIO : ""
 ```
 
 `INTENTO_LOGIN` no aparece en el diagrama: no tiene llaves foráneas (es el contador del límite de
@@ -221,7 +230,9 @@ erDiagram
 Desde 2026-09-28 el formulario de cada departamento/semestre es una lista ordenada de secciones que
 edita la jefatura (`CUESTIONARIO_SECCION`), y ya no hay lista personalizada por profesor: se
 eliminaron `PROFESOR_MATERIA_ELEGIBLE` y `profesor.modo_materias_elegibles`. Lo que se decide por
-persona va después, como `BLOQUEO_PROFESOR_MATERIA`. Ver `diseno-bd.md` §12.
+persona va después, como `BLOQUEO_PROFESOR_MATERIA`. Ver `diseno-bd.md` §12. Igual que el bloqueo, desde
+2026-10-12/13 la jefatura tiene dos capas más encima de lo que contestó el profesor:
+`AJUSTE_NUM_CURSOS` y las asignaciones directas (`ASIGNACION_FIJA`, con su horario opcional). Ver §16.
 
 ```mermaid
 erDiagram
@@ -316,6 +327,32 @@ erDiagram
     FRANJA_HORARIA ||--o{ DISPONIBILIDAD : ""
     PROFESOR ||--o{ BLOQUEO_PROFESOR_MATERIA : "(hard, jefatura)"
     MATERIA ||--o{ BLOQUEO_PROFESOR_MATERIA : ""
+
+    AJUSTE_NUM_CURSOS {
+        int profesor_id FK
+        int semestre_id FK
+        int num_cursos
+        int ajustado_por FK
+    }
+    ASIGNACION_FIJA {
+        int id PK
+        int semestre_id FK
+        text tipo "materia | maestria"
+        int departamento_id FK
+        int materia_id FK "NULL si maestria"
+        int profesor_id FK
+        text nota
+    }
+    ASIGNACION_FIJA_HORARIO {
+        int asignacion_fija_id FK
+        text dia
+        int franja_id FK
+    }
+    PROFESOR ||--o{ AJUSTE_NUM_CURSOS : "(jefatura, sobre num_cursos_max)"
+    PROFESOR ||--o{ ASIGNACION_FIJA : "(hard, jefatura)"
+    MATERIA |o--o{ ASIGNACION_FIJA : ""
+    ASIGNACION_FIJA ||--o{ ASIGNACION_FIJA_HORARIO : "horario opcional"
+    FRANJA_HORARIA ||--o{ ASIGNACION_FIJA_HORARIO : ""
 ```
 
 ## Dominio: salones, roles y configuración por departamento

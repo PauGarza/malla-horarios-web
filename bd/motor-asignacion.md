@@ -20,6 +20,8 @@
 | `profesor` | Roster: `departamento_id`, `tipo_contrato` (tiempo_completo asigna por curso, asignatura por hora — RN04). Desde 2026-09-28 ya no hay lista personalizada de materias por profesor (`modo_materias_elegibles` se eliminó): todos los de un departamento contestan el mismo formulario. |
 | `preferencia`, `preferencia_materia`, `disponibilidad` | Lo que declaró cada profesor para el semestre. **`disponibilidad` es restricción DURA** (el profesor dijo que no puede en rojo — no asignar ahí). **`preferencia_materia` es BLANDA** (ranking de materias deseadas — el motor debe intentar maximizarla, no es obligatoria de cumplir al 100%). |
 | `bloqueo_profesor_materia` | **Restricción DURA** (2026-09-28): la jefatura decidió que ese profesor NO da esa materia ese semestre. Nunca asignarlo, sin importar lo que haya contestado en `preferencia_materia` (esa respuesta se conserva intacta debajo del bloqueo). |
+| `ajuste_num_cursos` | (2026-10-12) La jefatura sobreescribió el número de cursos que pidió el profesor (desde Respuestas y bloqueos). **Si hay fila, ese número manda** sobre `preferencia.num_cursos_max`: `COALESCE(ajuste_num_cursos.num_cursos, preferencia.num_cursos_max)`. Puede ser **0** = este semestre no se le asignan cursos. |
+| `asignacion_fija`, `asignacion_fija_horario` | **Restricción DURA** (2026-10-13): asignaciones directas que la jefatura fijó antes de correr el motor. Cada fila de `asignacion_fija` es **un grupo**: tiene que existir un grupo de esa `materia_id` con ese `profesor_id`. Si la fila tiene horario en `asignacion_fija_horario`, ese grupo va **exactamente** en esos bloques (ya suman `materia.creditos` y no chocan entre sí para el mismo profesor; lo valida `api/asignaciones.php`). Sin horario, el motor elige cuándo. El salón siempre lo elige el motor. **`tipo = 'maestria'`** (sin `materia_id`): materia de maestría que no está en el catálogo; **no es un grupo que crear**, solo aparta esas horas del profesor. Ver §3. |
 | `preferencia_respuesta` | Respuestas a las preguntas abiertas del formulario (una fila por sección `abierta`). Texto libre para que lo lea la jefatura; el motor no lo interpreta. Reemplaza a `preferencia.horarios_otro_depto` / `observaciones_*`, que quedaron obsoletas. |
 | `departamento_semestre_config` | `horas_minimas_verde` (umbral de validez de una preferencia — ver checklist de envío). `publicado` dice si el formulario ya estaba abierto. (`mostrar_seleccion_materias` quedó obsoleta: un departamento que no captura materias simplemente no tiene secciones de materias en `cuestionario_seccion`, y el motor solo tiene `disponibilidad` como input de ese departamento.) |
 | `cuestionario_seccion`, `materia_cuestionario` | Qué materias vio cada departamento en su formulario y en qué sección. `cuestionario_seccion.cobertura_departamental` marca las secciones de cursos departamentales; ya viene copiado a `preferencia_materia.cobertura_departamental`. |
@@ -39,7 +41,7 @@ En este orden, por cada `grupo`:
 3. **`imparte_profesor`** — una fila por profesor asignado a ese `imparte` (casi siempre uno; puede
    ser más de uno si hay co-titularidad, confirmado con datos reales).
 4. **`imparte_horario`** — una fila por cada bloque de 30 min que el grupo ocupa (día + franja +
-   salón). **La suma de filas × 0.5 debe igualar `materia.creditos`** (ver `fn_validar_creditos_imparte`
+   salón). **El número de filas debe igualar `materia.creditos`**: 1 crédito = media hora = 1 bloque (un grupo de 6 créditos ocupa 6 bloques, 3 h por semana; confirmado 2026-10-09 con la columna Hrs del PDF de demanda) (ver `fn_validar_creditos_imparte`
    en `mysql/triggers-mysql.sql` — es una función de validación, no un trigger automático; hay que llamarla antes
    de marcar el grupo como `asignado`, porque a medio construir el horario la suma todavía no cierra).
 5. **`imparte_co_oferta`** — solo si el grupo es co-oferta de otro (`materia_co_oferta` lo indica en
@@ -73,17 +75,30 @@ gastar intentos en combinaciones que la base va a rechazar (ver `mysql/triggers-
   — hay que sumar `imparte_horario` de TODOS los departamentos donde ese profesor tenga clase ese
   semestre, no solo el propio.
 - **Asignación por tipo de contrato** (RN04): Tiempo Completo se piensa por número de cursos
-  (`preferencia.num_cursos_max`), Asignatura por horas. **`num_cursos_max` puede ser NULL** desde
+  (`preferencia.num_cursos_max`, o `ajuste_num_cursos.num_cursos` si la jefatura lo ajustó), Asignatura por horas. **`num_cursos_max` puede ser NULL** desde
   2026-10-02: la jefatura puede quitar esa pregunta de su formulario. NULL = "no lo dijo", no "cero".
 - **Sin medias horas sueltas** (RN06) — no dejar huecos de 30 min aislados en el día de un profesor o
   un salón.
 - **Cupo de salón vs. tamaño de grupo**: `grupo.cupo_maximo <= salon.capacidad`.
 - **Bloqueos de jefatura**: nunca asignar un par profesor-materia que esté en
   `bloqueo_profesor_materia` para ese semestre.
+- **Asignaciones fijas de jefatura** (`asignacion_fija`): se colocan **primero** y no se mueven. Por
+  cada fila, un grupo de esa materia con ese profesor (y en esos bloques, si trae
+  `asignacion_fija_horario`); cuentan para sus cursos, sus horas y los `grupos_sugeridos` de la materia.
+  Mandan sobre la disponibilidad: la jefatura puede fijar a alguien en una hora que marcó en rojo (la
+  vista se lo advierte, pero la decisión es suya), así que el motor **no** debe descartar una fija por
+  eso. Lo que sí es imposible ya lo rechaza el API: una fija sobre un par bloqueado, horarios que no
+  sumen los créditos o que choquen entre fijas del mismo profesor. Si hay más fijas que
+  `grupos_sugeridos`, se respetan todas (la jefatura abrió un grupo más).
+- **Materia de Maestría** (`asignacion_fija.tipo = 'maestria'`, 2026-10-13): **no** se crea grupo ni
+  `imparte`. Sus bloques de `asignacion_fija_horario` son horas **ocupadas** del profesor: tratarlas
+  como `rojo` (no asignarle nada ahí). **No cuenta como curso**: si pidió 1 curso y tiene una de
+  maestría, todavía hay que asignarle 1. Tampoco cuenta para `grupos_sugeridos` ni para el tope de
+  horas de asignatura del departamento. Siempre trae horario; no está atado a créditos.
 - **Disponibilidad dura**: nunca asignar un bloque marcado `rojo` en `disponibilidad` para ese
   profesor. Una celda **sin fila** en `disponibilidad` es "sin respuesta" (el profesor no la marcó; por
-  ejemplo, contestó antes de que existieran las franjas de 20:00–22:00). No es verde. Si cuenta como
-  rojo o como amarillo **está por decidir con la jefatura**. `amarillo` es "posible pero complicado" — evitarlo si hay alternativa en `verde`, no es un
+  ejemplo, contestó antes de que existieran las franjas de 20:00–22:00). No es verde. **Cuenta como rojo**
+  (decidido 2026-10-09): no asignar ahí. `amarillo` es "posible pero complicado" — evitarlo si hay alternativa en `verde`, no es un
   bloqueo absoluto.
 
 ### Objetivo a maximizar, no restricción a cumplir siempre
@@ -105,10 +120,14 @@ de autorización (por ejemplo, solo jefatura de su departamento o admin). Está 
 
 ## 5. Qué NO existe todavía (para no asumir que sí)
 
-- No hay motor de asignación implementado — este documento es la especificación de la interfaz de
-  datos que va a usar, no el algoritmo en sí.
+- El motor no está conectado al sistema. Existe un **motor v0** (`optV0/` en el repo del servicio
+  social `malla-horarios`, 2026-10-11) que no lee la base: trabaja sobre los archivos JSON de
+  `docs/convencion-datos-motor.md` de ese mismo repo (versión 1 del 2026-10-09; versión 2 del
+  2026-10-13, con la Materia de Maestría como horas en rojo, el ajuste de cursos ya resuelto en
+  `num_cursos_max` y el campo nuevo `asignaciones_fijas`, ver su §3.9). Este documento dice de qué
+  tablas sale cada dato y a cuáles se escribe; la convención, el formato de los archivos.
 - No hay endpoint que escriba `grupo`/`imparte`/`imparte_horario` (sí para el catálogo, la demanda,
-  el formulario y los bloqueos). Cuando el motor exista y alguien deba correrlo desde una vista con
+  el formulario, los bloqueos, el ajuste de cursos y las asignaciones fijas, que van en sus propias tablas). Cuando el motor exista y alguien deba correrlo desde una vista con
   sesión de Jefe de Departamento en vez de un script aparte, hará falta ese endpoint (ver §4).
 - No existe la protección de secuencias entre materias seriadas (RN01, "cálculos seriados a la misma
   hora") — es una idea a futuro, no una regla que el motor deba imponer todavía.
