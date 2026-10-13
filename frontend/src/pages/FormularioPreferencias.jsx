@@ -67,6 +67,14 @@ export default function FormularioPreferencias({
 
   const soloLectura = soloLecturaForzada || estado === 'enviado';
 
+  // Los botones están al final de un formulario largo y los mensajes arriba:
+  // sin esto el profesor enviaba y no veía ninguna confirmación (ni el error de
+  // lo que le faltaba), y se quedaba con la duda de si se había mandado.
+  const avisosRef = useRef(null);
+  useEffect(() => {
+    if (mensaje || error) avisosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [mensaje, error]);
+
   // Dependencias primitivas, no el objeto: si el padre construye
   // profesorObjetivo en cada render, depender del objeto reinicia el efecto en
   // bucle y dispara fetches sin parar.
@@ -280,7 +288,11 @@ export default function FormularioPreferencias({
       });
 
       setEstado(nuevoEstado);
-      setMensaje(nuevoEstado === 'enviado' ? 'Preferencias enviadas.' : 'Borrador guardado.');
+      setMensaje(
+        nuevoEstado === 'enviado'
+          ? '✓ Formulario enviado correctamente. Tu Jefe de Departamento ya puede ver tus preferencias; desde ahora el formulario queda en solo lectura.'
+          : '✓ Borrador guardado. Puedes volver a editarlo cuando quieras; recuerda enviarlo al terminar.',
+      );
     } catch (err) {
       if (err.codigo === 'ya_enviada') {
         // Lo más probable: un "Enviar" anterior SÍ llegó y se perdió la
@@ -442,14 +454,18 @@ export default function FormularioPreferencias({
     <div className="formulario-screen">
       {encabezado}
 
-      {error && <p className="formulario-error">{error}</p>}
-      {mensaje && <p className="formulario-mensaje">{mensaje}</p>}
+      <div ref={avisosRef} className="formulario-avisos" role="status" aria-live="polite">
+        {error && <p className="formulario-error">{error}</p>}
+        {mensaje && <p className="formulario-mensaje">{mensaje}</p>}
+      </div>
       {soloLecturaForzada ? (
         <p className="formulario-aviso">
           Estás viendo el formulario de {profesorForm.nombre} — solo lectura.
         </p>
       ) : (
-        soloLectura && (
+        // Recién enviado, la confirmación verde ya dice lo mismo.
+        soloLectura &&
+        !mensaje && (
           <p className="formulario-aviso">
             Ya enviaste tus preferencias — solo lectura. Si necesitas cambiar algo, pídele a tu Jefe de
             Departamento que la reabra.

@@ -12,9 +12,6 @@ import SelectorDepartamento from '../components/SelectorDepartamento';
 // guarda (api/demanda.php, una transacción que reemplaza la estimación
 // anterior del departamento/semestre).
 //
-// Con soloConsulta es el reporte "Demanda del semestre": la misma tabla, sin
-// nada que subir.
-//
 // Desde 2026-10-02 se pueden agregar a mano materias que no vienen en el
 // reporte, en la misma vista previa (después de subir el PDF, o partiendo de
 // la estimación ya guardada). El API no distingue: es una fila más con las
@@ -72,7 +69,7 @@ function filaManual({ clave, nombre, creditos, grupos_sugeridos }) {
   };
 }
 
-export default function CargaDemanda({ onVolver, soloConsulta = false }) {
+export default function CargaDemanda({ onVolver }) {
   const { token, profesor, departamentos, semestre } = useAuth();
 
   const [departamentoId, setDepartamentoId] = useState(() =>
@@ -343,7 +340,7 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
     }
   }
 
-  const puedeSubir = !soloConsulta && datos?.semestre_activo;
+  const puedeSubir = datos?.semestre_activo;
   const totalSugeridos = (datos?.filas ?? []).reduce((n, f) => n + Number(f.grupos_sugeridos), 0);
 
   return (
@@ -360,7 +357,7 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
         </button>
         <div className="formulario-header-datos">
           <div>
-            <strong>{soloConsulta ? 'Demanda del semestre' : 'Cargar la estimación de demanda'}</strong>
+            <strong>Cargar la estimación de demanda</strong>
             <span>{etiquetaSemestre(semestre)}</span>
           </div>
         </div>
@@ -416,7 +413,7 @@ export default function CargaDemanda({ onVolver, soloConsulta = false }) {
         </section>
       )}
 
-      {!soloConsulta && datos && !datos.semestre_activo && (
+      {datos && !datos.semestre_activo && (
         <p className="formulario-aviso">Este semestre ya está cerrado: su demanda solo se puede consultar.</p>
       )}
 

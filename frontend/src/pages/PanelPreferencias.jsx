@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { panel as cargarPanel, reabrirPreferencia } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
-import { veTodosLosDepartamentos } from '../lib/roles';
+import { departamentoInicial, veTodosLosDepartamentos } from '../lib/roles';
+import SelectorDepartamento from '../components/SelectorDepartamento';
 
 const ESTADO_LABELS = {
   no_iniciado: 'No ha iniciado',
@@ -14,11 +15,17 @@ const ESTADO_LABELS = {
 // §2): quién respondió, quién falta, antes de correr la asignación. No es el
 // panel grande de Jefe de Departamento de RF14 (grupos/asignación/histórico
 // de match) — eso sigue sin construir, ver HomePage.
-export default function PanelPreferencias({ onVolver, onVerFormulario }) {
-  const { token, profesor, semestre, nombreDepartamento } = useAuth();
+export default function PanelPreferencias({ onVolver, onVerFormulario, departamentoPrevio = null }) {
+  const { token, profesor, semestre, departamentos, nombreDepartamento } = useAuth();
   // Quién ve los 3 departamentos y no solo el suyo. Se pregunta por
   // comportamiento y no contra un rol concreto (ver lib/roles.js).
   const veTodos = veTodosLosDepartamentos(profesor.rol);
+  // panel.php le manda a quien ve todos los profesores de los 3 departamentos;
+  // se ven de uno en uno para no mezclarlos. departamentoPrevio es el que
+  // tenía elegido antes de abrir "Ver formulario", para regresar al mismo.
+  const [departamentoId, setDepartamentoId] = useState(
+    () => departamentoPrevio ?? departamentoInicial(profesor, departamentos),
+  );
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -67,6 +74,8 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
 
   if (cargando) return <div className="formulario-cargando">Cargando…</div>;
 
+  const visibles = veTodos ? filas.filter((f) => f.departamentoId === departamentoId) : filas;
+
   return (
     <div className="formulario-screen">
       <header className="formulario-header">
@@ -77,12 +86,14 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
           <div>
             <strong>Preferencias recibidas</strong>
             <span>
-              {veTodos ? 'Todos los departamentos' : nombreDepartamento(profesor.departamento_id)} ·{' '}
+              {nombreDepartamento(veTodos ? departamentoId : profesor.departamento_id)} ·{' '}
               {etiquetaSemestre(semestre)}
             </span>
           </div>
         </div>
       </header>
+
+      <SelectorDepartamento valor={departamentoId} onCambiar={setDepartamentoId} />
 
       {error && <p className="formulario-error">{error}</p>}
 
@@ -91,19 +102,17 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
           <thead>
             <tr>
               <th>Profesor</th>
-              {veTodos && <th>Departamento</th>}
               <th>Estado</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {filas.map((f) => (
+            {visibles.map((f) => (
               <tr key={f.profesorId}>
                 <td>
                   {f.nombre}
                   {f.estadoEspecial && <span className="materia-alias"> · {f.estadoEspecial}</span>}
                 </td>
-                {veTodos && <td>{nombreDepartamento(f.departamentoId) ?? '—'}</td>}
                 <td>
                   <span className={`badge badge-${f.estado}`}>{ESTADO_LABELS[f.estado]}</span>
                 </td>
@@ -112,7 +121,7 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
                       display:flex deja de ser celda y la fila se desfasa. */}
                   <div className="panel-acciones">
                     {f.estado !== 'no_iniciado' && (
-                      <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor)}>
+                      <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor, departamentoId)}>
                         Ver formulario
                       </button>
                     )}
@@ -129,9 +138,9 @@ export default function PanelPreferencias({ onVolver, onVerFormulario }) {
                 </td>
               </tr>
             ))}
-            {filas.length === 0 && (
+            {visibles.length === 0 && (
               <tr>
-                <td colSpan={veTodos ? 4 : 3}>No hay profesores con tipo de contrato configurado.</td>
+                <td colSpan={3}>No hay profesores con tipo de contrato configurado.</td>
               </tr>
             )}
           </tbody>
