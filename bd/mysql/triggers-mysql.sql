@@ -117,17 +117,22 @@ END$$
 -- grupo de 6 creditos se arma fila por fila y a medio construir la suma no
 -- cierra). La aplicacion la llama cuando el Jefe marca el grupo como asignado
 -- o lo publica.
+--
+-- 1 credito = media hora = 1 bloque de franja_horaria (2026-10-09). Lo confirma
+-- la columna Hrs del PDF de demanda de Servicios Escolares (Hrs = Sug x Cred / 2:
+-- 8 grupos de 9 creditos = 36 h) y los 126 grupos de V1. La version anterior
+-- comparaba COUNT(*) * 0.5 contra los creditos, que pedia el doble de bloques.
 CREATE FUNCTION fn_validar_creditos_imparte(p_imparte_id INT)
 RETURNS BOOLEAN
 READS SQL DATA
 BEGIN
     DECLARE v_creditos INT;
-    DECLARE v_horas DECIMAL(6,2);
+    DECLARE v_bloques INT;
     SELECT m.creditos INTO v_creditos
       FROM imparte i JOIN grupo g ON g.id = i.grupo_id JOIN materia m ON m.id = g.materia_id
      WHERE i.id = p_imparte_id;
-    SELECT COUNT(*) * 0.5 INTO v_horas FROM imparte_horario WHERE imparte_id = p_imparte_id;
-    RETURN v_horas = v_creditos;
+    SELECT COUNT(*) INTO v_bloques FROM imparte_horario WHERE imparte_id = p_imparte_id;
+    RETURN v_bloques = v_creditos;
 END$$
 
 DELIMITER ;

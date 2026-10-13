@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { crearMateria, editarMateria, guardarCoOferta, listarMaterias } from '../lib/api';
+import { departamentoInicial } from '../lib/roles';
+import SelectorDepartamento from '../components/SelectorDepartamento';
 
 // Campos editables de `materia`. departamento_id queda fuera a propósito:
 // moverla a otro departamento la sacaría del alcance que le permite RLS al
@@ -74,8 +76,12 @@ function cambiosDe(actual, original) {
 }
 
 export default function CatalogoMaterias({ onVolver }) {
-  const { token, profesor, nombreDepartamento } = useAuth();
-  const departamentoId = profesor.departamento_id;
+  const { token, profesor, departamentos, nombreDepartamento } = useAuth();
+  // El admin no tiene departamento propio: arranca en el primero y cambia con
+  // el selector. Para la jefatura es siempre el suyo.
+  const [departamentoId, setDepartamentoId] = useState(() =>
+    departamentoInicial(profesor, departamentos),
+  );
   const contadorNuevas = useRef(0);
 
   const [cargando, setCargando] = useState(true);
@@ -95,11 +101,15 @@ export default function CatalogoMaterias({ onVolver }) {
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
+      setCargando(true);
+      setError('');
+      setMensaje('');
+      setEditandoEquiv(null);
       try {
         // Una petición para las dos cosas. La co-oferta ya viene acotada al
         // departamento: antes se pedía la tabla completa y el filtro por
         // departamento lo hacía este mismo archivo, en JS.
-        const { materias, co_oferta: porMateria } = await listarMaterias(token);
+        const { materias, co_oferta: porMateria } = await listarMaterias(token, departamentoId);
         if (cancelado) return;
 
         const normalizadas = materias.map(normalizar);
@@ -391,6 +401,14 @@ export default function CatalogoMaterias({ onVolver }) {
           </div>
         </div>
       </header>
+
+      {/* Bloqueado con cambios pendientes: cambiar de departamento recarga la
+          tabla y se perderían sin aviso. */}
+      <SelectorDepartamento
+        valor={departamentoId}
+        disabled={guardando || pendientes.length > 0 || hayCambiosEquiv}
+        onCambiar={setDepartamentoId}
+      />
 
       {error && <p className="formulario-error">{error}</p>}
       {mensaje && <p className="formulario-mensaje">{mensaje}</p>}
