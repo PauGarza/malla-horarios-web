@@ -127,6 +127,10 @@ const gestion = [
   ['configuracion.php formulario', 'PUT', `configuracion.php?recurso=formulario&semestre_id=${s}`, {}],
   ['respuestas.php GET', 'GET', `respuestas.php?semestre_id=${s}`],
   ['respuestas.php bloqueo', 'POST', `respuestas.php?recurso=bloqueo&semestre_id=${s}`, { profesor_id: yo.id, materia_id: 1, bloqueado: true }],
+  ['respuestas.php num_cursos', 'POST', `respuestas.php?recurso=num_cursos&semestre_id=${s}`, { profesor_id: yo.id, num_cursos: 6 }],
+  ['reporte.php GET', 'GET', `reporte.php?semestre_id=${s}`],
+  ['asignaciones.php GET', 'GET', `asignaciones.php?semestre_id=${s}`],
+  ['asignaciones.php POST', 'POST', `asignaciones.php?semestre_id=${s}`, { materia_id: 1, profesor_id: yo.id, horario: [] }],
   ['semestres.php GET', 'GET', 'semestres.php'],
   ['semestres.php abrir', 'POST', 'semestres.php?recurso=abrir', { tipo: 'otono', anio: 2099 }],
   ['demanda.php GET', 'GET', `demanda.php?semestre_id=${s}`],
@@ -180,7 +184,7 @@ if (process.env.AP_JEFE_CU && semestreId) {
     revisar('AP_JEFE_CU es jefe_departamento', false, `rol ${jefe.perfil.rol}`);
   } else {
     const ajeno = jefe.departamentos.find((d) => d.id !== jefe.perfil.departamento_id);
-    for (const ruta of ['configuracion.php', 'respuestas.php', 'demanda.php', 'materias.php']) {
+    for (const ruta of ['configuracion.php', 'respuestas.php', 'reporte.php', 'asignaciones.php', 'demanda.php', 'materias.php']) {
       const r = await pedir(`${ruta}?semestre_id=${semestreId}&departamento_id=${ajeno.id}`, { token: tokJefe });
       revisar(`${ruta}?departamento_id=${ajeno.id} -> 403`, r.status === 403, `status ${r.status}`);
     }

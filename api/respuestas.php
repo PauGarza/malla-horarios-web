@@ -8,6 +8,14 @@
 //   POST ?recurso=bloqueo&semestre_id=N[&departamento_id=D]
 //        { profesor_id, materia_id, bloqueado: bool }  -> { ok, bloqueado }
 //
+//   POST ?recurso=num_cursos&semestre_id=N[&departamento_id=D]
+//        { profesor_id, num_cursos: 0-6 | null }  -> { ok, ajuste }
+//        Sobreescribe el número de cursos que pidió el profesor; null quita
+//        el ajuste y vuelve a valer el suyo. Misma idea que el bloqueo: va en
+//        ajuste_num_cursos, preferencia.num_cursos_max no se toca y el
+//        profesor nunca lo ve (cuestionario.php y preferencia.php no leen esa
+//        tabla).
+//
 // Es la matriz profesores × materias: lo que contestó cada quien, y encima la
 // capa de bloqueos. Un bloqueo dice "este profesor NO da esta materia" y el
 // motor lo toma como restricción dura. Va en una tabla aparte a propósito
@@ -43,6 +51,61 @@ $semestreId = param_id('semestre_id');
 // -----------------------------------------------------------------------------
 // POST ?recurso=bloqueo
 // -----------------------------------------------------------------------------
+
+if (metodo_http() === 'POST' && filter_input(INPUT_GET, 'recurso') === 'num_cursos') {
+    exigir_semestre_activo($pdo, $semestreId);
+    $body       = cuerpo_json();
+    $profesorId = filter_var(isset($body['profesor_id']) ? $body['profesor_id'] : null, FILTER_VALIDATE_INT);
+    if ($profesorId === false || $profesorId === null) {
+        error_json('Falta profesor_id', 400);
+    }
+    // null (o ausente) quita el ajuste; si viene, entero de 0 a 6. 0 es "no
+    // se le asignan cursos", que el profesor no puede pedir pero la jefatura
+    // sí decide.
+    $quitar = !array_key_exists('num_cursos', $body) || $body['num_cursos'] === null;
+    $num    = $quitar ? null : filter_var($body['num_cursos'], FILTER_VALIDATE_INT, [
+        'options' => ['min_range' => 0, 'max_range' => 6],
+    ]);
+    if (!$quitar && ($num === false || $num === null)) {
+        error_json('El número de cursos debe ser un entero de 0 a 6', 400);
+    }
+
+    $st = $pdo->prepare('SELECT departamento_id FROM profesor WHERE id = ?');
+    $st->execute([(int) $profesorId]);
+    $deptoProfesor = $st->fetchColumn();
+    if ($deptoProfesor === false) {
+        error_json('No existe ese profesor', 404);
+    }
+    if ($deptoProfesor === null || (int) $deptoProfesor !== $deptoId) {
+        error_json('Ese profesor no es de este departamento', 403);
+    }
+    exigir_jefe_de((int) $deptoProfesor);
+
+    try {
+        if ($quitar) {
+            $pdo->prepare('DELETE FROM ajuste_num_cursos WHERE profesor_id = ? AND semestre_id = ?')
+                ->execute([(int) $profesorId, $semestreId]);
+            responder(['ok' => true, 'ajuste' => null]);
+        }
+        $ahora = ahora_utc();
+        $pdo->prepare(
+            'INSERT INTO ajuste_num_cursos (profesor_id, semestre_id, num_cursos, ajustado_por, ajustado_at)
+                  VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE num_cursos = VALUES(num_cursos),
+                                     ajustado_por = VALUES(ajustado_por),
+                                     ajustado_at = VALUES(ajustado_at)'
+        )->execute([(int) $profesorId, $semestreId, $num, mi_id(), $ahora]);
+    } catch (Throwable $e) {
+        fallo_interno('respuestas.php num_cursos', $e, 'No se pudo guardar el número de cursos');
+    }
+
+    $yo = mi_perfil();
+    responder(['ok' => true, 'ajuste' => [
+        'num_cursos' => $num,
+        'por'        => $yo['nombre'],
+        'at'         => $ahora,
+    ]]);
+}
 
 if (metodo_http() === 'POST') {
     exigir_semestre_activo($pdo, $semestreId);
@@ -119,13 +182,16 @@ foreach ($completo['secciones'] as $s) {
 // quien ya se jubiló no cuentan.
 $st = $pdo->prepare(
     'SELECT p.id, p.nombre, p.tipo_contrato, p.estado_especial,
-            pref.estado, pref.num_cursos_max
+            pref.estado, pref.num_cursos_max,
+            anc.num_cursos AS ajuste_num_cursos, anc.ajustado_at, quien.nombre AS ajustado_por
        FROM profesor p
        LEFT JOIN preferencia pref ON pref.profesor_id = p.id AND pref.semestre_id = ?
+       LEFT JOIN ajuste_num_cursos anc ON anc.profesor_id = p.id AND anc.semestre_id = ?
+       LEFT JOIN profesor quien ON quien.id = anc.ajustado_por
       WHERE p.departamento_id = ? AND p.tipo_contrato IS NOT NULL AND p.activo = 1
       ORDER BY p.nombre'
 );
-$st->execute([$semestreId, $deptoId]);
+$st->execute([$semestreId, $semestreId, $deptoId]);
 $profesores = [];
 foreach ($st->fetchAll() as $p) {
     $profesores[] = [
@@ -135,6 +201,12 @@ foreach ($st->fetchAll() as $p) {
         'estado_especial' => $p['estado_especial'],
         'estado'          => $p['estado'] === null ? 'no_iniciado' : $p['estado'],
         'num_cursos_max'  => $p['num_cursos_max'] === null ? null : (int) $p['num_cursos_max'],
+        // Lo que puso la jefatura encima; null = vale el del profesor.
+        'ajuste_cursos'   => $p['ajuste_num_cursos'] === null ? null : [
+            'num_cursos' => (int) $p['ajuste_num_cursos'],
+            'por'        => $p['ajustado_por'],
+            'at'         => $p['ajustado_at'],
+        ],
     ];
 }
 

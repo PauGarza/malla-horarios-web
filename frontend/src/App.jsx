@@ -6,6 +6,9 @@ import FormularioPreferencias from './pages/FormularioPreferencias';
 import PanelPreferencias from './pages/PanelPreferencias';
 import EditorCuestionario from './pages/EditorCuestionario';
 import RespuestasCuestionario from './pages/RespuestasCuestionario';
+import ReportePreferencias from './pages/ReportePreferencias';
+import ReporteHoras from './pages/ReporteHoras';
+import AsignacionesDirectas from './pages/AsignacionesDirectas';
 import CatalogoMaterias from './pages/CatalogoMaterias';
 import PerfilUsuario from './pages/PerfilUsuario';
 import CargaDemanda from './pages/CargaDemanda';
@@ -92,16 +95,21 @@ function Vista({ vista, setVista }) {
       <FormularioPreferencias
         profesorObjetivo={vista.profesorObjetivo ?? null}
         soloLecturaForzada={Boolean(vista.profesorObjetivo)}
-        onVolver={() => setVista({ nombre: vista.volverA ?? 'home' })}
+        onVolver={() =>
+          setVista({ nombre: vista.volverA ?? 'home', departamentoId: vista.departamentoId ?? null })
+        }
       />
     );
   }
   if (vista.nombre === 'panel-preferencias') {
+    // departamentoId viaja de ida y vuelta por "Ver formulario" para que el
+    // admin regrese al departamento que estaba viendo y no al primero.
     return (
       <PanelPreferencias
+        departamentoPrevio={vista.departamentoId ?? null}
         onVolver={() => setVista({ nombre: 'home' })}
-        onVerFormulario={(profesorObjetivo) =>
-          setVista({ nombre: 'formulario', profesorObjetivo, volverA: 'panel-preferencias' })
+        onVerFormulario={(profesorObjetivo, departamentoId) =>
+          setVista({ nombre: 'formulario', profesorObjetivo, volverA: 'panel-preferencias', departamentoId })
         }
       />
     );
@@ -112,17 +120,20 @@ function Vista({ vista, setVista }) {
   if (vista.nombre === 'respuestas') {
     return <RespuestasCuestionario onVolver={() => setVista({ nombre: 'home' })} />;
   }
+  if (vista.nombre === 'reporte-preferencias') {
+    return <ReportePreferencias onVolver={() => setVista({ nombre: 'home' })} />;
+  }
+  if (vista.nombre === 'reporte-horas') {
+    return <ReporteHoras onVolver={() => setVista({ nombre: 'home' })} />;
+  }
+  if (vista.nombre === 'asignaciones-directas') {
+    return <AsignacionesDirectas onVolver={() => setVista({ nombre: 'home' })} />;
+  }
   if (vista.nombre === 'catalogo-materias') {
     return <CatalogoMaterias onVolver={() => setVista({ nombre: 'home' })} />;
   }
-  if (vista.nombre === 'carga-demanda' || vista.nombre === 'demanda') {
-    return (
-      <CargaDemanda
-        key={vista.nombre}
-        soloConsulta={vista.nombre === 'demanda'}
-        onVolver={() => setVista({ nombre: 'home' })}
-      />
-    );
+  if (vista.nombre === 'carga-demanda') {
+    return <CargaDemanda onVolver={() => setVista({ nombre: 'home' })} />;
   }
   if (vista.nombre === 'semestres') {
     return <Semestres onVolver={() => setVista({ nombre: 'home' })} />;
@@ -133,9 +144,11 @@ function Vista({ vista, setVista }) {
       onAbrirPanelPreferencias={() => setVista({ nombre: 'panel-preferencias' })}
       onAbrirEditor={() => setVista({ nombre: 'editor-cuestionario' })}
       onAbrirRespuestas={() => setVista({ nombre: 'respuestas' })}
+      onAbrirReporte={() => setVista({ nombre: 'reporte-preferencias' })}
+      onAbrirReporteHoras={() => setVista({ nombre: 'reporte-horas' })}
+      onAbrirAsignaciones={() => setVista({ nombre: 'asignaciones-directas' })}
       onAbrirCatalogoMaterias={() => setVista({ nombre: 'catalogo-materias' })}
       onAbrirCargaDemanda={() => setVista({ nombre: 'carga-demanda' })}
-      onAbrirDemanda={() => setVista({ nombre: 'demanda' })}
       onAbrirSemestres={() => setVista({ nombre: 'semestres' })}
     />
   );

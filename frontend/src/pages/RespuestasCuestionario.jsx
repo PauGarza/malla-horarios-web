@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { cambiarBloqueo, leerRespuestas } from '../lib/api';
+import { ajustarNumCursos, cambiarBloqueo, leerRespuestas } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
 import { TIPO_CONTRATO_LABELS, departamentoInicial } from '../lib/roles';
 import { audienciaAplica } from '../lib/formulario';
 import SelectorDepartamento from '../components/SelectorDepartamento';
+import { ValorNumCursos } from '../components/NumCursos';
+import { descripcionAjuste } from '../lib/numCursos';
 
 // Respuestas del cuestionario: profesores en filas, materias en columnas, cada
 // celda con el color que contestó el profesor. Encima va la capa de BLOQUEOS:
@@ -31,6 +33,59 @@ const ESTADO_LABELS = Object.fromEntries(ESTADOS.map((e) => [e.valor, e.etiqueta
 
 const claveCelda = (profesorId, materiaId) => `${profesorId}-${materiaId}`;
 
+const OPCIONES_CURSOS = [0, 1, 2, 3, 4, 5, 6];
+
+// La columna Cursos: el número (con marcador si la jefatura lo ajustó) y, al
+// darle clic, un select para cambiarlo. Elegir "Lo que pidió" quita el ajuste.
+// El select se cierra solo al elegir o al salir de él, para que la columna se
+// siga leyendo como números y no como 45 controles.
+function CeldaCursos({ profesor: p, guardando, onAjustar }) {
+  const [editando, setEditando] = useState(false);
+
+  if (editando) {
+    const pidio = p.num_cursos_max ?? 'sin respuesta';
+    return (
+      <select
+        className="cursos-select"
+        // autoFocus a propósito: el select aparece por un clic del usuario.
+        autoFocus
+        aria-label={`Número de cursos de ${p.nombre}`}
+        value={p.ajuste_cursos ? String(p.ajuste_cursos.num_cursos) : ''}
+        onChange={(e) => {
+          setEditando(false);
+          onAjustar(p, e.target.value === '' ? null : Number(e.target.value));
+        }}
+        onBlur={() => setEditando(false)}
+        onKeyDown={(e) => e.key === 'Escape' && setEditando(false)}
+      >
+        <option value="">Lo que pidió ({pidio})</option>
+        {OPCIONES_CURSOS.map((n) => (
+          <option key={n} value={n}>
+            {n === 0 ? '0 (sin cursos)' : n}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={`cursos-boton ${p.ajuste_cursos ? 'con-ajuste' : ''}`}
+      disabled={guardando}
+      title={descripcionAjuste(p) ?? 'Clic para ajustar el número de cursos (el profesor no lo ve)'}
+      aria-label={`${p.nombre}: ${
+        p.ajuste_cursos
+          ? descripcionAjuste(p)
+          : `pidió ${p.num_cursos_max ?? 'sin respuesta'} cursos`
+      }. Clic para ajustar.`}
+      onClick={() => setEditando(true)}
+    >
+      <ValorNumCursos profesor={p} />
+    </button>
+  );
+}
+
 // Para buscar "calculo" y encontrar "Cálculo".
 const normalizar = (s) =>
   (s ?? '')
@@ -54,6 +109,8 @@ export default function RespuestasCuestionario({ onVolver }) {
   const [datos, setDatos] = useState(null);
   const [bloqueos, setBloqueos] = useState(() => new Set());
   const [pendientes, setPendientes] = useState(() => new Set());
+  // Profesores cuyo ajuste de cursos se está guardando.
+  const [guardandoCursos, setGuardandoCursos] = useState(() => new Set());
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
@@ -169,6 +226,41 @@ export default function RespuestasCuestionario({ onVolver }) {
       setPendientes((prev) => {
         const siguiente = new Set(prev);
         siguiente.delete(clave);
+        return siguiente;
+      });
+    }
+  }
+
+  async function ajustarCursos(profesorFila, numCursos) {
+    const anterior = profesorFila.ajuste_cursos;
+    const actual = anterior ? anterior.num_cursos : null;
+    if (numCursos === actual) return;
+
+    const ponerAjuste = (ajuste) =>
+      setDatos((prev) => ({
+        ...prev,
+        profesores: prev.profesores.map((p) => (p.id === profesorFila.id ? { ...p, ajuste_cursos: ajuste } : p)),
+      }));
+    // Igual que el bloqueo: se ve al instante y se revierte si falla. Mientras
+    // llega la respuesta, el ajuste lleva el nombre de quien lo hace y la hora
+    // de su reloj; el servidor devuelve los suyos y esos se quedan.
+    ponerAjuste(
+      numCursos === null
+        ? null
+        : { num_cursos: numCursos, por: profesor.nombre, at: new Date().toISOString().slice(0, 19).replace('T', ' ') },
+    );
+    setGuardandoCursos((prev) => new Set(prev).add(profesorFila.id));
+    setError('');
+    try {
+      const r = await ajustarNumCursos(token, semestre.id, departamentoId, profesorFila.id, numCursos);
+      ponerAjuste(r.ajuste);
+    } catch (err) {
+      ponerAjuste(anterior);
+      setError(`No se pudo ajustar el número de cursos de ${profesorFila.nombre}: ${err.message}`);
+    } finally {
+      setGuardandoCursos((prev) => {
+        const siguiente = new Set(prev);
+        siguiente.delete(profesorFila.id);
         return siguiente;
       });
     }
@@ -352,7 +444,9 @@ export default function RespuestasCuestionario({ onVolver }) {
       <p className="formulario-nota">
         Haz clic en una celda para <strong>bloquear</strong> esa materia a ese profesor: el algoritmo no
         se la asignará. Lo que contestó se sigue viendo y el profesor no se entera. Otro clic la
-        desbloquea.
+        desbloquea. En la columna <strong>Cursos</strong> puedes ajustar cuántos cursos se le asignan a
+        alguien; queda marcado con <span className="cursos-marcador">J</span>, se guarda aparte de lo que
+        pidió y el profesor no lo ve.
       </p>
       <div className="legend">
         <span><i className="legend-verde" /> Verde</span>
@@ -420,7 +514,13 @@ export default function RespuestasCuestionario({ onVolver }) {
                           {p.estado_especial && ` · ${p.estado_especial}`}
                         </span>
                       </th>
-                      <td className="col-dato">{p.num_cursos_max ?? '—'}</td>
+                      <td className="col-dato">
+                        <CeldaCursos
+                          profesor={p}
+                          guardando={guardandoCursos.has(p.id)}
+                          onAjustar={ajustarCursos}
+                        />
+                      </td>
                       {materias.map((m) => {
                         const clave = claveCelda(p.id, m.id);
                         const nivel = contesta ? datos.niveles[p.id]?.[m.id] : undefined;

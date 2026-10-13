@@ -1411,7 +1411,8 @@ select.editor-mini {
   font-size: 11px;
 }
 
-/* Secciones del menú de inicio: Formulario / Reportes / Acciones. */
+/* Secciones del menú de inicio: Mi formulario / Datos del semestre /
+   Después de las respuestas / Reportes / Próximamente. */
 .home-seccion + .home-seccion {
   margin-top: 28px;
 }
@@ -1624,4 +1625,367 @@ select.editor-mini {
 }
 .semestre-cerrado summary {
   cursor: pointer;
+}
+
+/* Reporte de preferencias. Los números van en el color de su nivel pero el
+   encabezado dice el nombre del nivel: el color nunca es la única pista. */
+.reporte-tabla .col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.reporte-tabla .th-grupo {
+  text-align: center;
+  border-bottom: 1px solid var(--gray-border);
+  border-left: 1px solid var(--gray-border);
+}
+/* Separa Materias de Horas: la primera columna de cada grupo es la verde. */
+.reporte-tabla .num-verde {
+  border-left: 1px solid var(--gray-border);
+}
+.reporte-tabla .th-verde { color: var(--verde); }
+.reporte-tabla .th-amarillo { color: var(--amarillo); }
+.reporte-tabla .th-rojo { color: var(--rojo); }
+.reporte-tabla td.num-verde { background: var(--verde-bg); }
+.reporte-tabla td.num-amarillo { background: var(--amarillo-bg); }
+.reporte-tabla td.num-rojo { background: var(--rojo-bg); }
+.reporte-tabla tfoot th,
+.reporte-tabla tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--gray-border);
+  border-bottom: none;
+}
+.th-ordenable button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.th-ordenable button:focus-visible {
+  outline: 2px solid #1c2733;
+  outline-offset: 2px;
+}
+.orden-flecha {
+  font-size: 9px;
+  min-width: 9px;
+}
+
+/* Conteo de materias que abre la lista: se ve como el número, no como botón,
+   pero subrayado punteado para que se note que se le puede dar clic. */
+.conteo-boton {
+  all: unset;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.conteo-boton:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.conteo-boton:focus-visible {
+  outline: 2px solid #1c2733;
+  outline-offset: 1px;
+}
+
+/* Etiqueta flotante de los reportes (components/EtiquetaFlotante.jsx). */
+.etiqueta-flotante {
+  position: fixed;
+  z-index: 50;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 16px));
+  max-height: min(360px, calc(100vh - 16px));
+  overflow-y: auto;
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-top: 3px solid var(--itam);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(28, 39, 51, 0.18);
+  padding: 10px 14px;
+  font-size: 13px;
+  text-align: left;
+}
+.etiqueta-verde { border-top-color: var(--verde); }
+.etiqueta-amarillo { border-top-color: var(--amarillo); }
+.etiqueta-rojo { border-top-color: var(--rojo); }
+.etiqueta-flotante-titulo {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+.etiqueta-flotante-titulo span {
+  color: var(--gray-text);
+  font-size: 12px;
+}
+.etiqueta-flotante ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.etiqueta-flotante li {
+  padding: 2px 0;
+}
+.etiqueta-punto {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+/* Reporte de horas: mapa de calor sobre la misma rejilla del formulario. */
+.calor-escala {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.calor-escala-barra {
+  width: 140px;
+  height: 12px;
+  border: 1px solid var(--gray-border);
+  border-radius: 3px;
+}
+.calor-grid {
+  /* Aquí no se arrastra para pintar: que el texto se pueda seleccionar. */
+  user-select: auto;
+  -webkit-user-select: auto;
+  touch-action: auto;
+}
+.calor-celda {
+  background: white;
+}
+.calor-celda button {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.calor-celda button:hover {
+  box-shadow: inset 0 0 0 2px rgba(28, 39, 51, 0.45);
+}
+.calor-celda button:focus-visible {
+  outline: 2px solid #1c2733;
+  outline-offset: -2px;
+}
+.calor-cero {
+  height: 26px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Número de cursos ajustado por jefatura (components/NumCursos.jsx). El
+   marcador va en azul a propósito: no es ninguno de los tres colores del
+   semáforo, así que no se lee como una respuesta del profesor. */
+.cursos-ajustado {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-weight: 700;
+  color: #1f3a93;
+}
+.cursos-original {
+  font-weight: 400;
+  color: var(--gray-text);
+  font-size: 0.9em;
+}
+.cursos-marcador {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #1f3a93;
+  color: white;
+  vertical-align: 1px;
+}
+.cursos-boton {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  min-width: 32px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+  font-variant-numeric: tabular-nums;
+}
+.cursos-boton:hover {
+  border-color: var(--gray-border);
+  background: var(--gray-bg);
+}
+.cursos-boton.con-ajuste {
+  background: #e8edfb;
+}
+.cursos-boton:focus-visible {
+  outline: 2px solid #1c2733;
+  outline-offset: 1px;
+}
+.cursos-boton:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.cursos-select {
+  font-size: 12px;
+  padding: 2px 4px;
+  max-width: 130px;
+}
+
+/* Asignaciones directas (pages/AsignacionesDirectas.jsx). */
+.asig-editor {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-top: 3px solid var(--itam);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.asig-editor h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--itam);
+}
+.asig-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.asig-campos label,
+.asig-nota {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-text);
+}
+.asig-campos select {
+  width: 100%;
+}
+.asig-nota textarea {
+  font: inherit;
+  font-weight: 400;
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  resize: vertical;
+}
+.asig-horario {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.asig-horario-barra {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.asig-horario-barra .nota-ok { color: var(--verde); }
+.asig-horario-barra .nota-falta { color: var(--rojo); }
+.asig-acciones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* La rejilla: de fondo, lo que marcó el profesor (en tono claro, para que se
+   lea como contexto); la media hora elegida va en casi-negro con una franja
+   del color de fondo a la izquierda, para no perder qué había marcado. */
+.asig-grid {
+  user-select: auto;
+  -webkit-user-select: auto;
+  touch-action: auto;
+}
+.asig-slot {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  --nivel: var(--gray-border);
+}
+.asig-slot.fondo-verde { background: var(--verde-bg); --nivel: var(--verde); }
+.asig-slot.fondo-amarillo { background: var(--amarillo-bg); --nivel: var(--amarillo); }
+.asig-slot.fondo-rojo { background: var(--rojo-bg); --nivel: var(--rojo); }
+.asig-slot.fondo-vacio { background: white; }
+.asig-slot.elegida {
+  background: #1c2733;
+  color: white;
+  box-shadow: inset 6px 0 0 var(--nivel);
+}
+.asig-slot.ocupada {
+  cursor: not-allowed;
+  background: repeating-linear-gradient(45deg, #c9d1d9, #c9d1d9 3px, #e4e8ec 3px, #e4e8ec 6px);
+}
+.asig-slot:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 2px rgba(28, 39, 51, 0.5);
+}
+.asig-slot.elegida:hover:not(:disabled) {
+  box-shadow: inset 6px 0 0 var(--nivel), inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+.asig-slot:focus-visible {
+  outline: 2px solid #1c2733;
+  outline-offset: -2px;
+}
+.legend-elegida {
+  background: #1c2733;
+}
+
+.asig-avisos {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #6b5300;
+}
+.asig-avisos .aviso-grave {
+  color: var(--rojo);
+  font-weight: 600;
+}
+.asig-tabla td {
+  vertical-align: top;
+}
+.asig-fila-editando td {
+  background: #eef6f3;
+}
+
+/* Materia de Maestría en la lista de asignaciones directas: no es curso, así
+   que se distingue de las materias del catálogo. */
+.asig-etiqueta-maestria {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #e8edfb;
+  color: #1f3a93;
 }
