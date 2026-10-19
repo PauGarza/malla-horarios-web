@@ -11,7 +11,7 @@ export function LeyendaDisponibilidad() {
     <div className="legend">
       <span><i className="legend-verde" /> Seguro disponible</span>
       <span><i className="legend-amarillo" /> Posible pero complicado</span>
-      <span><i className="legend-rojo" /> No disponible</span>
+      <span><i className="legend-no-disponible" /> No disponible (todo lo que no pintes)</span>
     </div>
   );
 }
@@ -98,14 +98,18 @@ const SlotCelda = memo(function SlotCelda({
   onContinuar,
   onTeclado,
 }) {
+  // Sin marcar es rojo para el motor (2026-10-09), así que se pinta como "no
+  // disponible" (2026-10-13), igual que un 'rojo' explícito de un borrador
+  // viejo: el profesor ya solo elige verde o amarillo.
+  const pintado = nivel === 'verde' || nivel === 'amarillo' ? nivel : null;
   return (
     <td>
       <button
         type="button"
-        className={`slot ${nivel ?? ''}`}
+        className={`slot ${pintado ?? 'no-disponible'}`}
         data-clave={clave}
         disabled={disabled}
-        aria-label={`${etiqueta}: ${nivel ?? 'sin marcar'}`}
+        aria-label={`${etiqueta}: ${pintado ?? 'no disponible'}`}
         aria-describedby={ayudaId}
         onPointerDown={(e) => {
           if (disabled) return;

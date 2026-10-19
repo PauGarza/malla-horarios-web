@@ -69,41 +69,14 @@ INSERT INTO semestre (tipo, anio, estado) VALUES
     ('primavera', 2027, 'activo');
 
 -- -----------------------------------------------------------------------------
--- Salones de ejemplo (nombres reales de los reportes de Servicios Escolares —
--- no es el catalogo completo, solo una muestra para poder probar el esquema; el
--- completo vive en "Info servicios escolares/salones_Otoño 2026.xlsm").
--- -----------------------------------------------------------------------------
-
-INSERT INTO salon (nombre, edificio, capacidad, tipo) VALUES
-    ('RH107',   'EDIFICIO 3 EN RIO HONDO', 53, 'Butacas'),
-    ('RH109',   'EDIFICIO 3 EN RIO HONDO', 53, 'Butacas'),
-    ('RH301',   'EDIFICIO 3 EN RIO HONDO', 30, 'Butacas'),
-    ('PF105',   'EDIFICIO PF',             30, 'Butacas'),
-    ('RHB-1',   'EDIFICIO 3 EN RIO HONDO', 40, 'Butacas'),
-    ('RHB-2',   'EDIFICIO 3 EN RIO HONDO', 37, 'Butacas'),
-    ('RHCC302', 'EDIFICIO 3 EN RIO HONDO', 30, 'Sala de cómputo');
-
--- -----------------------------------------------------------------------------
--- Disponibilidad de salones por departamento: decision de alcance V1 (ver
--- ../diseno-bd.md) — los 3 departamentos comparten el mismo pool completo, sin
--- restriccion entre si, para tener menos friccion en esta primera iteracion. La
--- restriccion real de Servicios Escolares (salon X solo para el depto Y en tal
--- horario) se carga despues sin cambiar el esquema, reemplazando este INSERT
--- permisivo por datos de "act salones *.pdf".
+-- Salones: NINGUNO (desde 2026-10-13).
 --
--- 7 salones x 3 deptos x 2 semestres x 5 dias x 22 franjas = 4 620 filas, mas
--- la franja de 14:00 solo martes y jueves (x 2 dias = 84 filas), mas las 4 de
--- 20:00-22:00 solo para Estadistica (7 x 1 x 2 x 5 x 4 = 280 filas): 4 984.
--- Se usa un derivado con UNION ALL y no VALUES ROW(), que es 8.0.19+.
+-- Hasta esa fecha aqui se sembraban 7 salones de ejemplo (RH107, RH109, RH301,
+-- PF105, RHB-1, RHB-2, RHCC302) con disponibilidad permisiva para los 3
+-- departamentos, solo para probar el esquema. Se quitaron porque la descarga
+-- para el motor los tomaria como reales (ver
+-- limpieza-2026-10-13-salones-ejemplo.sql, que los borra de una base que ya
+-- los tenia). Los salones reales y su disponibilidad por departamento los
+-- asigna Servicios Escolares cada semestre y se cargaran aparte; mientras
+-- tanto el motor corre en modo sin salones (D44).
 -- -----------------------------------------------------------------------------
-
-INSERT INTO salon_disponibilidad_departamento (salon_id, departamento_id, semestre_id, dia, franja_id)
-SELECT s.id, d.id, sem.id, dias.valor, f.id
-  FROM salon s
- CROSS JOIN departamento d
- CROSS JOIN semestre sem
- CROSS JOIN (SELECT 'lunes' AS valor UNION ALL SELECT 'martes' UNION ALL
-             SELECT 'miercoles' UNION ALL SELECT 'jueves' UNION ALL SELECT 'viernes') dias
- CROSS JOIN franja_horaria f
- WHERE (f.dias IS NULL OR FIND_IN_SET(dias.valor, f.dias) > 0)
-   AND (f.departamento_id IS NULL OR f.departamento_id = d.id);

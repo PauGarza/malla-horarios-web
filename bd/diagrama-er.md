@@ -391,7 +391,7 @@ erDiagram
     DEPARTAMENTO_SEMESTRE_CONFIG {
         int departamento_id FK
         int semestre_id FK
-        numeric horas_minimas_verde
+        numeric ratio_horas_verde
         text texto_introduccion
         boolean publicado
     }

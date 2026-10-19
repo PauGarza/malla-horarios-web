@@ -219,7 +219,9 @@ CREATE TABLE departamento_semestre_config (
     mostrar_seleccion_materias TINYINT(1) NOT NULL DEFAULT 1
                                COMMENT 'OBSOLETA desde 2026-09-28: no tener secciones de materias equivale a 0. No se lee.',
     horas_minimas_verde        DECIMAL(5,2) NOT NULL DEFAULT 10
-                               COMMENT 'D18 de GUIA-DECISIONES.md, configurable por Jefe de Departamento.',
+                               COMMENT 'OBSOLETA desde 2026-10-13: el minimo sale de los cursos del profesor x ratio_horas_verde. No se lee.',
+    ratio_horas_verde          DECIMAL(4,2) NOT NULL DEFAULT 1.00
+                               COMMENT 'Tiempo completo y medio tiempo: minimo de horas en verde = horas de sus cursos x ratio. Asignatura = 1. 1.00-5.00, se valida en PHP.',
     texto_introduccion         TEXT NULL
                                COMMENT 'NULL = texto por defecto (api/lib/catalogo.php).',
     publicado                  TINYINT(1) NOT NULL DEFAULT 0
@@ -242,7 +244,7 @@ CREATE TABLE cuestionario_seccion (
     departamento_id         INT NOT NULL,
     semestre_id             INT NOT NULL,
     tipo                    ENUM('num_cursos','materias','disponibilidad','abierta') NOT NULL
-                            COMMENT 'disponibilidad: exactamente una por depto/semestre. num_cursos: a lo mas una, opcional desde 2026-10-02 (se valida en PHP).',
+                            COMMENT 'disponibilidad y num_cursos: exactamente una de cada por depto/semestre (num_cursos fue opcional del 2026-10-02 al 2026-10-13). Se valida en PHP.',
     titulo                  VARCHAR(255) NOT NULL,
     descripcion             TEXT NULL,
     audiencia               ENUM('todos','tiempo_completo_medio','asignatura') NOT NULL DEFAULT 'todos'
@@ -350,7 +352,7 @@ CREATE TABLE salon_disponibilidad_departamento (
     CONSTRAINT fk_sdd_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
     CONSTRAINT fk_sdd_franja   FOREIGN KEY (franja_id)       REFERENCES franja_horaria(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Que salon/dia/franja autoriza Servicios Escolares a cada depto. En V1 se siembra permisivo.';
+  COMMENT='Que salon/dia/franja autoriza Servicios Escolares a cada depto. Vacia hasta que se carguen los salones reales (2026-10-13: se quitaron los de ejemplo del seed).';
 
 -- -----------------------------------------------------------------------------
 -- Malla y asignacion: grupo (borrador) -> imparte (confirmado)
@@ -358,7 +360,7 @@ CREATE TABLE salon_disponibilidad_departamento (
 
 CREATE TABLE grupo (
     id             INT AUTO_INCREMENT PRIMARY KEY,
-    crn            INT NOT NULL,
+    crn            INT NULL COMMENT 'NULL hasta que Servicios Escolares asigne el CRN (el motor no lo da). 2026-10-13.',
     materia_id     INT NOT NULL,
     semestre_id    INT NOT NULL,
     numero         VARCHAR(3) NOT NULL,
@@ -432,7 +434,7 @@ CREATE TABLE imparte_horario (
     imparte_id INT NOT NULL,
     dia        ENUM('lunes','martes','miercoles','jueves','viernes') NOT NULL,
     franja_id  INT NOT NULL,
-    salon_id   INT NOT NULL,
+    salon_id   INT NULL COMMENT 'NULL = todavia sin salon (modo sin salones, D44). 2026-10-13.',
     UNIQUE KEY uq_ih (imparte_id, dia, franja_id),
     KEY idx_ih_franja (franja_id),
     KEY idx_ih_salon (salon_id),
@@ -451,7 +453,7 @@ CREATE TABLE preferencia (
     profesor_id            INT NOT NULL,
     semestre_id            INT NOT NULL,
     num_cursos_max         INT NULL
-                           COMMENT 'NULL = el formulario no tenia la pregunta (opcional desde 2026-10-02).',
+                           COMMENT 'NULL = el formulario no tenia la pregunta (opcional del 2026-10-02 al 2026-10-13; desde entonces el API la exige).',
     otro_curso             TEXT NULL,
     horarios_otro_depto    TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',
     observaciones_cursos   TEXT NULL COMMENT 'OBSOLETA desde 2026-09-28: ahora es una pregunta abierta (preferencia_respuesta).',
@@ -583,6 +585,47 @@ CREATE TABLE asignacion_fija_horario (
     CONSTRAINT fk_afh_franja     FOREIGN KEY (franja_id)          REFERENCES franja_horaria(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Horario fijado de una asignacion_fija, en bloques de 30 min. Sin filas = el motor elige el horario.';
+
+-- Frontera con el motor de asignacion (2026-10-13, D39/D43). El motor no toca
+-- la base: se descarga su entrada (api/motor-entrada.php) y se sube su salida
+-- (api/motor-salida.php). motor_descarga guarda la huella de cada descarga para
+-- avisar si el resultado esta desfasado; motor_corrida, lo que trae cada
+-- resultado aplicado que no cabe en grupo/imparte.
+CREATE TABLE motor_descarga (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id   INT NOT NULL,
+    departamentos VARCHAR(50) NOT NULL COMMENT 'Ids del alcance, ordenados y separados por coma: "1" o "1,2,3".',
+    con_salones   TINYINT(1) NOT NULL COMMENT '0 = se descargo con salones: [] (modo sin salones, D44).',
+    generado_at   VARCHAR(32) NOT NULL COMMENT 'Tal cual va en el JSON (ISO 8601 con -06:00); la salida lo devuelve en entrada.generado_at.',
+    huella        CHAR(64) NOT NULL COMMENT 'SHA-256 del paquete sin generado_at ni generado_por. Si al subir no coincide, el resultado esta desfasado.',
+    generado_por  INT NOT NULL,
+    descargado_at DATETIME NOT NULL COMMENT 'UTC.',
+    UNIQUE KEY uq_motor_descarga (semestre_id, generado_at, departamentos),
+    CONSTRAINT fk_md_semestre FOREIGN KEY (semestre_id)  REFERENCES semestre(id),
+    CONSTRAINT fk_md_por      FOREIGN KEY (generado_por) REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Cada paquete autoplanear-entrada descargado para el motor. Ver api/motor-entrada.php.';
+
+CREATE TABLE motor_corrida (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id         INT NOT NULL,
+    departamentos       VARCHAR(50) NOT NULL COMMENT 'Mismo formato que motor_descarga.departamentos.',
+    descarga_id         INT NULL COMMENT 'NULL = el resultado responde a una descarga que no se reconocio.',
+    desfasada           TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = algo cambio desde la descarga y se aplico de todos modos.',
+    motor               LONGTEXT NULL COMMENT 'JSON: el bloque motor de la salida (nombre, version, parametros).',
+    sin_asignar         LONGTEXT NULL COMMENT 'JSON: sin_asignar de la salida (§4.3).',
+    avisos              LONGTEXT NULL COMMENT 'JSON: {motor: [...], sistema: [...]} (§4.4 y blandas de §5).',
+    metricas            LONGTEXT NULL COMMENT 'JSON: metricas de la salida (§4.5), sin interpretar.',
+    grupos_creados      INT NOT NULL,
+    grupos_reemplazados INT NOT NULL,
+    subido_por          INT NOT NULL,
+    subido_at           DATETIME NOT NULL COMMENT 'UTC.',
+    KEY idx_mco_semestre (semestre_id),
+    CONSTRAINT fk_mco_semestre FOREIGN KEY (semestre_id) REFERENCES semestre(id),
+    CONSTRAINT fk_mco_descarga FOREIGN KEY (descarga_id) REFERENCES motor_descarga(id),
+    CONSTRAINT fk_mco_por      FOREIGN KEY (subido_por)  REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Cada resultado del motor aplicado (api/motor-salida.php). La vista de malla lee aqui sin_asignar y avisos.';
 
 -- -----------------------------------------------------------------------------
 -- Infraestructura del API (no existe en el esquema de Postgres)

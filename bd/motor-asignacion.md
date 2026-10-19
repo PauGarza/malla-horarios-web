@@ -23,7 +23,7 @@
 | `ajuste_num_cursos` | (2026-10-12) La jefatura sobreescribió el número de cursos que pidió el profesor (desde Respuestas y bloqueos). **Si hay fila, ese número manda** sobre `preferencia.num_cursos_max`: `COALESCE(ajuste_num_cursos.num_cursos, preferencia.num_cursos_max)`. Puede ser **0** = este semestre no se le asignan cursos. |
 | `asignacion_fija`, `asignacion_fija_horario` | **Restricción DURA** (2026-10-13): asignaciones directas que la jefatura fijó antes de correr el motor. Cada fila de `asignacion_fija` es **un grupo**: tiene que existir un grupo de esa `materia_id` con ese `profesor_id`. Si la fila tiene horario en `asignacion_fija_horario`, ese grupo va **exactamente** en esos bloques (ya suman `materia.creditos` y no chocan entre sí para el mismo profesor; lo valida `api/asignaciones.php`). Sin horario, el motor elige cuándo. El salón siempre lo elige el motor. **`tipo = 'maestria'`** (sin `materia_id`): materia de maestría que no está en el catálogo; **no es un grupo que crear**, solo aparta esas horas del profesor. Ver §3. |
 | `preferencia_respuesta` | Respuestas a las preguntas abiertas del formulario (una fila por sección `abierta`). Texto libre para que lo lea la jefatura; el motor no lo interpreta. Reemplaza a `preferencia.horarios_otro_depto` / `observaciones_*`, que quedaron obsoletas. |
-| `departamento_semestre_config` | `horas_minimas_verde` (umbral de validez de una preferencia — ver checklist de envío). `publicado` dice si el formulario ya estaba abierto. (`mostrar_seleccion_materias` quedó obsoleta: un departamento que no captura materias simplemente no tiene secciones de materias en `cuestionario_seccion`, y el motor solo tiene `disponibilidad` como input de ese departamento.) |
+| `departamento_semestre_config` | `ratio_horas_verde` (2026-10-13): con él se calcula el mínimo de horas en verde que el profesor tuvo que marcar para enviar (3 h por curso pedido, +1 h si tiene en verde una de 8 créditos, × ratio para tiempo completo y medio tiempo). Es una regla de envío, no del motor: el motor no tiene que volver a validarla. `horas_minimas_verde` quedó obsoleta. `publicado` dice si el formulario ya estaba abierto. (`mostrar_seleccion_materias` quedó obsoleta: un departamento que no captura materias simplemente no tiene secciones de materias en `cuestionario_seccion`, y el motor solo tiene `disponibilidad` como input de ese departamento.) |
 | `cuestionario_seccion`, `materia_cuestionario` | Qué materias vio cada departamento en su formulario y en qué sección. `cuestionario_seccion.cobertura_departamental` marca las secciones de cursos departamentales; ya viene copiado a `preferencia_materia.cobertura_departamental`. |
 | `franja_horaria` | Catálogo fijo de bloques de 30 min (07:00–14:00 y 16:00–20:00, Lun–Vie) — el universo de horarios posibles. **Dos excepciones** (2026-10-02 y 2026-10-06): `dias` limita una franja a ciertos días (14:00–14:30 solo martes y jueves) y `departamento_id` la limita a un departamento (20:00–22:00 solo Estadística). NULL en cualquiera de las dos = sin límite. Un grupo solo puede caer en una franja que valga para ese día y para el departamento de su materia. |
 | `salon`, `salon_disponibilidad_departamento` | Salones y qué departamento puede usar cuál, qué día/franja, cada semestre. |
@@ -60,10 +60,10 @@ gastar intentos en combinaciones que la base va a rechazar (ver `mysql/triggers-
 - Un profesor no puede tener dos `imparte_horario` al mismo día/franja en el mismo semestre.
 - Un salón no puede tener dos `imparte_horario` al mismo día/franja en el mismo semestre (RN02).
 - El salón asignado debe estar autorizado para el departamento del grupo ese día/franja/semestre
-  (`salon_disponibilidad_departamento`) — en V1 casi no filtra porque `seed-mysql.sql` da acceso
-  compartido a los 3 departamentos, **salvo las franjas de 20:00–22:00, que solo tienen filas para
-  Estadística**: a otro departamento la base le rechaza esas horas. Puede volverse más restrictivo
-  cuando Servicios Escolares cargue la asignación real de salones.
+  (`salon_disponibilidad_departamento`). **Hoy no hay salones** (2026-10-13): los 7 de ejemplo del
+  seed, que tenían acceso compartido de los 3 departamentos, se borraron
+  (`mysql/limpieza-2026-10-13-salones-ejemplo.sql`). Hasta que se carguen los reales, el motor
+  corre en modo sin salones (D44): `imparte_horario.salon_id` NULL y estos chequeos se saltan.
 - Si `materia.tipo_salon_requerido` no es NULL, el salón debe ser de ese `tipo` exacto.
 - La rejilla `franja_horaria` ya hace estructuralmente imposible asignar 14:00–16:00 (comida, RN05,
   salvo 14:00–14:30 martes y jueves) o después de las 20:00 (salvo Estadística, hasta las 22:00).
@@ -75,8 +75,9 @@ gastar intentos en combinaciones que la base va a rechazar (ver `mysql/triggers-
   — hay que sumar `imparte_horario` de TODOS los departamentos donde ese profesor tenga clase ese
   semestre, no solo el propio.
 - **Asignación por tipo de contrato** (RN04): Tiempo Completo se piensa por número de cursos
-  (`preferencia.num_cursos_max`, o `ajuste_num_cursos.num_cursos` si la jefatura lo ajustó), Asignatura por horas. **`num_cursos_max` puede ser NULL** desde
-  2026-10-02: la jefatura puede quitar esa pregunta de su formulario. NULL = "no lo dijo", no "cero".
+  (`preferencia.num_cursos_max`, o `ajuste_num_cursos.num_cursos` si la jefatura lo ajustó), Asignatura por horas. **`num_cursos_max` puede ser NULL** en
+  preferencias guardadas del 2026-10-02 al 2026-10-13, cuando la jefatura podía quitar esa pregunta de su
+  formulario. NULL = "no lo dijo", no "cero". Desde el 2026-10-13 la pregunta es fija y el API exige 1–6.
 - **Sin medias horas sueltas** (RN06) — no dejar huecos de 30 min aislados en el día de un profesor o
   un salón.
 - **Cupo de salón vs. tamaño de grupo**: `grupo.cupo_maximo <= salon.capacidad`.
@@ -113,22 +114,36 @@ gastar intentos en combinaciones que la base va a rechazar (ver `mysql/triggers-
 
 El motor **no** corre en el navegador del profesor ni del Jefe de Departamento — es un proceso propio
 (script, job, backend). Desde la migración a MySQL ya no hay RLS: la autorización vive en el API en
-PHP, y **ningún endpoint escribe hoy en `grupo`/`imparte`/`imparte_profesor`/`imparte_horario`/
-`imparte_co_oferta`**. El motor necesita una de dos cosas: correr en el servidor con credenciales
-propias de la base (nunca en código que llegue al frontend), o un endpoint nuevo con su propia regla
-de autorización (por ejemplo, solo jefatura de su departamento o admin). Está por decidir.
+PHP. **Decidido (D39, D43): el motor no toca la base ni tiene credenciales.** Se corre aparte sobre
+el JSON que baja `api/motor-entrada.php`, y su resultado lo sube `api/motor-salida.php`, que lo
+valida (§5 de la convención) y lo escribe en `grupo`/`imparte`/`imparte_profesor`/
+`imparte_horario`/`imparte_co_oferta` sin publicar. Los dos endpoints son **solo de admin** por
+ahora (pestaña "Datos para el motor"); abrirlos a la jefatura de su departamento es cambiar
+`exigir_rol` y mostrar la tarjeta.
+
+Cómo escribe la subida (2026-10-13, `api/lib/motor.php`):
+
+- `grupo.crn` queda **NULL**: el CRN lo da Servicios Escolares después.
+- **Grupo espejo**: un `grupo` + `imparte` por clave, ligados en `imparte_co_oferta` (los dos
+  sentidos), con el mismo profesor y horario. El vínculo se inserta **antes** que el horario: el
+  procedimiento de `imparte_horario` lo usa para no tomar la otra clave como traslape.
+- **Modo sin salones** (D44): `imparte_horario.salon_id` puede ser NULL y el grupo queda
+  `en_asignacion`. Con profesor + horario + salón queda `asignado`.
+- **Al volver a subir** se borran los grupos sin publicar del alcance (y sus espejos de otros
+  departamentos); los publicados nunca se tocan y van al motor como `grupos_fijos`.
 
 ## 5. Qué NO existe todavía (para no asumir que sí)
 
-- El motor no está conectado al sistema. Existe un **motor v0** (`optV0/` en el repo del servicio
+- El motor se conecta por archivos (§4), no corre dentro del sistema. Existe un **motor v0** (`optV0/` en el repo del servicio
   social `malla-horarios`, 2026-10-11) que no lee la base: trabaja sobre los archivos JSON de
   `docs/convencion-datos-motor.md` de ese mismo repo (versión 1 del 2026-10-09; versión 2 del
   2026-10-13, con la Materia de Maestría como horas en rojo, el ajuste de cursos ya resuelto en
   `num_cursos_max` y el campo nuevo `asignaciones_fijas`, ver su §3.9). Este documento dice de qué
   tablas sale cada dato y a cuáles se escribe; la convención, el formato de los archivos.
-- No hay endpoint que escriba `grupo`/`imparte`/`imparte_horario` (sí para el catálogo, la demanda,
-  el formulario, los bloqueos, el ajuste de cursos y las asignaciones fijas, que van en sus propias tablas). Cuando el motor exista y alguien deba correrlo desde una vista con
-  sesión de Jefe de Departamento en vez de un script aparte, hará falta ese endpoint (ver §4).
+- optV0 todavía lee y escribe la **versión 1**; el sistema ya solo habla la 2. Hasta que se
+  actualice (lista en `optV0/README.md`), su salida se rechaza al subirla.
+- No hay vista de malla: lo subido queda en la base sin publicar. Tampoco hay vista para cargar
+  salones; mientras tanto se corre en modo sin salones (D44).
 - No existe la protección de secuencias entre materias seriadas (RN01, "cálculos seriados a la misma
   hora") — es una idea a futuro, no una regla que el motor deba imponer todavía.
 - El scoring/balance histórico (§3, último punto) no tiene tabla propia todavía, solo el boceto de

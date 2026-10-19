@@ -45,7 +45,7 @@ navegador. Úsalo cuando llegue un reporte nuevo, para saber si cambió el forma
 | `src/components/` | `BarraSuperior` (menú de usuario y semestre activo), `SelectorDepartamento` (jefa de división / admin), `FormularioPiezas` (TriToggle, rejilla de disponibilidad: las comparten el formulario del profesor y el editor), `EtiquetaFlotante` (el detalle que se abre al hacer clic en un número de los reportes), `NumCursos` (número de cursos con el marcador **J** cuando la jefatura lo ajustó) |
 | `src/lib/api.js` | Un wrapper por endpoint. `PUT`/`PATCH`/`DELETE` van tunelados sobre `POST` con `X-HTTP-Method-Override` y el token va en `X-Autoplanear-Token`: el proxy del ITAM bloquea esos métodos y descarta `Authorization` (ver `../api/README.md`) |
 | `src/lib/roles.js` | Etiquetas de rol y contrato, `ROLES_GESTION` y `veTodosLosDepartamentos()`, espejo de `api/lib/auth.php` |
-| `src/lib/formulario.js` | Reglas del formulario compartidas: audiencia por contrato, mínimos para enviar, vista previa por contrato. Espejo de `api/lib/catalogo.php` |
+| `src/lib/formulario.js` | Reglas del formulario compartidas: audiencia por contrato, mínimos para enviar (incluido `horasMinimasVerde`, el mínimo de horas en verde calculado con los cursos y el ratio), vista previa por contrato. Espejo de `api/lib/catalogo.php` |
 | `src/lib/numCursos.js` | El número de cursos que cuenta (el ajuste de jefatura si lo hay, si no el del profesor) y su descripción |
 | `src/lib/parserDemanda.js` | Lector del PDF (o texto pegado) de estimación de demanda. Funciones puras |
 | `src/context/AuthContext.jsx` | Sesión (JWT en `localStorage`), perfil, departamentos, franjas y **semestre activo** |
@@ -60,6 +60,7 @@ El inicio (`HomePage`) se organiza en cuatro secciones:
 | **Proceso del semestre** | jefatura | agrupado por fases del procedimiento: `CatalogoMaterias` → `EditorCuestionario` (editar y publicar) → `CargaDemanda` → `RespuestasCuestionario` (bloqueos y ajuste del número de cursos) → `AsignacionesDirectas` (fijar profesor, materia y horario antes del algoritmo; incluye la Materia de Maestría) → pasos en construcción (asignar y revisar la malla, cartas, inscripciones) |
 | **Reportes** | jefatura | `PanelPreferencias` (quién contestó, reabrir), `ReportePreferencias` (por profesor: contrato, cursos, materias y horas por color; CSV), `ReporteHoras` (mapa de calor de las horas pedidas) |
 | **Administración** | admin y jefa de división | `Semestres` — abrir el siguiente semestre, consultar y reactivar los anteriores |
+| **Probar el formulario** | solo admin | `ProbarFormulario` — elige departamento y contrato y monta `FormularioPreferencias` con `prueba`: el formulario sale del editor (`configuracion.php`) recortado con `cuestionarioParaContrato()`, se llena y se valida como el real, y ni el borrador ni el envío llegan al servidor (2026-10-13) |
 
 **El admin** ve las mismas pantallas que la jefatura, pero de los 3 departamentos: cada una lleva
 `SelectorDepartamento` arriba y muestra un departamento a la vez (`CatalogoMaterias`,

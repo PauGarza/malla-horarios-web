@@ -73,7 +73,7 @@ function CeldaCursos({ profesor: p, guardando, onAjustar }) {
       type="button"
       className={`cursos-boton ${p.ajuste_cursos ? 'con-ajuste' : ''}`}
       disabled={guardando}
-      title={descripcionAjuste(p) ?? 'Clic para ajustar el número de cursos (el profesor no lo ve)'}
+      title={descripcionAjuste(p) ?? 'Clic para ajustar el número de cursos'}
       aria-label={`${p.nombre}: ${
         p.ajuste_cursos
           ? descripcionAjuste(p)
@@ -443,10 +443,9 @@ export default function RespuestasCuestionario({ onVolver }) {
 
       <p className="formulario-nota">
         Haz clic en una celda para <strong>bloquear</strong> esa materia a ese profesor: el algoritmo no
-        se la asignará. Lo que contestó se sigue viendo y el profesor no se entera. Otro clic la
-        desbloquea. En la columna <strong>Cursos</strong> puedes ajustar cuántos cursos se le asignan a
-        alguien; queda marcado con <span className="cursos-marcador">J</span>, se guarda aparte de lo que
-        pidió y el profesor no lo ve.
+        se la asignará. Lo que contestó se sigue viendo. Otro clic la desbloquea. En la columna{' '}
+        <strong>Cursos</strong> puedes ajustar cuántos cursos se le asignan a alguien; queda marcado con{' '}
+        <span className="cursos-marcador">J</span> y se guarda aparte de lo que pidió.
       </p>
       <div className="legend">
         <span><i className="legend-verde" /> Verde</span>

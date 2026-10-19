@@ -3,11 +3,11 @@
 // El editor del formulario (jefatura).
 //
 //   GET  ?semestre_id=N[&departamento_id=D]
-//        -> { publicado, publicado_at, texto_introduccion, horas_minimas_verde,
+//        -> { publicado, publicado_at, texto_introduccion, ratio_horas_verde,
 //             secciones[], ocultas[], enviadas }
 //
 //   PUT  ?recurso=formulario&semestre_id=N[&departamento_id=D]
-//        { texto_introduccion, horas_minimas_verde, secciones:[...], materias:[...] }
+//        { texto_introduccion, ratio_horas_verde, secciones:[...], materias:[...] }
 //        -> lo mismo que el GET, ya guardado
 //
 //   POST ?recurso=publicar&semestre_id=N[&departamento_id=D]   { publicado: bool }
@@ -137,13 +137,20 @@ function entero_opcional($valor, string $que): ?int
     return (int) $n;
 }
 
-$horas = filter_var(
-    isset($body['horas_minimas_verde']) ? $body['horas_minimas_verde'] : null,
+// Desde 2026-10-13 el mínimo de horas en verde sale de los cursos de cada
+// profesor (horas_minimas_verde() en lib/catalogo.php). La jefatura solo pone
+// el ratio para tiempo completo y medio tiempo: 1 = las horas de sus cursos,
+// 2 = el doble. Menos de 1 no alcanzaría ni para sus propios cursos.
+$ratio = filter_var(
+    isset($body['ratio_horas_verde']) ? $body['ratio_horas_verde'] : null,
     FILTER_VALIDATE_FLOAT
 );
-if ($horas === false || $horas === null || $horas < 0 || $horas > 60) {
-    error_json('Las horas mínimas en verde deben ser un número entre 0 y 60', 400, 'horas_invalidas');
+if ($ratio === false || $ratio === null || $ratio < 1 || $ratio > 5) {
+    error_json('El ratio de horas en verde debe ser un número entre 1 y 5', 400, 'ratio_invalido');
 }
+// La columna guarda centésimas; redondear aquí evita que 1.255 se lea distinto
+// en la pantalla y en la base.
+$ratio = round($ratio, 2);
 
 $intro = isset($body['texto_introduccion']) ? trim((string) $body['texto_introduccion']) : '';
 // Guardar el texto por defecto tal cual sería ruido: NULL significa "el de
@@ -223,12 +230,12 @@ foreach ($entrada as $s) {
         'obligatoria' => $tipo === 'abierta' && !empty($s['obligatoria']) ? 1 : 0,
     ];
 }
-// Disponibilidad es obligatoria (sin ella no hay horario que asignar).
-// Número de cursos es opcional desde 2026-10-02, pero a lo más una: es un solo
-// valor por preferencia (preferencia.num_cursos_max).
-if ($conteoTipo['disponibilidad'] !== 1 || $conteoTipo['num_cursos'] > 1) {
+// Disponibilidad es obligatoria (sin ella no hay horario que asignar), y
+// número de cursos también desde 2026-10-13 (de ahí sale el mínimo de horas en
+// verde). Una de cada: son un solo valor por preferencia.
+if ($conteoTipo['disponibilidad'] !== 1 || $conteoTipo['num_cursos'] !== 1) {
     error_json(
-        'El formulario debe tener exactamente una pregunta de disponibilidad y a lo más una de número de cursos',
+        'El formulario debe tener exactamente una pregunta de disponibilidad y una de número de cursos',
         400,
         'secciones_fijas'
     );
@@ -310,11 +317,11 @@ $pdo->beginTransaction();
 try {
     $pdo->prepare(
         'INSERT INTO departamento_semestre_config
-                (departamento_id, semestre_id, horas_minimas_verde, texto_introduccion)
+                (departamento_id, semestre_id, ratio_horas_verde, texto_introduccion)
          VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE horas_minimas_verde = VALUES(horas_minimas_verde),
+         ON DUPLICATE KEY UPDATE ratio_horas_verde = VALUES(ratio_horas_verde),
                 texto_introduccion = VALUES(texto_introduccion)'
-    )->execute([$deptoId, $semestreId, $horas, $intro]);
+    )->execute([$deptoId, $semestreId, $ratio, $intro]);
 
     $upd = $pdo->prepare(
         'UPDATE cuestionario_seccion

@@ -20,6 +20,9 @@
 
 DELIMITER $$
 
+-- 2026-10-13 (migracion-2026-10-13d-motor.sql): los chequeos 1 y 2 ignoran
+-- el grupo espejo de la misma clase (imparte_co_oferta), y con salon_id NULL
+-- (modo sin salones, D44) se saltan los de salon.
 CREATE PROCEDURE sp_validar_imparte_horario(
     IN p_id INT, IN p_imparte_id INT, IN p_dia VARCHAR(10),
     IN p_franja_id INT, IN p_salon_id INT
@@ -40,7 +43,8 @@ BEGIN
      WHERE i.id = p_imparte_id;
 
     -- 1. Un profesor no puede estar en dos grupos al mismo tiempo (mismo
-    --    semestre, mismo dia/franja), sin importar en que imparte este cada uno.
+    --    semestre, mismo dia/franja), salvo que sean la misma clase con otra
+    --    clave (grupo espejo, ligado en imparte_co_oferta).
     SELECT COUNT(*) INTO v_conflictos
       FROM imparte_horario ih
       JOIN imparte_profesor ip ON ip.imparte_id = ih.imparte_id
@@ -52,50 +56,60 @@ BEGIN
        AND g2.semestre_id = v_semestre_id
        AND ip.profesor_id IN (
            SELECT profesor_id FROM imparte_profesor WHERE imparte_id = p_imparte_id
+       )
+       AND NOT EXISTS (
+           SELECT 1 FROM imparte_co_oferta ico
+            WHERE (ico.imparte_id = p_imparte_id AND ico.imparte_relacionado_id = ih.imparte_id)
+               OR (ico.imparte_id = ih.imparte_id AND ico.imparte_relacionado_id = p_imparte_id)
        );
     IF v_conflictos > 0 THEN
         SIGNAL SQLSTATE '45000'
           SET MESSAGE_TEXT = 'Traslape de profesor: ya tiene una clase asignada en esa franja';
     END IF;
 
-    -- 2. Un salon no puede tener dos grupos al mismo tiempo (RN02).
-    SELECT COUNT(*) INTO v_conflictos
-      FROM imparte_horario ih
-      JOIN imparte i2 ON i2.id = ih.imparte_id
-      JOIN grupo g2  ON g2.id = i2.grupo_id
-     WHERE ih.id <> IFNULL(p_id, -1)
-       AND ih.dia = p_dia
-       AND ih.franja_id = p_franja_id
-       AND ih.salon_id = p_salon_id
-       AND g2.semestre_id = v_semestre_id;
-    IF v_conflictos > 0 THEN
-        SIGNAL SQLSTATE '45000'
-          SET MESSAGE_TEXT = 'Traslape de salon: ya esta ocupado en esa franja';
-    END IF;
-
-    -- 3. El salon debe estar autorizado para el depto en ese semestre/dia/franja.
-    --    En V1 la tabla se siembra permisiva (seed-mysql.sql), asi que esto no
-    --    bloquea nada hasta que se carguen datos reales de Servicios Escolares.
-    SELECT COUNT(*) INTO v_autorizado
-      FROM salon_disponibilidad_departamento sdd
-     WHERE sdd.salon_id = p_salon_id
-       AND sdd.departamento_id = v_departamento_id
-       AND sdd.semestre_id = v_semestre_id
-       AND sdd.dia = p_dia
-       AND sdd.franja_id = p_franja_id;
-    IF v_autorizado = 0 THEN
-        SIGNAL SQLSTATE '45000'
-          SET MESSAGE_TEXT = 'El salon no esta autorizado para ese departamento en esa franja';
-    END IF;
-
-    -- 3b. Si la materia exige un tipo de salon, el salon debe cumplirlo.
-    --     (Calculo Numerico y parientes siempre en RHCC302, con datos reales.)
-    IF v_tipo_requerido IS NOT NULL THEN
-        SELECT tipo INTO v_tipo_salon FROM salon WHERE id = p_salon_id;
-        -- <=> es la comparacion segura con NULL; NOT(a <=> b) = IS DISTINCT FROM.
-        IF NOT (v_tipo_salon <=> v_tipo_requerido) THEN
+    -- Sin salon todavia (D44): no hay salon que validar.
+    IF p_salon_id IS NOT NULL THEN
+        -- 2. Un salon no puede tener dos grupos al mismo tiempo (RN02), salvo
+        --    el grupo espejo de la misma clase.
+        SELECT COUNT(*) INTO v_conflictos
+          FROM imparte_horario ih
+          JOIN imparte i2 ON i2.id = ih.imparte_id
+          JOIN grupo g2  ON g2.id = i2.grupo_id
+         WHERE ih.id <> IFNULL(p_id, -1)
+           AND ih.dia = p_dia
+           AND ih.franja_id = p_franja_id
+           AND ih.salon_id = p_salon_id
+           AND g2.semestre_id = v_semestre_id
+           AND NOT EXISTS (
+               SELECT 1 FROM imparte_co_oferta ico
+                WHERE (ico.imparte_id = p_imparte_id AND ico.imparte_relacionado_id = ih.imparte_id)
+                   OR (ico.imparte_id = ih.imparte_id AND ico.imparte_relacionado_id = p_imparte_id)
+           );
+        IF v_conflictos > 0 THEN
             SIGNAL SQLSTATE '45000'
-              SET MESSAGE_TEXT = 'El salon no es del tipo que requiere la materia';
+              SET MESSAGE_TEXT = 'Traslape de salon: ya esta ocupado en esa franja';
+        END IF;
+
+        -- 3. El salon debe estar autorizado para el depto en ese semestre/dia/franja.
+        SELECT COUNT(*) INTO v_autorizado
+          FROM salon_disponibilidad_departamento sdd
+         WHERE sdd.salon_id = p_salon_id
+           AND sdd.departamento_id = v_departamento_id
+           AND sdd.semestre_id = v_semestre_id
+           AND sdd.dia = p_dia
+           AND sdd.franja_id = p_franja_id;
+        IF v_autorizado = 0 THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'El salon no esta autorizado para ese departamento en esa franja';
+        END IF;
+
+        -- 3b. Si la materia exige un tipo de salon, el salon debe cumplirlo.
+        IF v_tipo_requerido IS NOT NULL THEN
+            SELECT tipo INTO v_tipo_salon FROM salon WHERE id = p_salon_id;
+            IF NOT (v_tipo_salon <=> v_tipo_requerido) THEN
+                SIGNAL SQLSTATE '45000'
+                  SET MESSAGE_TEXT = 'El salon no es del tipo que requiere la materia';
+            END IF;
         END IF;
     END IF;
 END$$

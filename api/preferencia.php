@@ -70,24 +70,14 @@ if (!in_array($estado, ['borrador', 'enviado'], true)) {
     error_json('Estado inválido', 400);
 }
 
-// La pregunta de número de cursos es opcional desde 2026-10-02: la jefatura la
-// puede quitar del formulario. Si este profesor no la tiene, se guarda NULL y
-// se ignora lo que mande; si la tiene, es obligatoria.
-$pideNumCursos = false;
-foreach ($cuestionario['secciones'] as $s) {
-    if ($s['tipo'] === 'num_cursos') {
-        $pideNumCursos = true;
-    }
-}
-$numCursos = null;
-if ($pideNumCursos) {
-    $numCursos = filter_var(isset($body['num_cursos_max']) ? $body['num_cursos_max'] : null, FILTER_VALIDATE_INT);
-    // Se valida aquí y no solo con el CHECK porque en MySQL < 8.0.16 los CHECK se
-    // ignoran en silencio (ver bd/mysql/README.md) y este es el único camino por el
-    // que ese valor entra a la base.
-    if ($numCursos === false || $numCursos === null || $numCursos < 1 || $numCursos > 6) {
-        error_json('El número de cursos debe estar entre 1 y 6', 400, 'cursos_invalidos');
-    }
+// La pregunta de número de cursos es fija desde 2026-10-13 (fue opcional desde
+// 2026-10-02): de ella sale el mínimo de horas en verde.
+$numCursos = filter_var(isset($body['num_cursos_max']) ? $body['num_cursos_max'] : null, FILTER_VALIDATE_INT);
+// Se valida aquí y no solo con el CHECK porque en MySQL < 8.0.16 los CHECK se
+// ignoran en silencio (ver bd/mysql/README.md) y este es el único camino por el
+// que ese valor entra a la base.
+if ($numCursos === false || $numCursos === null || $numCursos < 1 || $numCursos > 6) {
+    error_json('El número de cursos debe estar entre 1 y 6', 400, 'cursos_invalidos');
 }
 
 $nivelesValidos = ['verde', 'amarillo', 'rojo'];
@@ -189,7 +179,7 @@ if (isset($body['respuestas']) && is_array($body['respuestas'])) {
 }
 
 if ($estado === 'enviado') {
-    $faltantes = faltantes_para_enviar($cuestionario, $niveles, $respuestas, $horasVerde);
+    $faltantes = faltantes_para_enviar($cuestionario, (int) $numCursos, $niveles, $respuestas, $horasVerde);
     if ($faltantes !== []) {
         error_json('Antes de enviar te falta: ' . implode('; ', $faltantes) . '.', 400, 'incompleta');
     }

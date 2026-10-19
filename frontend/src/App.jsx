@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage';
 import FormularioPreferencias from './pages/FormularioPreferencias';
 import PanelPreferencias from './pages/PanelPreferencias';
 import EditorCuestionario from './pages/EditorCuestionario';
+import ProbarFormulario from './pages/ProbarFormulario';
 import RespuestasCuestionario from './pages/RespuestasCuestionario';
 import ReportePreferencias from './pages/ReportePreferencias';
 import ReporteHoras from './pages/ReporteHoras';
@@ -13,6 +14,7 @@ import CatalogoMaterias from './pages/CatalogoMaterias';
 import PerfilUsuario from './pages/PerfilUsuario';
 import CargaDemanda from './pages/CargaDemanda';
 import Semestres from './pages/Semestres';
+import MotorAsignacion from './pages/MotorAsignacion';
 import RestablecerPasswordPage from './pages/RestablecerPasswordPage';
 import CapturarCorreoPage from './pages/CapturarCorreoPage';
 import BarraSuperior from './components/BarraSuperior';
@@ -91,8 +93,29 @@ function Vista({ vista, setVista }) {
   }
 
   if (vista.nombre === 'formulario') {
+    // Desde Preferencias recibidas llega la lista de profesores de la tabla,
+    // para pasar al anterior o al siguiente sin volver al panel.
+    const lista = vista.lista ?? [];
+    const i = lista.findIndex((p) => p.id === vista.profesorObjetivo?.id);
+    const ir = (j) => {
+      window.scrollTo(0, 0);
+      setVista({ ...vista, profesorObjetivo: lista[j] });
+    };
+    const navegacion =
+      i >= 0 && lista.length > 1
+        ? {
+            posicion: i + 1,
+            total: lista.length,
+            anterior: i > 0 ? { nombre: lista[i - 1].nombre, ir: () => ir(i - 1) } : null,
+            siguiente: i < lista.length - 1 ? { nombre: lista[i + 1].nombre, ir: () => ir(i + 1) } : null,
+          }
+        : null;
     return (
       <FormularioPreferencias
+        // La key reinicia el formulario al cambiar de profesor: sin ella se
+        // quedarían un instante las respuestas del anterior.
+        key={vista.profesorObjetivo?.id ?? 'propio'}
+        navegacion={navegacion}
         profesorObjetivo={vista.profesorObjetivo ?? null}
         soloLecturaForzada={Boolean(vista.profesorObjetivo)}
         onVolver={() =>
@@ -108,11 +131,14 @@ function Vista({ vista, setVista }) {
       <PanelPreferencias
         departamentoPrevio={vista.departamentoId ?? null}
         onVolver={() => setVista({ nombre: 'home' })}
-        onVerFormulario={(profesorObjetivo, departamentoId) =>
-          setVista({ nombre: 'formulario', profesorObjetivo, volverA: 'panel-preferencias', departamentoId })
+        onVerFormulario={(profesorObjetivo, departamentoId, lista) =>
+          setVista({ nombre: 'formulario', profesorObjetivo, volverA: 'panel-preferencias', departamentoId, lista })
         }
       />
     );
+  }
+  if (vista.nombre === 'probar-formulario') {
+    return <ProbarFormulario onVolver={() => setVista({ nombre: 'home' })} />;
   }
   if (vista.nombre === 'editor-cuestionario') {
     return <EditorCuestionario onVolver={() => setVista({ nombre: 'home' })} />;
@@ -138,11 +164,15 @@ function Vista({ vista, setVista }) {
   if (vista.nombre === 'semestres') {
     return <Semestres onVolver={() => setVista({ nombre: 'home' })} />;
   }
+  if (vista.nombre === 'motor') {
+    return <MotorAsignacion onVolver={() => setVista({ nombre: 'home' })} />;
+  }
   return (
     <HomePage
       onAbrirFormulario={() => setVista({ nombre: 'formulario' })}
       onAbrirPanelPreferencias={() => setVista({ nombre: 'panel-preferencias' })}
       onAbrirEditor={() => setVista({ nombre: 'editor-cuestionario' })}
+      onAbrirPrueba={() => setVista({ nombre: 'probar-formulario' })}
       onAbrirRespuestas={() => setVista({ nombre: 'respuestas' })}
       onAbrirReporte={() => setVista({ nombre: 'reporte-preferencias' })}
       onAbrirReporteHoras={() => setVista({ nombre: 'reporte-horas' })}
@@ -150,6 +180,7 @@ function Vista({ vista, setVista }) {
       onAbrirCatalogoMaterias={() => setVista({ nombre: 'catalogo-materias' })}
       onAbrirCargaDemanda={() => setVista({ nombre: 'carga-demanda' })}
       onAbrirSemestres={() => setVista({ nombre: 'semestres' })}
+      onAbrirMotor={() => setVista({ nombre: 'motor' })}
     />
   );
 }

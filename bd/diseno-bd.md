@@ -14,7 +14,8 @@
 > `boolean`, `timestamptz`…) porque el razonamiento sigue siendo el mismo; el DDL que corre de verdad
 > es [`mysql/schema-mysql.sql`](mysql/schema-mysql.sql). Lo que cambió con la migración está en §14,
 > y los cambios posteriores (correo y recuperación de contraseña, franjas por día y por
-> departamento, número de cursos opcional) en §15.
+> departamento, número de cursos opcional) en §15, y el mínimo de horas en verde calculado por
+> cursos (2026-10-13) en §17.
 
 ## 1. Contexto y fuentes
 
@@ -196,8 +197,9 @@ de aprovisionar el proyecto real, para no descubrirlo a medio camino.
   de verdad confirmada).
 
 **No bloquea la recolección de preferencias, pero sigue abierto (`GUIA-DECISIONES.md`):**
-- D18 — horas mínimas en verde por semana según tipo de contrato (pendiente de la junta de Jefes de
-  Departamento).
+- ~~D18 — horas mínimas en verde por semana según tipo de contrato (pendiente de la junta de Jefes de
+  Departamento).~~ Resuelta: primero 10 h fijas configurables (2026-09-21); desde 2026-10-13, un
+  mínimo calculado con los cursos de cada profesor y un ratio de la jefatura (D40, §17).
 - Mecanismo de cuentas: ¿reutilizar alguna credencial institucional de ITAM en vez de una nueva, ahora
   que sí se va a manejar contraseña propia? Vale la pena reconfirmarlo dado que cambió la decisión de
   auth — antes se asumía que esto quedaría resuelto por el sistema de autenticación nativo del proveedor.
@@ -399,7 +401,8 @@ departamento) o admin (de cualquiera) — ver política `departamento_config_esc
 | departamento_id | int FK → departamento | |
 | semestre_id | int FK → semestre | |
 | mostrar_seleccion_materias | boolean NOT NULL DEFAULT true | `false` = el cuestionario de ese departamento ese semestre NO muestra selección de materias — el profesor solo declara disponibilidad de horario. **Obsoleta desde 2026-09-28**: no tener secciones de materias en `cuestionario_seccion` significa lo mismo (§12) |
-| horas_minimas_verde | numeric(5,2) NOT NULL DEFAULT 10 | resuelve D18 de `GUIA-DECISIONES.md` con un valor por defecto, configurable por departamento |
+| horas_minimas_verde | numeric(5,2) NOT NULL DEFAULT 10 | **OBSOLETA desde 2026-10-13**: resolvía D18 con un valor fijo; el mínimo ahora se calcula (§17). No se lee |
+| ratio_horas_verde | numeric(4,2) NOT NULL DEFAULT 1.00 | (nueva 2026-10-13, D40) tiempo completo y medio tiempo: mínimo de horas en verde = horas de sus cursos × ratio, hacia arriba a la media hora. 1–5, se valida en el API. Asignatura siempre va con 1 (§17) |
 | texto_introduccion | text NULL | texto de arriba del formulario; NULL = el de siempre (§12) |
 | publicado / publicado_at / publicado_por | boolean DEFAULT false / datetime / int FK → profesor | sin publicar, los profesores no ven el formulario y el API rechaza guardar (§12) |
 | PK(departamento_id, semestre_id) | | |
@@ -538,7 +541,7 @@ Reglas de negocio validadas vía trigger/aplicación (agregados, no expresables 
 | id | serial PK | |
 | profesor_id | int NOT NULL FK → profesor | |
 | semestre_id | int NOT NULL FK → semestre | |
-| num_cursos_max | int NULL CHECK (num_cursos_max BETWEEN 1 AND 6) | **NULL desde 2026-10-02**: la pregunta "Número de cursos" es opcional y la jefatura la puede quitar de su formulario; quien contesta un formulario sin ella guarda NULL (§15) |
+| num_cursos_max | int NULL CHECK (num_cursos_max BETWEEN 1 AND 6) | **NULL del 2026-10-02 al 2026-10-13**, cuando la pregunta "Número de cursos" era opcional (§15). Desde entonces la pregunta es fija y el API exige 1–6; la columna sigue admitiendo NULL por las preferencias de ese intervalo (§17) |
 | otro_curso | text NULL | |
 | horarios_otro_depto | text NULL | solo relevante si `profesor.tipo_contrato = 'asignatura'` (RN03: tope 10 hrs/semana cruzando departamentos). **Obsoleta desde 2026-09-28**: ahora es una pregunta abierta (`preferencia_respuesta`, §12) |
 | observaciones_cursos | text NULL | **Obsoleta desde 2026-09-28**, igual que la anterior |
@@ -570,9 +573,10 @@ Las opciones que ve el profesor salen del formulario de su departamento (`cuesti
 | nivel | nivel_preferencia_enum NOT NULL | rejilla *when2meet*: verde = seguro disponible, amarillo = posible pero complicado, rojo = no disponible (D10, resuelto 2026-08-21) |
 | UNIQUE(preferencia_id, dia, franja_id) | | |
 
-**Pendiente (D18, `GUIA-DECISIONES.md`):** horas mínimas en verde por semana según tipo de contrato —
-sin definir, depende de la junta de Jefes de Departamento. No bloquea el esquema (es una validación de
-aplicación al momento de enviar, no una columna).
+**Mínimo de horas en verde (D18 → D40, `GUIA-DECISIONES.md`):** es una validación de aplicación al
+momento de enviar, no una columna. Desde 2026-10-13 se calcula con lo que contesta el profesor: 3 h por
+curso que pidió, más 1 h si tiene en verde una materia de 8 créditos, por el ratio de
+`departamento_semestre_config.ratio_horas_verde` si es de tiempo completo o medio tiempo (§17).
 
 ### `cuestionario_seccion` (nueva 2026-09-28 — el formulario editable, ver §12)
 Bloques del formulario de un departamento/semestre, en orden. Sin filas, el editor siembra una
@@ -582,7 +586,7 @@ plantilla la primera vez que se abre.
 | id | serial PK | |
 | departamento_id | int NOT NULL FK → departamento | |
 | semestre_id | int NOT NULL FK → semestre | |
-| tipo | enum NOT NULL | `num_cursos` \| `materias` \| `disponibilidad` \| `abierta`. `disponibilidad`: exactamente una; `num_cursos`: a lo más una, y opcional desde 2026-10-02 (se valida en el API) |
+| tipo | enum NOT NULL | `num_cursos` \| `materias` \| `disponibilidad` \| `abierta`. `disponibilidad` y `num_cursos`: exactamente una de cada (`num_cursos` fue opcional del 2026-10-02 al 2026-10-13; se valida en el API) |
 | titulo | text NOT NULL | |
 | descripcion | text NULL | |
 | audiencia | enum NOT NULL DEFAULT 'todos' | `todos` \| `tiempo_completo_medio` \| `asignatura` |
@@ -811,8 +815,8 @@ Para no adelantar decisiones que siguen abiertas en `GUIA-DECISIONES.md`:
   el terreno listo sin adelantar la decisión.
 - **D15–D17** (gobernanza de excepciones, apelación, reasignación automática) — sin representación en
   el esquema; son flujo de proceso, no estructura de datos, hasta que se decidan.
-- **D18** (horas mínimas en verde por semana) — validación de aplicación pendiente de parámetro, no de
-  columna.
+- **D18** (horas mínimas en verde por semana) — validación de aplicación, no columna. Resuelta: desde
+  2026-10-13 el mínimo se calcula con los cursos del profesor y `ratio_horas_verde` (D40, §17).
 
 ### 10.1 Escenarios futuros pensados desde ahora (evaluación docente, score histórico, horas)
 
@@ -1104,7 +1108,7 @@ se aplicaron como migraciones aditivas, antes de desplegar el API que las lee.
 - **Recuperar la contraseña.** Tabla `recuperacion_password` (§6): el profesor pide un enlace con su
   correo, el enlace lleva un token de un solo uso que vence en una hora, y en la base solo queda el
   hash del token.
-- **"Número de cursos" es opcional.** La jefatura puede quitar esa sección de su formulario, así que
+- **"Número de cursos" es opcional** (deshecho el 2026-10-13, §17). La jefatura puede quitar esa sección de su formulario, así que
   `preferencia.num_cursos_max` acepta NULL. El trigger que valida el rango 1–6 deja pasar el NULL y
   sigue rechazando 0, 7, etc.
 - **Franja 14:00–14:30 solo martes y jueves.** `franja_horaria.dias` (nueva, NULL = todos los días).
@@ -1151,3 +1155,27 @@ D33–D35 de `GUIA-DECISIONES.md`.
   ata a créditos; para el motor son horas ocupadas del profesor (como rojo) y **no cuentan como
   curso**. Por la falta de `materia_id`, el departamento de una asignación fija pasó a ser columna
   propia (`departamento_id`).
+
+## 17. Cambio del 2026-10-13 (c): el mínimo de horas en verde sale de los cursos
+
+Ya está en `mysql/schema-mysql.sql`; en la base que corre se aplica con
+`migracion-2026-10-13c-horas-minimas-por-cursos.sql`, antes de desplegar el API que lo lee.
+Decisiones D40–D42 de `GUIA-DECISIONES.md`.
+
+- **Mínimo calculado, no fijo** (D40). `departamento_semestre_config.horas_minimas_verde` (10 h para
+  todos) queda obsoleta. El mínimo para enviar se calcula con lo que contesta el profesor: 3 h por
+  curso que pidió (`num_cursos_max`, no el ajuste de la jefatura), más lo que su materia **verde**
+  más larga pase de 3 h (una de 8 créditos son 4 h: +1, una sola vez), por el ratio de su contrato y
+  hacia arriba a la media hora. Las amarillas no cuentan. No es columna: se calcula al validar
+  (`horas_minimas_verde()` en `api/lib/catalogo.php`), y por eso el cuestionario manda los créditos
+  de cada materia.
+- **`ratio_horas_verde`** (nueva en `departamento_semestre_config`, `DECIMAL(4,2)`, 1.00 por
+  omisión). Lo pone la jefatura en el editor y aplica a tiempo completo y medio tiempo; asignatura
+  siempre va con 1. El rango 1–5 lo cuida el API (no hay trigger: entra por la pantalla de la
+  jefatura, como antes las horas). Se copia al abrir semestre.
+- **"Número de cursos" vuelve a ser fija** (D41), porque de ella sale el mínimo: exactamente una
+  sección `num_cursos` por formulario, que la migración agrega a los del semestre activo que no la
+  tienen y el API agrega a uno que le falte. `preferencia.num_cursos_max` sigue admitiendo NULL
+  por las preferencias guardadas cuando era opcional.
+- **Sin cambio de datos en la rejilla** (D42): la celda sin marcar ya contaba como rojo (D37); ahora
+  además se ve en rojo claro en el formulario.

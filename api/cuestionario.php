@@ -2,7 +2,10 @@
 // =============================================================================
 // GET ?semestre_id=N
 //   -> { publicado: false, secciones: [] }               si no está publicado
-//   -> { publicado, texto_introduccion, horas_minimas_verde, secciones[] }
+//   -> { publicado, texto_introduccion, ratio_horas_verde, secciones[] }
+//      ratio_horas_verde ya viene resuelto para su contrato (asignatura = 1);
+//      el mínimo de horas en verde lo calcula horas_minimas_verde() con sus
+//      respuestas, y cada materia trae sus créditos para eso.
 //
 // El formulario del profesor que llama, ya resuelto por el servidor: las
 // secciones de su departamento que le aplican por tipo de contrato, cada

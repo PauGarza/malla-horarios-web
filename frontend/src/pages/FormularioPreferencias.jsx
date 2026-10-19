@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   cuestionario as cargarCuestionario,
   guardarPreferencia,
+  leerFormulario,
   leerPreferencia,
   preferenciaDeProfesor,
 } from '../lib/api';
@@ -10,8 +11,11 @@ import { etiquetaSemestre } from '../lib/semestre';
 import { TIPO_CONTRATO_LABELS } from '../lib/roles';
 import {
   claveDisponibilidad,
+  cuestionarioParaContrato,
   faltantesParaEnviar,
+  formatearRatio,
   franjasDeDepartamento,
+  horasMinimasVerde,
   minimoEfectivo,
 } from '../lib/formulario';
 import {
@@ -21,27 +25,64 @@ import {
   TriToggle,
 } from '../components/FormularioPiezas';
 
-const NIVELES = ['verde', 'amarillo', 'rojo'];
+// Una franja sin marcar ES rojo para el motor (2026-10-09), y desde 2026-10-13
+// la rejilla lo muestra así: arranca toda en rojo claro y el profesor solo
+// pinta lo que sí puede. El clic va sin marcar -> verde -> amarillo -> sin
+// marcar. Un 'rojo' explícito de un borrador viejo se ve igual que sin marcar
+// y su siguiente clic es verde (indexOf da -1).
+const NIVELES_REJILLA = ['verde', 'amarillo'];
 
 function siguienteNivel(actual) {
-  const idx = actual ? NIVELES.indexOf(actual) : -1;
-  return idx === NIVELES.length - 1 ? undefined : NIVELES[idx + 1];
+  const idx = actual ? NIVELES_REJILLA.indexOf(actual) : -1;
+  return idx === NIVELES_REJILLA.length - 1 ? undefined : NIVELES_REJILLA[idx + 1];
+}
+
+/** "El mínimo sale de lo que contestaste: 6 h por 2 cursos + 1 h para … = 7 h, × 1.5 …" */
+function ExplicacionMinimo({ numCursos, base, extra, minimo, ratio }) {
+  let texto = `El mínimo sale de lo que contestaste: ${numCursos * 3} h por ${numCursos} ${
+    numCursos === 1 ? 'curso' : 'cursos'
+  }`;
+  if (extra > 0) {
+    texto += ` + ${extra} h para que quepa tu materia más larga en verde (${3 + extra} h a la semana)`;
+  }
+  if (ratio !== 1) {
+    texto += ` = ${base} h, × ${formatearRatio(ratio)} que pide tu departamento`;
+    if (minimo !== base * ratio) texto += ', redondeado a la media hora';
+  }
+  return `${texto}.`;
 }
 
 // Desde 2026-09-28 el formulario no está escrito aquí: lo arma la jefatura en
 // su editor (secciones de materias, preguntas abiertas, textos y mínimos) y el
 // servidor lo manda ya resuelto para el contrato de esta persona. Esta pantalla
 // solo recorre `secciones` y dibuja cada una según su tipo.
+//
+// `prueba` = { departamentoId, tipoContrato }: el formulario de prueba del
+// admin (2026-10-13). Se llena igual que el de un profesor de ese
+// departamento y contrato, con las mismas validaciones, pero nada viaja al
+// servidor: ni el borrador ni el envío se guardan.
 export default function FormularioPreferencias({
   onVolver,
   profesorObjetivo = null,
   soloLecturaForzada = false,
+  prueba = null,
+  // { posicion, total, anterior, siguiente }: al revisar los formularios
+  // desde Preferencias recibidas, para pasar al de otro profesor sin volver.
+  navegacion = null,
 }) {
   const { token, profesor, semestre, franjas, nombreDepartamento } = useAuth();
   // Un Jefe de Departamento puede abrir el formulario YA CONTESTADO de otro
   // profesor desde el panel; en ese caso todo se arma alrededor de esa persona,
-  // no de quien tiene la sesión abierta.
-  const profesorForm = profesorObjetivo ?? profesor;
+  // no de quien tiene la sesión abierta. En modo prueba, alrededor de un
+  // profesor imaginario.
+  const profesorForm = prueba
+    ? {
+        id: null,
+        nombre: 'Formulario de prueba',
+        departamento_id: prueba.departamentoId,
+        tipo_contrato: prueba.tipoContrato,
+      }
+    : (profesorObjetivo ?? profesor);
   const franjasForm = useMemo(
     () => franjasDeDepartamento(franjas, profesorForm.departamento_id),
     [franjas, profesorForm.departamento_id],
@@ -57,7 +98,8 @@ export default function FormularioPreferencias({
   const [publicado, setPublicado] = useState(true);
   const [secciones, setSecciones] = useState([]);
   const [textoIntroduccion, setTextoIntroduccion] = useState('');
-  const [horasMinimasVerde, setHorasMinimasVerde] = useState(10);
+  // Ya resuelto para el contrato de esta persona (asignatura = 1).
+  const [ratioHorasVerde, setRatioHorasVerde] = useState(1);
 
   const [estado, setEstado] = useState('borrador');
   const [numCursosMax, setNumCursosMax] = useState(1);
@@ -80,6 +122,9 @@ export default function FormularioPreferencias({
   // bucle y dispara fetches sin parar.
   const profesorId = profesorForm.id;
   const esDeOtro = Boolean(profesorObjetivo);
+  const esPrueba = Boolean(prueba);
+  const pruebaDepto = prueba?.departamentoId ?? null;
+  const pruebaContrato = prueba?.tipoContrato ?? null;
 
   useEffect(() => {
     let cancelado = false;
@@ -91,7 +136,15 @@ export default function FormularioPreferencias({
         // Cuando el Jefe abre el formulario de OTRA persona, todo viene de
         // panel.php?profesor_id=N: el formulario que se muestra es el que vio
         // quien lo llenó, no el de quien lo consulta.
-        const [cuest, prefDatos] = esDeOtro
+        // En modo prueba, del editor (configuracion.php): el formulario
+        // completo del departamento, recortado para el contrato elegido, y sin
+        // preferencia guardada (siempre arranca en blanco).
+        const [cuest, prefDatos] = esPrueba
+          ? await leerFormulario(token, semestre.id, pruebaDepto).then((d) => [
+              cuestionarioParaContrato(d, pruebaContrato),
+              { preferencia: null },
+            ])
+          : esDeOtro
           ? await preferenciaDeProfesor(token, semestre.id, profesorId).then((d) => [
               d.cuestionario,
               d,
@@ -107,7 +160,7 @@ export default function FormularioPreferencias({
         setPublicado(esDeOtro || cuest.publicado);
         setSecciones(cuest.secciones ?? []);
         setTextoIntroduccion(cuest.texto_introduccion ?? '');
-        setHorasMinimasVerde(cuest.horas_minimas_verde ?? 10);
+        setRatioHorasVerde(cuest.ratio_horas_verde ?? 1);
 
         // Todas las materias arrancan en amarillo: "la puedo dar si hace
         // falta" es el default honesto, y así el motor recibe una señal de
@@ -118,9 +171,8 @@ export default function FormularioPreferencias({
         const pref = prefDatos.preferencia;
         if (pref) {
           setEstado(pref.estado);
-          // null si el formulario no tenía la pregunta de número de cursos
-          // (opcional desde 2026-10-02); si la jefatura la vuelve a poner,
-          // arranca en 1.
+          // null si se guardó cuando la pregunta de número de cursos era
+          // opcional (2026-10-02 a 2026-10-13): arranca en 1.
           setNumCursosMax(pref.num_cursos_max ?? 1);
           // El merge deja en amarillo cualquier materia que la jefatura haya
           // agregado al formulario después de que se guardó el borrador.
@@ -150,13 +202,25 @@ export default function FormularioPreferencias({
     return () => {
       cancelado = true;
     };
-  }, [token, semestre, profesorId, esDeOtro]);
+  }, [token, semestre, profesorId, esDeOtro, esPrueba, pruebaDepto, pruebaContrato]);
 
   const hayMaterias = secciones.some((s) => s.tipo === 'materias');
 
   const horasVerdeSemana = useMemo(
     () => Object.values(nivelDisponibilidad).filter((n) => n === 'verde').length * 0.5,
     [nivelDisponibilidad],
+  );
+
+  // Se recalcula al cambiar el número de cursos o al poner una materia en verde.
+  const horasMinimas = useMemo(
+    () =>
+      horasMinimasVerde({
+        numCursos: numCursosMax,
+        secciones,
+        niveles: nivelMaterias,
+        ratio: ratioHorasVerde,
+      }),
+    [numCursosMax, secciones, nivelMaterias, ratioHorasVerde],
   );
 
   function alternarMateria(materiaId, nivel) {
@@ -246,7 +310,7 @@ export default function FormularioPreferencias({
       // de uno en uno, reintento tras reintento, es la peor versión de esto.
       const faltantes = faltantesParaEnviar({
         secciones,
-        horasMinimasVerde,
+        horasMinimasVerde: horasMinimas.minimo,
         niveles: nivelMaterias,
         respuestas,
         horasVerde: horasVerdeSemana,
@@ -256,6 +320,22 @@ export default function FormularioPreferencias({
         setError(`Antes de enviar te falta: ${faltantes.join('; ')}.`);
         return;
       }
+    }
+    if (esPrueba) {
+      // Lo único que en el formulario real revisa solo el servidor
+      // (preferencia.php), para que la prueba rebote donde rebotaría.
+      if (!Number.isInteger(numCursosMax) || numCursosMax < 1 || numCursosMax > 6) {
+        setError('El número de cursos debe estar entre 1 y 6');
+        return;
+      }
+      // Nada viaja al servidor.
+      setEstado(nuevoEstado);
+      setMensaje(
+        nuevoEstado === 'enviado'
+          ? '✓ Prueba: el formulario se habría enviado. No se guardó nada.'
+          : '✓ Prueba: el borrador se habría guardado. No se guardó nada.',
+      );
+      return;
     }
     setGuardando(true);
     try {
@@ -312,9 +392,34 @@ export default function FormularioPreferencias({
 
   const encabezado = (
     <header className="formulario-header">
-      <button className="btn-link" onClick={onVolver}>
-        ← Volver
-      </button>
+      <div className="formulario-header-barra">
+        <button className="btn-link" onClick={onVolver}>
+          ← Volver
+        </button>
+        {navegacion && (
+          <nav className="formulario-navegacion" aria-label="Otros formularios">
+            <button
+              className="btn-secondary"
+              disabled={!navegacion.anterior}
+              onClick={navegacion.anterior?.ir}
+              title={navegacion.anterior ? `Anterior: ${navegacion.anterior.nombre}` : undefined}
+            >
+              ← Anterior
+            </button>
+            <span>
+              {navegacion.posicion} de {navegacion.total}
+            </span>
+            <button
+              className="btn-secondary"
+              disabled={!navegacion.siguiente}
+              onClick={navegacion.siguiente?.ir}
+              title={navegacion.siguiente ? `Siguiente: ${navegacion.siguiente.nombre}` : undefined}
+            >
+              Siguiente →
+            </button>
+          </nav>
+        )}
+      </div>
       <div className="formulario-header-datos">
         <div>
           <strong>{profesorForm.nombre}</strong>
@@ -351,8 +456,8 @@ export default function FormularioPreferencias({
 
   function renderSeccion(s) {
     if (s.tipo === 'num_cursos') {
-      // Sin materias que elegir, la pregunta no tiene sentido.
-      if (!hayMaterias) return null;
+      // Se muestra aunque no haya materias que elegir: de aquí sale el mínimo
+      // de horas en verde, y el motor la necesita igual.
       return (
         <section className="formulario-seccion" key={s.id}>
           <label htmlFor="num_cursos_max">{s.titulo}</label>
@@ -405,10 +510,13 @@ export default function FormularioPreferencias({
         <section className="formulario-seccion" key={s.id}>
           <h2>{s.titulo}</h2>
           <p
-            className={`formulario-nota ${horasVerdeSemana >= horasMinimasVerde ? 'nota-ok' : 'nota-falta'}`}
+            className={`formulario-nota ${horasVerdeSemana >= horasMinimas.minimo ? 'nota-ok' : 'nota-falta'}`}
           >
-            {horasVerdeSemana} hrs en verde marcadas de {horasMinimasVerde} hrs mínimo para poder
+            {horasVerdeSemana} hrs en verde marcadas de {horasMinimas.minimo} hrs mínimo para poder
             enviar.
+          </p>
+          <p className="formulario-nota">
+            <ExplicacionMinimo numCursos={numCursosMax} ratio={ratioHorasVerde} {...horasMinimas} />
           </p>
           <LeyendaDisponibilidad />
           {!soloLectura && s.descripcion && (
@@ -458,7 +566,21 @@ export default function FormularioPreferencias({
         {error && <p className="formulario-error">{error}</p>}
         {mensaje && <p className="formulario-mensaje">{mensaje}</p>}
       </div>
-      {soloLecturaForzada ? (
+      {esPrueba ? (
+        <div className="formulario-aviso">
+          <p>
+            <strong>Modo prueba.</strong> Así ve el formulario un profesor de{' '}
+            {TIPO_CONTRATO_LABELS[pruebaContrato]} de {nombreDepartamento(pruebaDepto)}, con las mismas
+            validaciones. Nada de lo que hagas aquí se guarda.
+            {soloLectura && ' Así queda el formulario después de enviarlo.'}
+          </p>
+          {soloLectura && (
+            <button type="button" className="btn-secondary" onClick={() => setEstado('borrador')}>
+              Seguir editando la prueba
+            </button>
+          )}
+        </div>
+      ) : soloLecturaForzada ? (
         <p className="formulario-aviso">
           Estás viendo el formulario de {profesorForm.nombre} — solo lectura.
         </p>
@@ -482,7 +604,8 @@ export default function FormularioPreferencias({
       {!hayMaterias && (
         <section className="formulario-seccion">
           <p className="formulario-nota">
-            Este semestre no se eligen materias: solo declara tu disponibilidad de horario.
+            Este semestre no se eligen materias: solo di cuántos cursos puedes impartir y tu
+            disponibilidad de horario.
           </p>
         </section>
       )}
@@ -498,7 +621,10 @@ export default function FormularioPreferencias({
             className="btn-primary"
             disabled={guardando}
             onClick={() => {
-              if (window.confirm('¿Enviar tus preferencias? Ya no podrás editarlas tú mismo después.')) {
+              const pregunta = esPrueba
+                ? '¿Enviar la prueba? Se valida como un envío real, pero no se guarda nada.'
+                : '¿Enviar tus preferencias? Ya no podrás editarlas tú mismo después.';
+              if (window.confirm(pregunta)) {
                 guardar('enviado');
               }
             }}

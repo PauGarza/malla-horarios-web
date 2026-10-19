@@ -246,3 +246,28 @@ export const leerDemanda = (token, semestreId, departamentoId) =>
 /** Reemplaza la estimación del departamento/semestre con estas filas, en una transacción. */
 export const guardarDemanda = (token, semestreId, departamentoId, filas) =>
   post(conDepto('demanda.php', semestreId, departamentoId), token, { filas });
+
+// --- Motor de asignación (admin, D43) ---------------------------------------
+// El motor no toca la base (D39): se le baja un JSON y se sube el que devuelve.
+// Formato en malla-horarios/docs/convencion-datos-motor.md.
+
+const alcanceMotor = (semestreId, departamentos) =>
+  `semestre_id=${semestreId}&departamentos=${departamentos.join(',')}`;
+
+/** Cuántos salones activos tienen disponibilidad para esos departamentos. */
+export const contarSalonesMotor = (token, semestreId, departamentos) =>
+  pedir(`motor-entrada.php?recurso=salones&${alcanceMotor(semestreId, departamentos)}`, token);
+
+/** El paquete autoplanear-entrada/2. conSalones = false manda salones: [] (D44). */
+export const descargarEntradaMotor = (token, semestreId, departamentos, conSalones) =>
+  pedir(`motor-entrada.php?${alcanceMotor(semestreId, departamentos)}&salones=${conSalones ? 1 : 0}`, token);
+
+/** Revisa una salida contra las reglas de §5 sin escribir nada. */
+export const validarSalidaMotor = (token, salida) => post('motor-salida.php?accion=validar', token, salida);
+
+/** Escribe la salida (revalida en el servidor). 409 'desfasada' si hay que confirmar. */
+export const aplicarSalidaMotor = (token, salida, confirmarDesfase) =>
+  post('motor-salida.php?accion=aplicar', token, { salida, confirmar_desfase: confirmarDesfase });
+
+export const leerCorridasMotor = (token, semestreId) =>
+  pedir(`motor-salida.php?semestre_id=${semestreId}`, token);

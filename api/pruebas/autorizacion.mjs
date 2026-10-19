@@ -135,6 +135,10 @@ const gestion = [
   ['semestres.php abrir', 'POST', 'semestres.php?recurso=abrir', { tipo: 'otono', anio: 2099 }],
   ['demanda.php GET', 'GET', `demanda.php?semestre_id=${s}`],
   ['demanda.php POST', 'POST', `demanda.php?semestre_id=${s}`, { filas: [] }],
+  ['motor-entrada.php GET', 'GET', `motor-entrada.php?semestre_id=${s}&departamentos=1`],
+  ['motor-salida.php GET', 'GET', `motor-salida.php?semestre_id=${s}`],
+  ['motor-salida.php validar', 'POST', 'motor-salida.php?accion=validar', {}],
+  ['motor-salida.php aplicar', 'POST', 'motor-salida.php?accion=aplicar', { salida: {} }],
 ];
 for (const [nombre, metodo, ruta, cuerpo] of gestion) {
   const r = await pedir(ruta, { token: tokProf, metodo, cuerpo });
@@ -190,6 +194,14 @@ if (process.env.AP_JEFE_CU && semestreId) {
     }
     const r = await pedir('semestres.php', { token: tokJefe });
     revisar('semestres.php (solo división/admin) -> 403', r.status === 403, `status ${r.status}`);
+    // El motor es solo de admin por ahora (D43), aun en el departamento propio.
+    for (const ruta of [
+      `motor-entrada.php?semestre_id=${semestreId}&departamentos=${jefe.perfil.departamento_id}`,
+      `motor-salida.php?semestre_id=${semestreId}`,
+    ]) {
+      const r2 = await pedir(ruta, { token: tokJefe });
+      revisar(`${ruta.split('?')[0]} (solo admin) -> 403`, r2.status === 403, `status ${r2.status}`);
+    }
   }
 } else {
   console.log('(omitida: jefe fuera de su departamento — requiere AP_JEFE_CU/AP_JEFE_PASS)');

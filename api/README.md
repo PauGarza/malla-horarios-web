@@ -1,6 +1,6 @@
 # `api/` — el backend en PHP
 
-Dieciocho endpoints y seis archivos de librería que corren en
+Veinte endpoints y siete archivos de librería que corren en
 `https://horariosdace.itam.mx/api/`, contra el MySQL del ITAM
 (`../bd/mysql/`).
 
@@ -80,17 +80,19 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 | `olvide-password.php` | POST | `{correo}` → `{ok}` **siempre**, exista o no la cuenta. Sin sesión. Si es de una cuenta activa, manda un enlace `/#restablecer=<token>` que vale 1 hora y una vez (2026-10-02) |
 | `restablecer-password.php` | POST | `{token, password_nueva}` → `{ok, cu}`. Sin sesión; canjea el enlace. 400 `token_invalido` si venció, ya se usó o no existe |
 | `catalogos.php` | GET | Perfil propio (con `correo`), departamentos, franjas, semestre actual y si el formulario propio está publicado. Manda **todas** las franjas con `dias` (null = todos los días, D31) y `departamento_id` (null = todos los departamentos, D32); el frontend filtra según el formulario que dibuja |
-| `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado |
-| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` solo se exige (1-6) si el formulario del profesor trae esa pregunta; si no, se guarda NULL (2026-10-02). Las celdas de disponibilidad en un día o un departamento en que su franja no existe se descartan en silencio; una franja inexistente es 400 |
+| `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado. Trae `ratio_horas_verde` ya resuelto para su contrato (asignatura = 1) y los `creditos` de cada materia, para calcular el mínimo de horas en verde (2026-10-13) |
+| `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` se exige siempre (1-6): la pregunta es fija desde 2026-10-13. Al enviar, el mínimo de horas en verde se calcula con `horas_minimas_verde()` (`lib/catalogo.php`): 3 h por curso pedido, +1 h si hay una de 8 créditos en verde, × el ratio del contrato, hacia arriba a la media hora. Las celdas de disponibilidad en un día o un departamento en que su franja no existe se descartan en silencio; una franja inexistente es 400 |
 | `panel.php` | GET | Roster + preferencia de cada quien (jefatura) |
 | `reabrir.php` | POST | `estado` → `borrador` (jefatura) |
 | `materias.php` | GET, POST, PATCH, PUT | Catálogo de materias y co-oferta (jefatura) |
-| `configuracion.php` | GET, PUT, POST | El editor del formulario: leerlo, guardarlo completo, publicarlo (jefatura). Exige una sección de disponibilidad y a lo más una de número de cursos (opcional desde 2026-10-02) |
+| `configuracion.php` | GET, PUT, POST | El editor del formulario: leerlo, guardarlo completo, publicarlo (jefatura). Exige exactamente una sección de disponibilidad y una de número de cursos (fija desde 2026-10-13). Recibe `ratio_horas_verde` (1-5) en lugar de las horas mínimas fijas |
 | `respuestas.php` | GET, POST | Matriz profesores × materias y bloqueos de jefatura (jefatura). `?recurso=num_cursos` `{profesor_id, num_cursos: 0-6 | null}`: la jefatura sobreescribe el número de cursos de un profesor en `ajuste_num_cursos` (null lo quita); `preferencia` no se toca y el profesor nunca lo ve (2026-10-12) |
 | `asignaciones.php` | GET, POST, PUT, DELETE | Asignaciones directas de la jefatura antes del motor (`asignacion_fija` + `asignacion_fija_horario`, 2026-10-13): materia + profesor + horario opcional. `tipo: 'maestria'` (sin `materia_id`) aparta horas del profesor sin contar como curso: horario obligatorio y sin atar a créditos. Rechaza par bloqueado, horario que no sume `materia.creditos`, franja inválida para el día/departamento y choques entre fijas del mismo profesor; lo demás (rojo en disponibilidad, exceso de cursos) solo lo avisa la vista. `?recurso=disponibilidad&profesor_id=` da la rejilla de un profesor (jefatura) |
 | `reporte.php` | GET | Por profesor: contrato, cursos solicitados, materias (con la lista) y horas en verde/amarillo/rojo (jefatura). Horas = suma de la duración de las franjas marcadas; sin bloqueos de jefatura. `?recurso=horas`: las celdas de disponibilidad de cada profesor, para el mapa de calor |
 | `demanda.php` | GET, POST | Estimación de demanda de Servicios Escolares: leerla y reemplazarla (jefatura). Las materias agregadas a mano en la pantalla llegan como filas normales con las columnas del reporte en 0 |
 | `semestres.php` | GET, POST | Ciclo de semestres: listar, abrir el siguiente, reactivar uno (admin y jefa de división) |
+| `motor-entrada.php` | GET | `?semestre_id=&departamentos=1,2,3&salones=0|1` → el paquete `autoplanear-entrada/2` para el motor (convención en `malla-horarios/docs/convencion-datos-motor.md`). Registra la descarga y su huella en `motor_descarga`. `salones=0` manda `salones: []` (modo sin salones, D44). `?recurso=salones` cuenta los salones con disponibilidad. **Solo admin** (D43). Lo arma `lib/motor.php` (2026-10-13) |
+| `motor-salida.php` | GET, POST | `POST ?accion=validar` revisa una `autoplanear-salida/2` contra §5 sin escribir; `?accion=aplicar` `{salida, confirmar_desfase}` revalida y, en una transacción, borra los grupos sin publicar del alcance y crea los nuevos (`grupo` con `crn` NULL, `imparte`, `imparte_profesor`, `imparte_co_oferta`, `imparte_horario`), sin publicar; 422 `salida_invalida`, 409 `desfasada` (cambió algo desde la descarga y no se confirmó), 409 `rechazado_por_la_base`. GET `?semestre_id=` → corridas aplicadas (`motor_corrida`) y grupos por estado. **Solo admin** (D43) |
 
 Los que aceptan varias operaciones las distinguen con `?recurso=` (`materias.php?recurso=co_oferta`,
 `configuracion.php?recurso=formulario|publicar`, `respuestas.php?recurso=bloqueo|num_cursos`, `reporte.php?recurso=horas`). Los de
@@ -208,7 +210,7 @@ AP_URL=https://horariosdace.itam.mx/api AP_PROF_CU=... AP_PROF_PASS=... \
   node api/pruebas/autorizacion.mjs
 ```
 
-Cubre lo de la tabla y además: 403 en los 16 caminos de gestión con token de profesor, token
+Cubre lo de la tabla y además: 403 en los 20 caminos de gestión con token de profesor, token
 con `alg:"none"`, claim `rol` cambiado a admin y `exp` vencido → 401. Opcionales:
 `AP_PROF2_*` + `AP_ESCRIBIR=1` para el `profesor_id` ajeno (escribe el borrador de la primera
 cuenta), y `AP_JEFE_*` para comprobar que un jefe de departamento no puede pedir
