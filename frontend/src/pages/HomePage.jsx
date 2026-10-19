@@ -23,6 +23,7 @@ export default function HomePage({
   onAbrirFormulario,
   onAbrirPanelPreferencias,
   onAbrirEditor,
+  onAbrirPrueba,
   onAbrirRespuestas,
   onAbrirReporte,
   onAbrirReporteHoras,
@@ -30,6 +31,7 @@ export default function HomePage({
   onAbrirCatalogoMaterias,
   onAbrirCargaDemanda,
   onAbrirSemestres,
+  onAbrirMotor,
 }) {
   const { profesor, nombreDepartamento, formularioPublicado, semestre } = useAuth();
 
@@ -89,6 +91,17 @@ export default function HomePage({
                 </span>
               </button>
 
+              {/* Solo admin: no tiene formulario propio con el cual probar. */}
+              {profesor.rol === 'admin' && (
+                <button className="opcion-card opcion-activa" onClick={onAbrirPrueba}>
+                  <strong>Probar el formulario</strong>
+                  <span>
+                    Contestarlo como un profesor de cualquier departamento y contrato, con las mismas
+                    validaciones. No se guarda nada.
+                  </span>
+                </button>
+              )}
+
               <button className="opcion-card opcion-activa" onClick={onAbrirCatalogoMaterias}>
                 <strong>Catálogo de materias</strong>
                 <span>
@@ -137,6 +150,23 @@ export default function HomePage({
                 <span>
                   Fijar a mano qué profesor da qué materia (y si quieres, a qué hora) antes de correr el
                   algoritmo. Él lo respeta tal cual.
+                </span>
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Solo admin por ahora (D43): baja los datos para el motor y sube su
+            resultado. Para abrirlo a jefatura, cambiar también motor-*.php. */}
+        {profesor.rol === 'admin' && (
+          <section className="home-seccion">
+            <h2>Malla</h2>
+            <div className="opciones-grid">
+              <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
+                <strong>Datos para el motor</strong>
+                <span>
+                  Descargar los datos del semestre para correr el motor de asignación, y subir su
+                  resultado para crear los grupos.
                 </span>
               </button>
             </div>

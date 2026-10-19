@@ -97,7 +97,10 @@ Estadística (materias y co-oferta); cada profesor crea su propia cuenta. Lo que
 - **Ciclo de semestres**: un semestre activo; abrir el siguiente copia el formulario anterior.
 - **Formulario editable por jefatura**, "como un Google Forms" (secciones de materias, preguntas
   abiertas, textos, mínimos), que se publica cuando está listo. Todos los profesores de un
-  departamento ven el mismo formulario.
+  departamento ven el mismo formulario. El mínimo de horas en verde de la rejilla sale de los
+  cursos que pide cada profesor (3 h por curso, +1 h si tiene en verde una de 8 créditos), y a
+  tiempo completo y medio tiempo la jefatura le aplica un ratio. La rejilla arranca en rojo claro:
+  el profesor solo pinta lo que sí puede.
 - **Respuestas y bloqueos**: matriz profesores × materias; la jefatura bloquea pares antes de
   correr el algoritmo, sin que el profesor lo vea. Ahí mismo puede **ajustar el número de cursos**
   de un profesor (queda marcado y el profesor no lo ve).
@@ -108,13 +111,18 @@ Estadística (materias y co-oferta); cada profesor crea su propia cuenta. Lo que
 - **Reportes para la jefatura**: por profesor (contrato, cursos solicitados, materias y horas en
   verde/amarillo/rojo, con descarga en CSV) y un mapa de calor de las horas que pidieron.
 - **Perfil de administrador**: ve y edita los 3 departamentos, uno a la vez, con un selector de
-  departamento en cada vista de jefatura.
+  departamento en cada vista de jefatura. Puede **probar el formulario** de cualquier departamento
+  y contrato: se contesta y se valida como el real, pero no se guarda nada.
+- **Datos para el motor** (solo admin, 2026-10-13): descargar el paquete del semestre para el
+  motor de asignación (un departamento o los tres, con o sin salones) y subir su resultado, que se
+  revisa contra las reglas y, si no tiene errores, crea los grupos sin publicar. El contrato (JSON de
+  ida y vuelta) está en `docs/convencion-datos-motor.md` del repo del servicio social
+  (`malla-horarios`), donde también viven el motor v0 (`optV0/`) y el diagrama del flujo completo
+  (`docs/flujo-del-sistema.md`).
 
-Pendiente: conectar el motor de asignación. El contrato de datos (JSON que se descarga para el
-algoritmo y JSON que regresa) está en `docs/convencion-datos-motor.md` del repo del servicio social
-(`malla-horarios`), donde también vive el motor v0 (`optV0/`); aquí falta la descarga, la subida y
-la vista de malla. También las cartas de asignación, y cargar Actuaría. `backend/` es el backend
-anterior (Supabase), ya reemplazado por `api/`.
+Pendiente: la vista de malla (revisar, editar y publicar lo que dejó el motor), cargar los salones del
+semestre, y actualizar optV0 a la versión 2 de la convención. También las cartas de asignación, y
+cargar Actuaría. `backend/` es el backend anterior (Supabase), ya reemplazado por `api/`.
 
 ## Cómo contribuir
 

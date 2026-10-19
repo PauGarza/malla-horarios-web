@@ -288,6 +288,26 @@ textarea {
   margin-bottom: 16px;
 }
 
+/* Volver a la izquierda y, al revisar formularios desde Preferencias
+   recibidas, Anterior / Siguiente a la derecha. */
+.formulario-header-barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.formulario-navegacion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gray-text);
+}
+.formulario-navegacion .btn-secondary {
+  padding: 6px 12px;
+}
+
 .formulario-header-datos {
   display: flex;
   justify-content: space-between;
@@ -672,6 +692,10 @@ textarea {
 .legend-rojo {
   background: var(--rojo);
 }
+.legend-no-disponible {
+  background: var(--rojo-bg);
+  border: 1px solid #e8b4ae;
+}
 
 .disponibilidad-grid-wrap {
   overflow-x: auto;
@@ -764,8 +788,11 @@ textarea {
 .slot.amarillo {
   background: var(--amarillo);
 }
-.slot.rojo {
-  background: var(--rojo);
+/* Sin marcar = no disponible (2026-10-13): la rejilla arranca toda en rojo
+   claro y el profesor pinta encima lo que sí puede. Claro a propósito: un rojo
+   pleno en 100+ celdas cansa la vista y se lee como error. */
+.slot.no-disponible {
+  background: var(--rojo-bg);
 }
 
 .formulario-acciones {
@@ -933,6 +960,15 @@ textarea {
 
 .obligatoria {
   color: var(--rojo);
+}
+
+/* Departamento, contrato y "Empezar de nuevo" arriba del formulario de prueba. */
+.prueba-herramientas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding-bottom: 0;
 }
 
 .selector-depto {
@@ -1988,4 +2024,104 @@ select.editor-mini {
   font-weight: 600;
   background: #e8edfb;
   color: #1f3a93;
+}
+
+/* Datos para el motor (MotorAsignacion.jsx). */
+.motor-screen {
+  max-width: 1000px;
+}
+.motor-controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+.motor-controles label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.formulario-seccion label.motor-casilla {
+  flex-direction: row;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 500;
+  color: inherit;
+}
+.motor-boton {
+  align-self: flex-start;
+}
+.motor-subir {
+  cursor: pointer;
+}
+.formulario-seccion label.motor-subir {
+  font-size: 14px;
+}
+.motor-descargado,
+.motor-revision,
+.motor-aplicar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.motor-revision h3 {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.motor-cifras {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.motor-cifra {
+  background: var(--gray-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.motor-cifra b {
+  display: block;
+  font-size: 20px;
+  color: inherit;
+}
+.motor-cifra.alerta {
+  background: var(--amarillo-bg);
+  color: #6b5300;
+}
+.motor-tipos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.motor-tipo {
+  border: 1px solid var(--gray-border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.motor-tipo.error {
+  border-left-color: var(--rojo);
+}
+.motor-tipo.aviso {
+  border-left-color: var(--amarillo);
+}
+.motor-tipo summary {
+  cursor: pointer;
+}
+.motor-tipo ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.motor-cuenta {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--gray-bg);
+  font-size: 12px;
+  text-align: center;
 }

@@ -109,7 +109,7 @@ function tiene_formulario(PDO $pdo, int $deptoId, int $semestreId): bool
 /**
  * Copia el formulario de un departamento de un semestre a otro: secciones
  * activas, en qué sección va cada materia (con sus nombres, alias y orden), y
- * de la config solo el texto de introducción y las horas mínimas. Queda SIN
+ * de la config solo el texto de introducción y el ratio de horas. Queda SIN
  * publicar: la jefatura lo revisa y lo publica cuando esté listo.
  *
  * No abre transacción: la maneja quien llama (asegurar_formulario o la
@@ -167,11 +167,38 @@ function copiar_formulario(PDO $pdo, int $deptoId, int $desde, int $hacia): void
 
     $pdo->prepare(
         'INSERT IGNORE INTO departamento_semestre_config
-                (departamento_id, semestre_id, horas_minimas_verde, texto_introduccion, publicado)
-         SELECT departamento_id, ?, horas_minimas_verde, texto_introduccion, 0
+                (departamento_id, semestre_id, ratio_horas_verde, texto_introduccion, publicado)
+         SELECT departamento_id, ?, ratio_horas_verde, texto_introduccion, 0
            FROM departamento_semestre_config
           WHERE departamento_id = ? AND semestre_id = ?'
     )->execute([$hacia, $deptoId, $desde]);
+
+    // Un formulario del 2026-10-02 al 2026-10-13 pudo quedarse sin la pregunta
+    // de número de cursos; desde entonces es fija.
+    asegurar_num_cursos($pdo, $deptoId, $hacia);
+}
+
+/**
+ * "Número de cursos" es fija desde 2026-10-13: el mínimo de horas en verde
+ * sale de ella. Si el formulario no la tiene, se agrega arriba de todo.
+ */
+function asegurar_num_cursos(PDO $pdo, int $deptoId, int $semestreId): void
+{
+    $st = $pdo->prepare(
+        "SELECT COUNT(*) FROM cuestionario_seccion
+          WHERE departamento_id = ? AND semestre_id = ? AND tipo = 'num_cursos' AND activa = 1"
+    );
+    $st->execute([$deptoId, $semestreId]);
+    if ((int) $st->fetchColumn() > 0) {
+        return;
+    }
+    $s = secciones_por_defecto(null)[0];
+    $pdo->prepare(
+        'INSERT INTO cuestionario_seccion
+                (departamento_id, semestre_id, tipo, titulo, descripcion, audiencia,
+                 minimo_verdes, cobertura_departamental, obligatoria, orden)
+         VALUES (?,?,?,?,?,?,?,?,0,0)'
+    )->execute([$deptoId, $semestreId, $s[0], $s[1], $s[2], $s[3], $s[4], $s[5]]);
 }
 
 /**
@@ -198,6 +225,8 @@ function semestre_anterior_con_formulario(PDO $pdo, int $deptoId, int $semestreI
 function asegurar_formulario(PDO $pdo, int $deptoId, int $semestreId): void
 {
     if (tiene_formulario($pdo, $deptoId, $semestreId)) {
+        // Uno que la jefatura armó cuando la pregunta era opcional.
+        asegurar_num_cursos($pdo, $deptoId, $semestreId);
         return;
     }
 
@@ -232,7 +261,7 @@ function asegurar_formulario(PDO $pdo, int $deptoId, int $semestreId): void
 function config_formulario(PDO $pdo, int $deptoId, int $semestreId): array
 {
     $st = $pdo->prepare(
-        'SELECT horas_minimas_verde, texto_introduccion, publicado, publicado_at
+        'SELECT ratio_horas_verde, texto_introduccion, publicado, publicado_at
            FROM departamento_semestre_config
           WHERE departamento_id = ? AND semestre_id = ?'
     );
@@ -242,7 +271,7 @@ function config_formulario(PDO $pdo, int $deptoId, int $semestreId): array
     return [
         'publicado'           => $c !== false && (int) $c['publicado'] === 1,
         'publicado_at'        => $c === false ? null : $c['publicado_at'],
-        'horas_minimas_verde' => $c === false ? 10.0 : (float) $c['horas_minimas_verde'],
+        'ratio_horas_verde'   => $c === false ? 1.0 : (float) $c['ratio_horas_verde'],
         'texto_introduccion'  => ($c === false || $c['texto_introduccion'] === null)
             ? TEXTO_INTRODUCCION_DEFAULT
             : $c['texto_introduccion'],
@@ -294,7 +323,7 @@ function secciones_activas(PDO $pdo, int $deptoId, int $semestreId): array
 function repartir_materias(PDO $pdo, int $deptoId, int $semestreId, array $secciones): array
 {
     $st = $pdo->prepare(
-        'SELECT m.id, m.clave, m.nombre,
+        'SELECT m.id, m.clave, m.nombre, m.creditos,
                 mc.materia_id IS NOT NULL AS tiene_fila,
                 mc.seccion_id, mc.alias_de_id, mc.etiqueta, mc.orden, mc.revisado,
                 ed.grupos_sugeridos
@@ -340,6 +369,8 @@ function repartir_materias(PDO $pdo, int $deptoId, int $semestreId, array $secci
             'id'             => $id,
             'clave'          => $f['clave'],
             'nombre'         => $f['nombre'],
+            // Para el mínimo de horas en verde: una de 8 créditos pide 4 h.
+            'creditos'       => (int) $f['creditos'],
             'etiqueta'       => $f['etiqueta'],
             'nombreMostrado' => $f['etiqueta'] !== null ? $f['etiqueta'] : $f['nombre'],
             'alias'          => isset($aliasPorVisible[$id]) ? $aliasPorVisible[$id] : [],
@@ -478,9 +509,49 @@ function cuestionario_de(PDO $pdo, array $profesor, int $semestreId, bool $exigi
     return [
         'publicado'           => $config['publicado'],
         'texto_introduccion'  => $config['texto_introduccion'],
-        'horas_minimas_verde' => $config['horas_minimas_verde'],
+        // Ya resuelto para su contrato: asignatura siempre lleva 1.
+        'ratio_horas_verde'   => ratio_para_contrato($config['ratio_horas_verde'], $tipo),
         'secciones'           => $visibles,
     ];
+}
+
+/** El ratio de la jefatura es para tiempo completo y medio tiempo; asignatura va con 1. */
+function ratio_para_contrato(float $ratio, ?string $tipoContrato): float
+{
+    return $tipoContrato === 'asignatura' ? 1.0 : $ratio;
+}
+
+/**
+ * El mínimo de horas en verde de la rejilla para poder enviar (2026-10-13).
+ * Sale de lo que contesta el profesor, no es un número fijo:
+ *
+ *   base   = 3 h por cada curso que pidió
+ *          + lo que su materia VERDE más larga pase de 3 h (una de 8 créditos
+ *            son 4 h: +1, para que quepa). Se suma una sola vez, no por curso.
+ *   mínimo = base × ratio, redondeado hacia arriba a la media hora.
+ *
+ * Las amarillas no cuentan. Todo en medias horas y centésimas para que el
+ * redondeo sea exacto: con flotantes, 3 × 1.5 puede salir 4.5000001 y subir a 5.
+ *
+ * $niveles: materia_id => nivel. $ratio ya resuelto para el contrato.
+ */
+function horas_minimas_verde(int $numCursos, array $secciones, array $niveles, float $ratio): float
+{
+    $extraMedias = 0;
+    foreach ($secciones as $s) {
+        if ($s['tipo'] !== 'materias') {
+            continue;
+        }
+        foreach ($s['materias'] as $m) {
+            if (isset($niveles[$m['id']]) && $niveles[$m['id']] === 'verde') {
+                // 1 crédito = 1 bloque de media hora; 3 h = 6 bloques.
+                $extraMedias = max($extraMedias, (int) $m['creditos'] - 6);
+            }
+        }
+    }
+    $baseMedias = 6 * max($numCursos, 0) + $extraMedias;
+    $centesimas = (int) round($ratio * 100);
+    return (int) ceil($baseMedias * $centesimas / 100) / 2;
 }
 
 /**
@@ -488,11 +559,17 @@ function cuestionario_de(PDO $pdo, array $profesor, int $semestreId, bool $exigi
  * que ve ese profesor. Vacío = se puede enviar. Es la misma regla que muestra
  * la pantalla; aquí es la que manda.
  *
+ * $numCursos:  los que pidió el profesor (no el ajuste de la jefatura)
  * $niveles:    materia_id => nivel
  * $respuestas: seccion_id => texto
  */
-function faltantes_para_enviar(array $cuestionario, array $niveles, array $respuestas, float $horasVerde): array
-{
+function faltantes_para_enviar(
+    array $cuestionario,
+    int $numCursos,
+    array $niveles,
+    array $respuestas,
+    float $horasVerde
+): array {
     $faltantes = [];
     foreach ($cuestionario['secciones'] as $s) {
         if ($s['tipo'] === 'materias' && $s['minimo_verdes'] !== null) {
@@ -512,7 +589,12 @@ function faltantes_para_enviar(array $cuestionario, array $niveles, array $respu
             $faltantes[] = "responder \"{$s['titulo']}\"";
         }
     }
-    $minHoras = (float) $cuestionario['horas_minimas_verde'];
+    $minHoras = horas_minimas_verde(
+        $numCursos,
+        $cuestionario['secciones'],
+        $niveles,
+        (float) $cuestionario['ratio_horas_verde']
+    );
     if ($horasVerde < $minHoras) {
         $faltantes[] = "$minHoras hrs en verde de disponibilidad (llevas $horasVerde)";
     }

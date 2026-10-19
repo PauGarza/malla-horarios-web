@@ -79,6 +79,23 @@ migracion-2026-10-13b-asignacion-maestria.sql  asignacion_fija.tipo ('maestria' 
                                                no es curso) y departamento_id; materia_id acepta
                                                NULL. DESPUÉS de la anterior y ANTES de desplegar
                                                el API nuevo. Una sola vez.
+migracion-2026-10-13c-horas-minimas-por-cursos.sql
+                                               departamento_semestre_config.ratio_horas_verde (el
+                                               mínimo de horas en verde se calcula con los cursos
+                                               de cada profesor; horas_minimas_verde queda
+                                               obsoleta) y la pregunta "Número de cursos" en los
+                                               formularios del semestre activo que no la tienen.
+                                               ADITIVA: correr ANTES de desplegar el API nuevo
+                                               (sin la columna da 500). Una sola vez.
+migracion-2026-10-13d-motor.sql                descarga y subida de datos del motor (D43, D44):
+                                               grupo.crn e imparte_horario.salon_id aceptan NULL
+                                               (el motor no da CRN; modo sin salones), el
+                                               procedimiento de imparte_horario deja pasar los
+                                               grupos espejo de co-oferta y salta los chequeos de
+                                               salón con salon_id NULL, y tablas motor_descarga y
+                                               motor_corrida. ADITIVA: correr ANTES de desplegar
+                                               el API nuevo (sin las tablas, "Datos para el motor"
+                                               da 500).
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por
@@ -113,11 +130,18 @@ ajuste-2026-10-06-disponibilidad-estadistica.sql
                                  Estadística que contestó antes de las franjas de 20:00-22:00
                                  (D32). DESPUÉS de esa migración. Solo toca esas celdas; es
                                  idempotente. Sin el CU (repo público): hay que ponerlo en @cu.
+limpieza-2026-10-13-salones-ejemplo.sql
+                                 borra los 7 salones de ejemplo del seed (RH107, RH109, RH301,
+                                 PF105, RHB-1, RHB-2, RHCC302) y su disponibilidad inventada, para
+                                 que la descarga del motor no los tome como reales. No toca un
+                                 salón que ya use algún imparte_horario. Idempotente; no depende
+                                 del deploy. Desde ese día el seed tampoco los trae.
 ```
 
 ### Los datos reales
 
-`seed-mysql.sql` es el catálogo base (departamentos, franjas, semestres, salones). Encima van
+`seed-mysql.sql` es el catálogo base (departamentos, franjas, semestres; sin salones desde el
+2026-10-13). Encima van
 los datos reales de Matemáticas, traducidos de los originales de PostgreSQL que viven en
 `DACE/BD/`:
 

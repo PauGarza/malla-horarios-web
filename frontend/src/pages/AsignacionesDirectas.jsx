@@ -612,7 +612,7 @@ export default function AsignacionesDirectas({ onVolver }) {
             ))}
 
           <label className="asig-nota">
-            {esMaestriaEditor ? '¿Qué materia es? (opcional, solo la ve la jefatura)' : 'Nota (opcional, solo la ve la jefatura)'}
+            {esMaestriaEditor ? '¿Qué materia es? (opcional)' : 'Nota (opcional)'}
             <textarea
               rows={2}
               maxLength={500}

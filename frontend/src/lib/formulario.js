@@ -43,9 +43,57 @@ export function vistaParaContrato(secciones, tipoContrato) {
   return visibles.filter((s) => s.tipo !== 'materias' || s.materias.length > 0);
 }
 
+/**
+ * El cuestionario que le mandaría cuestionario.php a un profesor de ese
+ * contrato, armado aquí a partir del formulario completo del editor
+ * (configuracion.php). Lo usa el formulario de prueba del admin, que no tiene
+ * departamento ni contrato propios. Ignora si está publicado: probar uno sin
+ * publicar es justo lo útil.
+ */
+export function cuestionarioParaContrato(formularioCompleto, tipoContrato) {
+  return {
+    publicado: true,
+    texto_introduccion: formularioCompleto.texto_introduccion,
+    ratio_horas_verde: tipoContrato === 'asignatura' ? 1 : formularioCompleto.ratio_horas_verde,
+    secciones: vistaParaContrato(formularioCompleto.secciones, tipoContrato),
+  };
+}
+
 /** El mínimo real de una sección: no se puede exigir más de las que hay. */
 export const minimoEfectivo = (seccion) =>
   seccion.minimo_verdes == null ? 0 : Math.min(seccion.minimo_verdes, seccion.materias.length);
+
+/**
+ * El mínimo de horas en verde de la rejilla (2026-10-13). Espejo de
+ * horas_minimas_verde() en api/lib/catalogo.php:
+ *
+ *   base   = 3 h por curso que pidió + lo que su verde más larga pase de 3 h
+ *            (una de 8 créditos: +1), una sola vez
+ *   mínimo = base × ratio, hacia arriba a la media hora
+ *
+ * Devuelve el desglose para poder explicárselo al profesor. Las cuentas van en
+ * medias horas y centésimas: con flotantes, el redondeo hacia arriba fallaría.
+ */
+export function horasMinimasVerde({ numCursos, secciones, niveles, ratio }) {
+  let extraMedias = 0;
+  for (const s of secciones) {
+    if (s.tipo !== 'materias') continue;
+    for (const m of s.materias) {
+      // 1 crédito = 1 bloque de media hora; 3 h = 6 bloques.
+      if (niveles[m.id] === 'verde') extraMedias = Math.max(extraMedias, (m.creditos ?? 0) - 6);
+    }
+  }
+  const baseMedias = 6 * Math.max(numCursos || 0, 0) + extraMedias;
+  const centesimas = Math.round(ratio * 100);
+  return {
+    base: baseMedias / 2,
+    extra: extraMedias / 2,
+    minimo: Math.ceil((baseMedias * centesimas) / 100) / 2,
+  };
+}
+
+/** "1.5" y no "1.50"; "2" y no "2.00". */
+export const formatearRatio = (r) => String(Number(r));
 
 /** Lo que le falta a un formulario para poder enviarse. Espejo de faltantes_para_enviar(). */
 export function faltantesParaEnviar({ secciones, horasMinimasVerde, niveles, respuestas, horasVerde }) {

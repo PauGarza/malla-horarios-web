@@ -2,7 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useAuth } from '../context/AuthContext';
 import { guardarFormulario, leerFormulario, publicarFormulario } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
-import { AUDIENCIAS, franjasDeDepartamento, vistaParaContrato } from '../lib/formulario';
+import {
+  AUDIENCIAS,
+  formatearRatio,
+  franjasDeDepartamento,
+  horasMinimasVerde,
+  vistaParaContrato,
+} from '../lib/formulario';
 import {
   LeyendaDisponibilidad,
   MateriaInfo,
@@ -73,7 +79,7 @@ function desdeServidor(datos) {
     publicado: datos.publicado,
     enviadas: datos.enviadas ?? 0,
     texto_introduccion: datos.texto_introduccion ?? '',
-    horas_minimas_verde: datos.horas_minimas_verde ?? 10,
+    ratio_horas_verde: datos.ratio_horas_verde ?? 1,
     secciones: datos.secciones.map((s) => ({
       ...s,
       key: `s-${s.id}`,
@@ -299,7 +305,7 @@ export default function EditorCuestionario({ onVolver }) {
     }
     return {
       texto_introduccion: f.texto_introduccion,
-      horas_minimas_verde: f.horas_minimas_verde,
+      ratio_horas_verde: f.ratio_horas_verde,
       secciones: f.secciones.map((s) => ({
         id: s.id,
         clave_temporal: s.id ? undefined : s.key,
@@ -493,6 +499,14 @@ export default function EditorCuestionario({ onVolver }) {
     );
     const visibles = vistaParaContrato(conDisplay, vista);
     const hayMaterias = visibles.some((s) => s.tipo === 'materias');
+    // Lo que verá alguien que apenas abre el formulario: 1 curso y nada en verde.
+    const ratioPrevia = vista === 'asignatura' ? 1 : form.ratio_horas_verde;
+    const horasPrevia = horasMinimasVerde({
+      numCursos: 1,
+      secciones: [],
+      niveles: {},
+      ratio: ratioPrevia,
+    }).minimo;
     return (
       <div className="formulario-screen">
         {encabezado}
@@ -508,7 +522,7 @@ export default function EditorCuestionario({ onVolver }) {
         )}
         {visibles.map((s) => (
           <section className="formulario-seccion" key={s.key}>
-            <PreviaSeccion seccion={s} franjas={franjas} horas={form.horas_minimas_verde} />
+            <PreviaSeccion seccion={s} franjas={franjas} horas={horasPrevia} ratio={ratioPrevia} />
           </section>
         ))}
         {barraAcciones}
@@ -518,10 +532,8 @@ export default function EditorCuestionario({ onVolver }) {
 
   // --- Edición --------------------------------------------------------------
 
-  // "Número de cursos" es opcional desde 2026-10-02 y puede haber a lo más una:
-  // el botón para (re)agregarla solo aparece cuando no está.
-  const tieneNumCursos = form.secciones.some((s) => s.tipo === 'num_cursos');
-
+  // "Número de cursos" y "Disponibilidad" son fijas (la primera desde
+  // 2026-10-13): no se agregan ni se quitan, solo se mueven y se retitulan.
   const insertador = (indice) => (
     <div className="editor-insertar">
       <button type="button" className="btn-link" onClick={() => agregarSeccion('materias', indice)}>
@@ -530,11 +542,6 @@ export default function EditorCuestionario({ onVolver }) {
       <button type="button" className="btn-link" onClick={() => agregarSeccion('abierta', indice)}>
         + Pregunta abierta
       </button>
-      {!tieneNumCursos && (
-        <button type="button" className="btn-link" onClick={() => agregarSeccion('num_cursos', indice)}>
-          + Número de cursos
-        </button>
-      )}
     </div>
   );
 
@@ -626,9 +633,9 @@ export default function EditorCuestionario({ onVolver }) {
                 >
                   ↓
                 </button>
-                {/* Disponibilidad es la única fija: sin ella no hay horario que
-                    asignar. Número de cursos es opcional desde 2026-10-02. */}
-                {s.tipo !== 'disponibilidad' && (
+                {/* Fijas: sin disponibilidad no hay horario que asignar, y sin
+                    número de cursos no hay mínimo de horas en verde. */}
+                {s.tipo !== 'disponibilidad' && s.tipo !== 'num_cursos' && (
                   <button type="button" className="btn-icono peligro" onClick={() => borrarSeccion(s)}>
                     Eliminar
                   </button>
@@ -671,18 +678,35 @@ export default function EditorCuestionario({ onVolver }) {
             {s.tipo === 'disponibilidad' && (
               <>
                 <label className="editor-opcion">
-                  Horas en verde mínimas para poder enviar
+                  Ratio de horas en verde (tiempo completo y medio tiempo)
                   <input
                     type="number"
-                    min={0}
-                    max={60}
-                    step={0.5}
-                    value={form.horas_minimas_verde}
+                    min={1}
+                    max={5}
+                    step={0.1}
+                    value={form.ratio_horas_verde}
                     onChange={(e) =>
-                      cambiar((f) => ({ ...f, horas_minimas_verde: Number(e.target.value) }))
+                      cambiar((f) => ({ ...f, ratio_horas_verde: Number(e.target.value) }))
                     }
                   />
                 </label>
+                <p className="formulario-nota">
+                  El mínimo de horas en verde para poder enviar sale de lo que contesta cada
+                  profesor: 3 h por cada curso que pide, más 1 h si puso en verde alguna materia de
+                  8 créditos. A tiempo completo y medio tiempo se les multiplica por este ratio
+                  (redondeado hacia arriba a la media hora); asignatura siempre va con 1. Con{' '}
+                  {formatearRatio(form.ratio_horas_verde)}, quien pide 2 cursos con una de 8
+                  créditos en verde necesita{' '}
+                  {
+                    horasMinimasVerde({
+                      numCursos: 2,
+                      secciones: [{ tipo: 'materias', materias: [{ id: 0, creditos: 8 }] }],
+                      niveles: { 0: 'verde' },
+                      ratio: form.ratio_horas_verde,
+                    }).minimo
+                  }{' '}
+                  h en verde.
+                </p>
                 <LeyendaDisponibilidad />
                 <details className="editor-previa">
                   <summary>Ver la rejilla</summary>
@@ -882,7 +906,7 @@ function SeccionMateriasEditor({
 }
 
 /** Una sección tal como la ve el profesor, sin nada editable. */
-function PreviaSeccion({ seccion: s, franjas, horas }) {
+function PreviaSeccion({ seccion: s, franjas, horas, ratio }) {
   if (s.tipo === 'num_cursos') {
     return (
       <>
@@ -917,6 +941,11 @@ function PreviaSeccion({ seccion: s, franjas, horas }) {
       <>
         <h2>{s.titulo}</h2>
         <p className="formulario-nota nota-falta">0 hrs en verde marcadas de {horas} hrs mínimo para poder enviar.</p>
+        <p className="formulario-nota">
+          Con 1 curso y nada en verde
+          {ratio !== 1 && `, × ${formatearRatio(ratio)}`}. El profesor ve su mínimo recalcularse al
+          contestar.
+        </p>
         <LeyendaDisponibilidad />
         {s.descripcion && <p className="formulario-nota texto-libre">{s.descripcion}</p>}
         <RejillaDisponibilidad franjas={franjas} disabled />

@@ -128,8 +128,8 @@ export default function PerfilUsuario({ onVolver }) {
             onChange={(e) => setCorreo(e.target.value)}
           />
           <p className="formulario-nota">
-            Obligatorio: ahí te llega el enlace si olvidas tu contraseña, y la jefatura lo usa para
-            contactarte sobre tu asignación.
+            Obligatorio: ahí te llega el enlace si olvidas tu contraseña y los avisos sobre tus
+            cursos.
           </p>
           {errorCorreo && (
             <p className="formulario-error" role="alert">

@@ -75,6 +75,9 @@ export default function PanelPreferencias({ onVolver, onVerFormulario, departame
   if (cargando) return <div className="formulario-cargando">Cargando…</div>;
 
   const visibles = veTodos ? filas.filter((f) => f.departamentoId === departamentoId) : filas;
+  // Los que tienen formulario que ver, en el orden de la tabla: el formulario
+  // abierto los recorre con Anterior / Siguiente sin volver aquí.
+  const conFormulario = visibles.filter((f) => f.estado !== 'no_iniciado').map((f) => f.profesor);
 
   return (
     <div className="formulario-screen">
@@ -121,7 +124,7 @@ export default function PanelPreferencias({ onVolver, onVerFormulario, departame
                       display:flex deja de ser celda y la fila se desfasa. */}
                   <div className="panel-acciones">
                     {f.estado !== 'no_iniciado' && (
-                      <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor, departamentoId)}>
+                      <button className="btn-secondary" onClick={() => onVerFormulario(f.profesor, departamentoId, conFormulario)}>
                         Ver formulario
                       </button>
                     )}
