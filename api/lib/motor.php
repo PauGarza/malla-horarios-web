@@ -837,9 +837,16 @@ function motor_armar_entrada(
     unset($p);
 
     // --- grupos_fijos (§3.7) ---
+    // Solo con los profesores que vienen en profesores[] (§3.7): un profesor
+    // sin cuenta (Actuaría, D45) o un co-titular de un departamento de fuera
+    // del alcance no está en el paquete y el motor no puede asignarle nada.
     $gruposFijos = [];
     foreach ($clases['fijos'] as $c) {
-        $gruposFijos[] = motor_grupo_de_clase($rej, $c);
+        $g = motor_grupo_de_clase($rej, $c);
+        $g['profesores'] = array_values(array_filter($g['profesores'], function ($pid) use ($profesores) {
+            return isset($profesores[$pid]);
+        }));
+        $gruposFijos[] = $g;
     }
 
     // --- asignaciones_fijas (§3.9.3), solo tipo materia ---
@@ -1249,7 +1256,10 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
                     $err('sesiones', "$etq: dos sesiones se enciman el $d a las $h.");
                     continue;
                 }
-                if (!motor_franja_vale($rej['por_inicio'][$h], $d, $depto)) {
+                // Un grupo publicado ya está decidido y puede caer fuera de la
+                // rejilla de su departamento (Actuaría de 20:30 a 22:00, D45):
+                // solo ocupa. La regla es para lo que propone el motor.
+                if ($esSalida && !motor_franja_vale($rej['por_inicio'][$h], $d, $depto)) {
                     $err('sesiones', "$etq: la franja de las $h no existe el $d para " . ($nombreDepto[$depto] ?? "el departamento $depto") . '.');
                 }
                 $bloques["$d|$h"] = [$d, $h, $rid];
@@ -1292,7 +1302,17 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
         }
 
         foreach ($pIds as $p) {
-            $carga[$p] = ($carga[$p] ?? 0) + 1;
+            // Un grupo publicado sin ninguna clave del departamento del
+            // profesor no es uno de los cursos que pidió en su formulario
+            // (Rojas Nandayapa en ACT-25354, D45): solo ocupa horas, igual
+            // que en ocupado cuando la descarga no incluye ese departamento.
+            $propio = $esSalida;
+            foreach ($mIds as $mid) {
+                $propio = $propio || $mats[$mid]['departamento_id'] === $profs[$p]['departamento_id'];
+            }
+            if ($propio) {
+                $carga[$p] = ($carga[$p] ?? 0) + 1;
+            }
             $horas[$p] += $total * $mins / 60;
         }
         if (!$esSalida) {

@@ -96,6 +96,11 @@ migracion-2026-10-13d-motor.sql                descarga y subida de datos del mo
                                                motor_corrida. ADITIVA: correr ANTES de desplegar
                                                el API nuevo (sin las tablas, "Datos para el motor"
                                                da 500).
+migracion-2026-10-19-profesor-sin-cuenta.sql   profesor.cu y password_hash aceptan NULL:
+                                               "profesor sin cuenta" (D45), para los grupos
+                                               publicados de un departamento que no usa el
+                                               sistema. No toca el API. ANTES de
+                                               datos-actuaria-primavera-2027-mysql.sql.
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por
@@ -136,6 +141,12 @@ limpieza-2026-10-13-salones-ejemplo.sql
                                  que la descarga del motor no los tome como reales. No toca un
                                  salón que ya use algún imparte_horario. Idempotente; no depende
                                  del deploy. Desde ese día el seed tampoco los trae.
+datos-actuaria-primavera-2027-mysql.sql
+                                 la programación FIJA de Actuaría para Primavera 2027 (D45), de
+                                 DACE/Actuaria/PROGRAMACIÓNPRIM2027.pdf: 15 materias ACT, 3 pares
+                                 de co-oferta (uno con MAT-22600), 13 profesores sin cuenta y 23
+                                 grupos publicados sin salón. DESPUÉS de la migración del
+                                 2026-10-19. Una sola vez: repetida, falla y no cambia nada.
 ```
 
 ### Los datos reales

@@ -51,10 +51,13 @@ CREATE TABLE departamento (
 
 CREATE TABLE profesor (
     id                      INT AUTO_INCREMENT PRIMARY KEY,
-    cu                      VARCHAR(10)  NOT NULL UNIQUE
-                            COMMENT 'Clave Unica: identificador de login para cualquier rol. Tambien es la password inicial.',
-    password_hash           VARCHAR(255) NOT NULL
-                            COMMENT 'bcrypt, manejado por la app. NUNCA se selecciona fuera de login.php / cambiar-password.php.',
+    -- cu y password_hash NULL = profesor sin cuenta (2026-10-19, D45): solo
+    -- existe para decir quien da un grupo publicado de un departamento que no
+    -- usa el sistema (Actuaria). Va con activo = 0 y tipo_contrato NULL.
+    cu                      VARCHAR(10)  NULL UNIQUE
+                            COMMENT 'Clave Unica: identificador de login para cualquier rol. Tambien es la password inicial. NULL = profesor sin cuenta (D45).',
+    password_hash           VARCHAR(255) NULL
+                            COMMENT 'bcrypt, manejado por la app. NUNCA se selecciona fuera de login.php / cambiar-password.php. NULL = profesor sin cuenta (D45).',
     nombre                  VARCHAR(255) NOT NULL,
     -- VARCHAR(191) por el UNIQUE: InnoDB de 5.5 topa el indice en 767 bytes.
     correo                  VARCHAR(191) NULL
@@ -81,7 +84,7 @@ CREATE TABLE profesor (
     CONSTRAINT fk_profesor_departamento FOREIGN KEY (departamento_id) REFERENCES departamento(id),
     CONSTRAINT chk_profesor_depto CHECK (
         rol IN ('admin','servicios_escolares','nomina')
-        OR (departamento_id IS NOT NULL AND tipo_contrato IS NOT NULL)
+        OR (departamento_id IS NOT NULL AND (tipo_contrato IS NOT NULL OR cu IS NULL))
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Login unificado: TODA persona con acceso es una fila aqui. Ver diseno-bd.md 4.1.';

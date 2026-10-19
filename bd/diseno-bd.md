@@ -1179,3 +1179,35 @@ Decisiones D40–D42 de `GUIA-DECISIONES.md`.
   por las preferencias guardadas cuando era opcional.
 - **Sin cambio de datos en la rejilla** (D42): la celda sin marcar ya contaba como rojo (D37); ahora
   además se ve en rojo claro en el formulario.
+
+## 18. Cambio del 2026-10-19: profesores sin cuenta y la programación de Actuaría
+
+Ya está en `mysql/schema-mysql.sql`; en la base que corre se aplica con
+`migracion-2026-10-19-profesor-sin-cuenta.sql` y, encima, `datos-actuaria-primavera-2027-mysql.sql`.
+Decisión D45 de `GUIA-DECISIONES.md`.
+
+- **El problema.** Actuaría no usa el sistema: sus profesores no contestan el formulario y su
+  jefatura entrega la programación ya hecha (para Primavera 2027, `DACE/Actuaria/
+  PROGRAMACIÓNPRIM2027.pdf`). Esa programación es fija y tiene que salir en la malla, y el motor
+  tiene que respetarla: un grupo de Actuaría puede ser espejo de una clave de Matemáticas
+  (ACT-11310 / MAT-22600) o darlo un profesor de Estadística (ACT-25354 001, Rojas Nandayapa).
+- **Se registra como grupos publicados**, en las tablas de siempre (`grupo`, `imparte`,
+  `imparte_profesor`, `imparte_co_oferta`, `imparte_horario`), no en una tabla aparte: así la malla
+  lee de un solo lugar, el motor la recibe en `grupos_fijos` (o como `ocupado` del profesor si la
+  descarga no incluye Actuaría) y ninguna subida la reemplaza. Sin CRN y sin salón (el PDF no los
+  trae), por eso en `'en_asignacion'`, como lo que escribe el motor en modo sin salones (D44).
+- **Profesor sin cuenta.** `imparte_profesor` pide un `profesor_id`, así que los profesores de
+  Actuaría necesitan una fila en `profesor` aunque nunca entren: `cu` y `password_hash` NULL (no
+  puede entrar: el login busca por `cu`), `activo = 0` y `tipo_contrato` NULL. Con eso quedan fuera
+  de todo lo demás sin tocar el API: paneles, reportes, respuestas, asignaciones directas y el
+  paquete del motor filtran `activo = 1 AND tipo_contrato IS NOT NULL`. `cu` sigue `UNIQUE` (varios
+  NULL caben). Si uno de ellos se registra después con su CU, queda una fila nueva: hay que mover sus
+  `imparte_profesor` a esa fila y borrar la sin cuenta. Un profesor de Actuaría que ya tenga cuenta
+  en otro departamento (Rojas Nandayapa) usa su fila de siempre.
+- **El motor** (`api/lib/motor.php`): en `grupos_fijos` solo van los profesores que vienen en
+  `profesores[]` (convención §3.7), y la regla "la franja vale para ese día y departamento" ya no se
+  aplica a los grupos publicados, solo a lo que propone el motor: ACT-22306/22320 002 va LU-MI de
+  20:30 a 22:00, franjas que la rejilla tiene solo para Estadística (D32 es una restricción del
+  formulario, no del departamento). Además, un grupo publicado sin ninguna clave del departamento
+  del profesor no cuenta para su número de cursos: solo le aparta las horas (Rojas Nandayapa pidió
+  1 curso en Estadística y lo sigue teniendo pendiente aunque dé ACT-25354).
