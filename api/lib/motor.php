@@ -767,6 +767,51 @@ function motor_armar_entrada(
         }
     }
 
+    // Co-oferta con una clave oculta: las claves de un par SON la misma clase,
+    // y si la jefatura muestra solo una en el cuestionario (EST-13102 visible,
+    // EST-13101 oculta) la demanda puede estar en la que nadie pudo marcar.
+    // La clave OCULTA hereda de su co-oferta la marca (si sus co-ofertas traen
+    // colores distintos, la más restrictiva) y los bloqueos. Las visibles no se
+    // tocan: en Matemáticas la co-oferta es una red de pares, no grupos
+    // cerrados, y la jefatura bloquea clave por clave a propósito. Solo en el
+    // paquete: la base no se toca.
+    $st = $pdo->prepare('SELECT materia_id FROM materia_cuestionario WHERE semestre_id = ? AND seccion_id IS NULL');
+    $st->execute([$semestreId]);
+    $ocultas = [];
+    foreach ($st->fetchAll() as $f) {
+        $ocultas[(int) $f['materia_id']] = true;
+    }
+    $rango = ['verde' => 0, 'amarillo' => 1, 'rojo' => 2];
+    foreach ($profesores as &$p) {
+        $marcadas = $p['materias'];
+        $cobertura = array_flip($p['cobertura_departamental']);
+        foreach ($marcadas as $mid => $nivel) {
+            foreach (array_keys($coOferta[$mid] ?? []) as $par) {
+                if (!isset($ocultas[$par]) || !isset($enPaquete[$par]) || isset($marcadas[$par])) {
+                    continue;
+                }
+                $actual = $p['materias'][$par] ?? null;
+                if ($actual === null || $rango[$nivel] > $rango[$actual]) {
+                    $p['materias'][$par] = $nivel;
+                }
+                if (isset($cobertura[$mid]) && !in_array($par, $p['cobertura_departamental'], true)) {
+                    $p['cobertura_departamental'][] = $par;
+                }
+            }
+        }
+        foreach ($p['bloqueos'] as $mid) {
+            foreach (array_keys($coOferta[$mid] ?? []) as $par) {
+                if (isset($ocultas[$par]) && isset($enPaquete[$par]) && !in_array($par, $p['bloqueos'], true)) {
+                    $p['bloqueos'][] = $par;
+                }
+            }
+        }
+        ksort($p['materias']);
+        sort($p['cobertura_departamental']);
+        sort($p['bloqueos']);
+    }
+    unset($p);
+
     // ocupado: clases de fuera del alcance.
     foreach ($clases['externas'] as $c) {
         $g = $c['grupos'][0];
