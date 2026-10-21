@@ -1261,6 +1261,17 @@ select.editor-mini {
   padding-top: 4px;
 }
 
+.respuestas-modo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}
+.respuestas-modo .formulario-nota {
+  margin: 0;
+}
+
 .respuestas-resumen {
   display: flex;
   align-items: center;
@@ -1270,6 +1281,9 @@ select.editor-mini {
 
 .legend-bloqueada {
   background: repeating-linear-gradient(45deg, #7b1d14, #7b1d14 3px, var(--rojo) 3px, var(--rojo) 6px);
+}
+.legend-verde-jefatura {
+  background: repeating-linear-gradient(45deg, #1b5a2c, #1b5a2c 3px, var(--verde) 3px, var(--verde) 6px);
 }
 .legend-vacia {
   background: var(--gray-bg);
@@ -1419,6 +1433,13 @@ select.editor-mini {
 .celda.bloqueada {
   background: repeating-linear-gradient(45deg, #7b1d14, #7b1d14 3px, var(--rojo) 3px, var(--rojo) 6px);
   outline: 2px solid #4a0f0a;
+  outline-offset: -2px;
+}
+/* El verde de jefatura, con el mismo rayado que el bloqueo pero en verde: es
+   una decisión encima de la respuesta, no la respuesta. */
+.celda.verde-jefatura {
+  background: repeating-linear-gradient(45deg, #1b5a2c, #1b5a2c 3px, var(--verde) 3px, var(--verde) 6px);
+  outline: 2px solid #0f3a1b;
   outline-offset: -2px;
 }
 .celda:hover:not(:disabled) {

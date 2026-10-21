@@ -432,6 +432,18 @@ $niveles = [];
 foreach ($st->fetchAll() as $n) {
     $niveles[(string) (int) $n['profesor_id']][(string) (int) $n['materia_id']] = $n['nivel'];
 }
+// Encima, los verdes de jefatura (2026-10-21): para elegir candidato cuenta lo
+// que va a contar en el motor, no solo lo que contestó.
+$st = $pdo->prepare(
+    'SELECT v.profesor_id, v.materia_id
+       FROM verde_profesor_materia v
+       JOIN materia m ON m.id = v.materia_id
+      WHERE v.semestre_id = ? AND m.departamento_id = ?'
+);
+$st->execute([$semestreId, $deptoId]);
+foreach ($st->fetchAll() as $v) {
+    $niveles[(string) (int) $v['profesor_id']][(string) (int) $v['materia_id']] = 'verde';
+}
 
 $st = $pdo->prepare(
     'SELECT b.profesor_id, b.materia_id

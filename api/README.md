@@ -131,8 +131,10 @@ departamento (sin publicar) y la disponibilidad de salones.
 **Desde 2026-09-28** el armado del formulario vive en `lib/catalogo.php` (`cuestionario_de()`,
 `formulario_completo()`, `faltantes_para_enviar()`), compartido por cuatro endpoints para que lo
 que ve el profesor, lo que valida el servidor y lo que edita la jefatura no se desincronicen.
-Los bloqueos (`bloqueo_profesor_materia`) **solo** los lee `respuestas.php`: ningún endpoint que
-use un profesor los consulta, porque el profesor no debe enterarse.
+Los bloqueos (`bloqueo_profesor_materia`) y los verdes de jefatura (`verde_profesor_materia`,
+2026-10-21) **solo** los leen los endpoints de la jefatura (`respuestas.php`, `asignaciones.php`) y
+la descarga del motor: ningún endpoint que use un profesor los consulta, porque el profesor no debe
+enterarse.
 
 **Recuperar la contraseña (desde 2026-10-02).** `olvide-password.php` guarda en
 `recuperacion_password` el SHA-256 de un token de 256 bits y manda el token por correo; pedir

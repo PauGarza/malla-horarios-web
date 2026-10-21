@@ -530,6 +530,26 @@ CREATE TABLE bloqueo_profesor_materia (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Restriccion DURA para el motor. Capa aparte: no toca preferencia_materia y el profesor nunca la ve.';
 
+-- El inverso del bloqueo (2026-10-21): la jefatura marca un par en verde aunque
+-- el profesor lo haya contestado de otro color o no lo haya contestado. Para el
+-- motor cuenta como si el profesor lo hubiera marcado verde. Misma capa aparte;
+-- un par no esta bloqueado y en verde a la vez (lo garantiza respuestas.php).
+CREATE TABLE verde_profesor_materia (
+    profesor_id  INT NOT NULL,
+    materia_id   INT NOT NULL,
+    semestre_id  INT NOT NULL,
+    marcado_por  INT NOT NULL,
+    marcado_at   DATETIME NOT NULL COMMENT 'UTC.',
+    PRIMARY KEY (profesor_id, materia_id, semestre_id),
+    KEY idx_vpm_materia (materia_id),
+    KEY idx_vpm_semestre (semestre_id),
+    CONSTRAINT fk_vpm_profesor FOREIGN KEY (profesor_id) REFERENCES profesor(id),
+    CONSTRAINT fk_vpm_materia  FOREIGN KEY (materia_id)  REFERENCES materia(id),
+    CONSTRAINT fk_vpm_semestre FOREIGN KEY (semestre_id) REFERENCES semestre(id),
+    CONSTRAINT fk_vpm_por      FOREIGN KEY (marcado_por) REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Verde puesto por la jefatura: para el motor manda sobre preferencia_materia. Capa aparte; el profesor nunca la ve.';
+
 -- La jefatura sobreescribe el numero de cursos que pidio un profesor
 -- (2026-10-12). Misma idea que bloqueo_profesor_materia: capa aparte, la
 -- respuesta del profesor queda intacta y el profesor nunca la ve. Para el

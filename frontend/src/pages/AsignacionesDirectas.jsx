@@ -29,7 +29,7 @@ import SelectorDepartamento from '../components/SelectorDepartamento';
 // horario es obligatorio y no depende de créditos.
 
 const GRUPOS_PROFESOR = [
-  { nivel: 'verde', etiqueta: 'Marcó la materia en verde' },
+  { nivel: 'verde', etiqueta: 'En verde (lo marcó o lo puso la jefatura)' },
   { nivel: 'amarillo', etiqueta: 'En amarillo' },
   { nivel: 'rojo', etiqueta: 'En rojo' },
   { nivel: null, etiqueta: 'Sin respuesta para esta materia' },

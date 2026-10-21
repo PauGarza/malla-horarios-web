@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ajustarNumCursos, cambiarBloqueo, leerRespuestas } from '../lib/api';
+import { ajustarNumCursos, cambiarBloqueo, cambiarVerde, leerRespuestas } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
 import { TIPO_CONTRATO_LABELS, departamentoInicial } from '../lib/roles';
 import { audienciaAplica } from '../lib/formulario';
@@ -18,6 +18,11 @@ import { descripcionAjuste } from '../lib/numCursos';
 // profesor: en vez de esconderle materias a alguien de antemano, todos
 // contestan lo mismo y la jefatura decide después.
 //
+// El VERDE de jefatura (2026-10-21) es lo contrario: "para el motor, esta
+// persona tiene esta materia en verde", contestara lo que contestara. Misma
+// capa aparte. Qué pone un clic lo dice el modo de arriba de la tabla; una
+// celda tiene a lo más una de las dos, y poner una quita la otra.
+//
 // Las columnas van por NOMBRE de materia, no por clave: los jefes conocen las
 // materias por su nombre. Y con ~50 materias × ~45 profesores, la tabla entera
 // no se puede leer de un vistazo, así que se filtra: materias por nombre y por
@@ -32,6 +37,21 @@ const ESTADOS = [
 const ESTADO_LABELS = Object.fromEntries(ESTADOS.map((e) => [e.valor, e.etiqueta]));
 
 const claveCelda = (profesorId, materiaId) => `${profesorId}-${materiaId}`;
+
+// Lo que pone un clic en una celda. La decisión de una celda es 'bloqueo',
+// 'verde' o ninguna (no está en el Map).
+const MODOS = [
+  { valor: 'bloqueo', etiqueta: '✕ Bloquear', accion: 'bloquear', deshacer: 'desbloquear' },
+  { valor: 'verde', etiqueta: '✓ Poner en verde', accion: 'poner en verde', deshacer: 'quitar el verde de' },
+];
+const MODO_POR_VALOR = Object.fromEntries(MODOS.map((m) => [m.valor, m]));
+
+function decisionesDe(r) {
+  const d = new Map();
+  for (const [p, m] of r.bloqueos) d.set(claveCelda(p, m), 'bloqueo');
+  for (const [p, m] of r.verdes) d.set(claveCelda(p, m), 'verde');
+  return d;
+}
 
 const OPCIONES_CURSOS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -107,7 +127,9 @@ export default function RespuestasCuestionario({ onVolver }) {
     departamentoInicial(profesor, departamentos),
   );
   const [datos, setDatos] = useState(null);
-  const [bloqueos, setBloqueos] = useState(() => new Set());
+  // claveCelda -> 'bloqueo' | 'verde'
+  const [decisiones, setDecisiones] = useState(() => new Map());
+  const [modo, setModo] = useState('bloqueo');
   const [pendientes, setPendientes] = useState(() => new Set());
   // Profesores cuyo ajuste de cursos se está guardando.
   const [guardandoCursos, setGuardandoCursos] = useState(() => new Set());
@@ -135,7 +157,7 @@ export default function RespuestasCuestionario({ onVolver }) {
         const r = await leerRespuestas(token, semestre.id, departamentoId);
         if (cancelado) return;
         setDatos(r);
-        setBloqueos(new Set(r.bloqueos.map(([p, m]) => claveCelda(p, m))));
+        setDecisiones(decisionesDe(r));
         // Otro departamento, otras materias y otros profesores: lo elegido a
         // mano ya no aplica.
         setProfesoresOcultos(new Set());
@@ -186,42 +208,51 @@ export default function RespuestasCuestionario({ onVolver }) {
   }, [datos, estados, contratos, profesoresOcultos, busquedaProfesor]);
 
   // Totales por materia sobre las filas visibles: cuántos la pueden dar en
-  // verde sin estar bloqueados. Es lo que dice si una materia se va a poder
-  // cubrir antes de correr el motor.
+  // verde (suyo o de la jefatura) sin estar bloqueados. Es lo que dice si una
+  // materia se va a poder cubrir antes de correr el motor.
   const totales = useMemo(() => {
     const t = {};
-    for (const m of materias) t[m.id] = { verdes: 0, bloqueos: 0 };
+    for (const m of materias) t[m.id] = { verdes: 0, verdesJefatura: 0, bloqueos: 0 };
     for (const p of filas) {
       for (const m of materias) {
-        if (bloqueos.has(claveCelda(p.id, m.id))) t[m.id].bloqueos++;
-        else if (datos.niveles[p.id]?.[m.id] === 'verde') t[m.id].verdes++;
+        const decision = decisiones.get(claveCelda(p.id, m.id));
+        if (decision === 'bloqueo') t[m.id].bloqueos++;
+        else if (decision === 'verde') {
+          t[m.id].verdes++;
+          t[m.id].verdesJefatura++;
+        } else if (datos.niveles[p.id]?.[m.id] === 'verde') t[m.id].verdes++;
       }
     }
     return t;
-  }, [filas, materias, bloqueos, datos]);
+  }, [filas, materias, decisiones, datos]);
 
   async function alternar(profesorFila, materia) {
     const clave = claveCelda(profesorFila.id, materia.id);
     if (pendientes.has(clave)) return;
-    const bloquear = !bloqueos.has(clave);
+    const anterior = decisiones.get(clave);
+    const activar = anterior !== modo;
+    const textos = MODO_POR_VALOR[modo];
 
     // Se ve al instante y se revierte si falla: con 45 × 50 celdas, esperar
     // al servidor en cada clic se siente roto.
-    const aplicar = (activo) =>
-      setBloqueos((prev) => {
-        const siguiente = new Set(prev);
-        if (activo) siguiente.add(clave);
+    const poner = (decision) =>
+      setDecisiones((prev) => {
+        const siguiente = new Map(prev);
+        if (decision) siguiente.set(clave, decision);
         else siguiente.delete(clave);
         return siguiente;
       });
-    aplicar(bloquear);
+    poner(activar ? modo : undefined);
     setPendientes((prev) => new Set(prev).add(clave));
     setError('');
     try {
-      await cambiarBloqueo(token, semestre.id, departamentoId, profesorFila.id, materia.id, bloquear);
+      const cambiar = modo === 'verde' ? cambiarVerde : cambiarBloqueo;
+      const r = await cambiar(token, semestre.id, departamentoId, profesorFila.id, materia.id, activar);
+      // Lo que dice el servidor gana (otra pestaña pudo cambiar la otra capa).
+      poner(r.bloqueado ? 'bloqueo' : r.verde ? 'verde' : undefined);
     } catch (err) {
-      aplicar(!bloquear);
-      setError(`No se pudo ${bloquear ? 'bloquear' : 'desbloquear'} ${materia.nombreMostrado}: ${err.message}`);
+      poner(anterior);
+      setError(`No se pudo ${activar ? textos.accion : textos.deshacer} ${materia.nombreMostrado}: ${err.message}`);
     } finally {
       setPendientes((prev) => {
         const siguiente = new Set(prev);
@@ -442,16 +473,35 @@ export default function RespuestasCuestionario({ onVolver }) {
       )}
 
       <p className="formulario-nota">
-        Haz clic en una celda para <strong>bloquear</strong> esa materia a ese profesor: el algoritmo no
-        se la asignará. Lo que contestó se sigue viendo. Otro clic la desbloquea. En la columna{' '}
-        <strong>Cursos</strong> puedes ajustar cuántos cursos se le asignan a alguien; queda marcado con{' '}
+        Elige qué hace un clic en una celda. <strong>Bloquear</strong>: el algoritmo no le asignará esa
+        materia a ese profesor. <strong>Poner en verde</strong>: el algoritmo la toma como si la hubiera
+        marcado en verde, aunque la haya contestado de otro color o no la haya contestado. Lo que contestó
+        no se pierde: otro clic con el mismo modo lo deshace. En la columna <strong>Cursos</strong> puedes
+        ajustar cuántos cursos se le asignan a alguien; queda marcado con{' '}
         <span className="cursos-marcador">J</span> y se guarda aparte de lo que pidió.
       </p>
+      <div className="respuestas-modo">
+        <span className="formulario-nota">Al hacer clic en una celda:</span>
+        <div className="segmentado" role="group" aria-label="Qué hace un clic en una celda">
+          {MODOS.map((m) => (
+            <button
+              key={m.valor}
+              type="button"
+              className={modo === m.valor ? 'active' : ''}
+              aria-pressed={modo === m.valor}
+              onClick={() => setModo(m.valor)}
+            >
+              {m.etiqueta}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="legend">
         <span><i className="legend-verde" /> Verde</span>
         <span><i className="legend-amarillo" /> Amarillo</span>
         <span><i className="legend-rojo" /> Rojo (del profesor)</span>
         <span><i className="legend-bloqueada" /> Bloqueada por jefatura</span>
+        <span><i className="legend-verde-jefatura" /> Verde por jefatura</span>
         <span><i className="legend-vacia" /> Sin respuesta</span>
       </div>
 
@@ -523,22 +573,27 @@ export default function RespuestasCuestionario({ onVolver }) {
                       {materias.map((m) => {
                         const clave = claveCelda(p.id, m.id);
                         const nivel = contesta ? datos.niveles[p.id]?.[m.id] : undefined;
-                        const bloqueada = bloqueos.has(clave);
+                        const decision = decisiones.get(clave);
+                        const bloqueada = decision === 'bloqueo';
+                        const verdeJefatura = decision === 'verde';
                         const descripcion = `${p.nombre} — ${m.nombreMostrado}: ${
                           nivel ? `contestó ${nivel}` : 'sin respuesta'
-                        }${bloqueada ? ', bloqueada por jefatura' : ''}`;
+                        }${bloqueada ? ', bloqueada por jefatura' : ''}${verdeJefatura ? ', en verde por jefatura' : ''}`;
+                        const textos = MODO_POR_VALOR[modo];
                         return (
                           <td key={m.id} className="celda-respuesta">
                             <button
                               type="button"
-                              className={`celda ${nivel ?? 'vacia'} ${bloqueada ? 'bloqueada' : ''}`}
-                              aria-pressed={bloqueada}
-                              aria-label={`${descripcion}. ${bloqueada ? 'Clic para desbloquear' : 'Clic para bloquear'}`}
+                              className={`celda ${nivel ?? 'vacia'} ${bloqueada ? 'bloqueada' : ''} ${
+                                verdeJefatura ? 'verde-jefatura' : ''
+                              }`}
+                              aria-pressed={decision === modo}
+                              aria-label={`${descripcion}. Clic para ${decision === modo ? textos.deshacer : textos.accion}`}
                               title={descripcion}
                               disabled={pendientes.has(clave)}
                               onClick={() => alternar(p, m)}
                             >
-                              {bloqueada ? '✕' : ''}
+                              {bloqueada ? '✕' : verdeJefatura ? '✓' : ''}
                             </button>
                           </td>
                         );
@@ -551,16 +606,27 @@ export default function RespuestasCuestionario({ onVolver }) {
                 <tr>
                   <th scope="row" className="col-profesor">
                     Verdes disponibles
-                    <span className="respuestas-sub">de los profesores mostrados, sin bloqueos</span>
+                    <span className="respuestas-sub">de los profesores mostrados, sin bloqueos, con los de jefatura</span>
                   </th>
                   <td className="col-dato" />
                   {materias.map((m) => (
                     <td
                       key={m.id}
                       className={`total ${totales[m.id].verdes === 0 ? 'total-cero' : ''}`}
-                      title={`${m.nombreMostrado}: ${totales[m.id].verdes} en verde, ${totales[m.id].bloqueos} bloqueados`}
+                      title={`${m.nombreMostrado}: ${totales[m.id].verdes} en verde (${totales[m.id].verdesJefatura} por jefatura), ${totales[m.id].bloqueos} bloqueados`}
                     >
                       {totales[m.id].verdes}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th scope="row" className="col-profesor">
+                    Verdes de jefatura
+                  </th>
+                  <td className="col-dato" />
+                  {materias.map((m) => (
+                    <td key={m.id} className="total">
+                      {totales[m.id].verdesJefatura || ''}
                     </td>
                   ))}
                 </tr>
