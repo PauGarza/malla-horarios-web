@@ -106,6 +106,12 @@ migracion-2026-10-21-plan-estudio-clave.sql    plan_estudio.clave (UNIQUE, ej. '
                                                de planes de Oracle los resuelve por clave. No toca
                                                el API. ANTES de datos-planes-estudio-mysql.sql.
                                                Una sola vez.
+migracion-2026-10-21b-verdes-jefatura.sql      tabla verde_profesor_materia: la jefatura marca en
+                                               verde un par profesor-materia (el inverso del
+                                               bloqueo) sin tocar lo que contestó. ADITIVA:
+                                               correr ANTES de desplegar el API nuevo
+                                               (respuestas.php, asignaciones.php y la descarga
+                                               del motor la leen; sin ella dan 500).
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por

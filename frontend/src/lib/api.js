@@ -194,6 +194,14 @@ export const cambiarBloqueo = (token, semestreId, departamentoId, profesorId, ma
     bloqueado,
   });
 
+/** El inverso del bloqueo. Poner uno quita el otro; la respuesta trae { bloqueado, verde }. */
+export const cambiarVerde = (token, semestreId, departamentoId, profesorId, materiaId, verde) =>
+  post(conDepto('respuestas.php?recurso=verde', semestreId, departamentoId), token, {
+    profesor_id: profesorId,
+    materia_id: materiaId,
+    verde,
+  });
+
 /** numCursos null quita el ajuste: vuelve a valer lo que pidió el profesor. */
 export const ajustarNumCursos = (token, semestreId, departamentoId, profesorId, numCursos) =>
   post(conDepto('respuestas.php?recurso=num_cursos', semestreId, departamentoId), token, {

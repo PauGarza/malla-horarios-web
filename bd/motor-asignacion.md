@@ -20,6 +20,7 @@
 | `profesor` | Roster: `departamento_id`, `tipo_contrato` (tiempo_completo asigna por curso, asignatura por hora — RN04). Desde 2026-09-28 ya no hay lista personalizada de materias por profesor (`modo_materias_elegibles` se eliminó): todos los de un departamento contestan el mismo formulario. |
 | `preferencia`, `preferencia_materia`, `disponibilidad` | Lo que declaró cada profesor para el semestre. **`disponibilidad` es restricción DURA** (el profesor dijo que no puede en rojo — no asignar ahí). **`preferencia_materia` es BLANDA** (ranking de materias deseadas — el motor debe intentar maximizarla, no es obligatoria de cumplir al 100%). |
 | `bloqueo_profesor_materia` | **Restricción DURA** (2026-09-28): la jefatura decidió que ese profesor NO da esa materia ese semestre. Nunca asignarlo, sin importar lo que haya contestado en `preferencia_materia` (esa respuesta se conserva intacta debajo del bloqueo). |
+| `verde_profesor_materia` | (2026-10-21) El inverso del bloqueo: la jefatura puso ese par en **verde**. Para el motor **manda sobre `preferencia_materia`**: tratarlo como si el profesor lo hubiera marcado verde (sigue siendo blando, no una asignación forzosa). Nunca coincide con un bloqueo del mismo par. En el paquete de `api/motor-entrada.php` ya llega aplicado en `profesores[].materias`. |
 | `ajuste_num_cursos` | (2026-10-12) La jefatura sobreescribió el número de cursos que pidió el profesor (desde Respuestas y bloqueos). **Si hay fila, ese número manda** sobre `preferencia.num_cursos_max`: `COALESCE(ajuste_num_cursos.num_cursos, preferencia.num_cursos_max)`. Puede ser **0** = este semestre no se le asignan cursos. |
 | `asignacion_fija`, `asignacion_fija_horario` | **Restricción DURA** (2026-10-13): asignaciones directas que la jefatura fijó antes de correr el motor. Cada fila de `asignacion_fija` es **un grupo**: tiene que existir un grupo de esa `materia_id` con ese `profesor_id`. Si la fila tiene horario en `asignacion_fija_horario`, ese grupo va **exactamente** en esos bloques (ya suman `materia.creditos` y no chocan entre sí para el mismo profesor; lo valida `api/asignaciones.php`). Sin horario, el motor elige cuándo. El salón siempre lo elige el motor. **`tipo = 'maestria'`** (sin `materia_id`): materia de maestría que no está en el catálogo; **no es un grupo que crear**, solo aparta esas horas del profesor. Ver §3. |
 | `preferencia_respuesta` | Respuestas a las preguntas abiertas del formulario (una fila por sección `abierta`). Texto libre para que lo lea la jefatura; el motor no lo interpreta. Reemplaza a `preferencia.horarios_otro_depto` / `observaciones_*`, que quedaron obsoletas. |
@@ -105,7 +106,8 @@ gastar intentos en combinaciones que la base va a rechazar (ver `mysql/triggers-
 ### Objetivo a maximizar, no restricción a cumplir siempre
 
 - **`preferencia_materia`** (verde/amarillo/rojo por materia) — el motor debe preferir asignar
-  profesores a materias donde marcaron verde, pero no es un error si no se puede siempre.
+  profesores a materias donde marcaron verde, pero no es un error si no se puede siempre. Un par en
+  `verde_profesor_materia` (2026-10-21) cuenta como verde aunque el profesor haya contestado otra cosa.
 - **Balance de carga histórica** — `diseno-bd.md` §10.1 deja pensado (no construido todavía) un
   `historial_score_asignacion` para esto; mientras no exista, se puede aproximar consultando
   `imparte`/`imparte_horario` de semestres anteriores directamente.

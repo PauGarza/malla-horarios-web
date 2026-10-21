@@ -705,6 +705,7 @@ function motor_armar_entrada(
             'materias'                => [],
             'cobertura_departamental' => [],
             'bloqueos'                => [],
+            'verdes_jefatura'         => [],
             'ocupado'                 => [],
             'maestria'                => [],
         ];
@@ -780,6 +781,22 @@ function motor_armar_entrada(
         $mid = (int) $b['materia_id'];
         if (isset($profesores[$pid]) && isset($enPaquete[$mid])) {
             $profesores[$pid]['bloqueos'][] = $mid;
+        }
+    }
+
+    // Verdes de jefatura (2026-10-21): mandan sobre lo que contestó el
+    // profesor, así que en materias quedan como 'verde' y el algoritmo no
+    // tiene que distinguirlos. verdes_jefatura dice cuáles fueron, solo para
+    // leer el paquete. Van antes de la co-oferta para que la clave oculta
+    // herede el verde igual que una marca del profesor.
+    $st = $pdo->prepare('SELECT profesor_id, materia_id FROM verde_profesor_materia WHERE semestre_id = ? ORDER BY profesor_id, materia_id');
+    $st->execute([$semestreId]);
+    foreach ($st->fetchAll() as $v) {
+        $pid = (int) $v['profesor_id'];
+        $mid = (int) $v['materia_id'];
+        if (isset($profesores[$pid]) && isset($enPaquete[$mid])) {
+            $profesores[$pid]['materias'][$mid] = 'verde';
+            $profesores[$pid]['verdes_jefatura'][] = $mid;
         }
     }
 

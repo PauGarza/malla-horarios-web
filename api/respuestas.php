@@ -3,10 +3,18 @@
 // Respuestas del cuestionario y bloqueos de jefatura (vista de jefatura).
 //
 //   GET  ?semestre_id=N[&departamento_id=D]
-//        -> { secciones[], profesores[], niveles{}, bloqueos[] }
+//        -> { secciones[], profesores[], niveles{}, bloqueos[], verdes[] }
 //
 //   POST ?recurso=bloqueo&semestre_id=N[&departamento_id=D]
-//        { profesor_id, materia_id, bloqueado: bool }  -> { ok, bloqueado }
+//        { profesor_id, materia_id, bloqueado: bool }  -> { ok, bloqueado, verde }
+//
+//   POST ?recurso=verde&semestre_id=N[&departamento_id=D]
+//        { profesor_id, materia_id, verde: bool }      -> { ok, bloqueado, verde }
+//        (2026-10-21) El inverso del bloqueo: "para el motor, este profesor
+//        tiene esta materia en verde", contestara lo que contestara. Va en
+//        verde_profesor_materia, con las mismas reglas que el bloqueo. Un par
+//        no puede estar bloqueado y en verde: poner uno quita el otro en la
+//        misma transacción, y la respuesta trae cómo quedaron los dos.
 //
 //   POST ?recurso=num_cursos&semestre_id=N[&departamento_id=D]
 //        { profesor_id, num_cursos: 0-6 | null }  -> { ok, ajuste }
@@ -17,7 +25,7 @@
 //        tabla).
 //
 // Es la matriz profesores × materias: lo que contestó cada quien, y encima la
-// capa de bloqueos. Un bloqueo dice "este profesor NO da esta materia" y el
+// capa de bloqueos (y, desde 2026-10-21, la de verdes de jefatura). Un bloqueo dice "este profesor NO da esta materia" y el
 // motor lo toma como restricción dura. Va en una tabla aparte a propósito
 // (bloqueo_profesor_materia): la respuesta del profesor no se toca, al
 // desbloquear vuelve a contar tal como la dio, y el profesor nunca lo ve —
@@ -49,7 +57,7 @@ $deptoId    = departamento_objetivo();   // ya corrió exigir_jefe_de()
 $semestreId = param_id('semestre_id');
 
 // -----------------------------------------------------------------------------
-// POST ?recurso=bloqueo
+// POST ?recurso=num_cursos
 // -----------------------------------------------------------------------------
 
 if (metodo_http() === 'POST' && filter_input(INPUT_GET, 'recurso') === 'num_cursos') {
@@ -107,9 +115,14 @@ if (metodo_http() === 'POST' && filter_input(INPUT_GET, 'recurso') === 'num_curs
     ]]);
 }
 
+// -----------------------------------------------------------------------------
+// POST ?recurso=bloqueo | ?recurso=verde
+// -----------------------------------------------------------------------------
+
 if (metodo_http() === 'POST') {
     exigir_semestre_activo($pdo, $semestreId);
-    if (filter_input(INPUT_GET, 'recurso') !== 'bloqueo') {
+    $recurso = filter_input(INPUT_GET, 'recurso');
+    if ($recurso !== 'bloqueo' && $recurso !== 'verde') {
         error_json('Recurso no soportado', 400);
     }
     $body       = cuerpo_json();
@@ -118,7 +131,8 @@ if (metodo_http() === 'POST') {
     if ($profesorId === false || $profesorId === null || $materiaId === false || $materiaId === null) {
         error_json('Faltan profesor_id y materia_id', 400);
     }
-    $bloquear = !empty($body['bloqueado']);
+    $esBloqueo = $recurso === 'bloqueo';
+    $activar   = !empty($body[$esBloqueo ? 'bloqueado' : 'verde']);
 
     $st = $pdo->prepare('SELECT departamento_id FROM profesor WHERE id = ?');
     $st->execute([(int) $profesorId]);
@@ -136,24 +150,40 @@ if (metodo_http() === 'POST') {
         error_json('Esa materia no es de este departamento', 403);
     }
 
+    // Nombres fijos, nunca del cliente: solo eligen entre las dos tablas.
+    $tabla = $esBloqueo ? 'bloqueo_profesor_materia' : 'verde_profesor_materia';
+    $otra  = $esBloqueo ? 'verde_profesor_materia' : 'bloqueo_profesor_materia';
+    $quien = $esBloqueo ? 'bloqueado_por, bloqueado_at' : 'marcado_por, marcado_at';
+    $par   = [(int) $profesorId, (int) $materiaId, $semestreId];
+
+    $pdo->beginTransaction();
     try {
-        if ($bloquear) {
+        if ($activar) {
             $pdo->prepare(
-                'INSERT IGNORE INTO bloqueo_profesor_materia
-                        (profesor_id, materia_id, semestre_id, bloqueado_por, bloqueado_at)
-                 VALUES (?,?,?,?,?)'
-            )->execute([(int) $profesorId, (int) $materiaId, $semestreId, mi_id(), ahora_utc()]);
+                "INSERT IGNORE INTO $tabla (profesor_id, materia_id, semestre_id, $quien) VALUES (?,?,?,?,?)"
+            )->execute(array_merge($par, [mi_id(), ahora_utc()]));
+            $pdo->prepare("DELETE FROM $otra WHERE profesor_id = ? AND materia_id = ? AND semestre_id = ?")
+                ->execute($par);
         } else {
-            $pdo->prepare(
-                'DELETE FROM bloqueo_profesor_materia
-                  WHERE profesor_id = ? AND materia_id = ? AND semestre_id = ?'
-            )->execute([(int) $profesorId, (int) $materiaId, $semestreId]);
+            $pdo->prepare("DELETE FROM $tabla WHERE profesor_id = ? AND materia_id = ? AND semestre_id = ?")
+                ->execute($par);
         }
+        $pdo->commit();
     } catch (Throwable $e) {
-        fallo_interno('respuestas.php bloqueo', $e, 'No se pudo guardar el bloqueo');
+        $pdo->rollBack();
+        fallo_interno("respuestas.php $recurso", $e, $esBloqueo ? 'No se pudo guardar el bloqueo' : 'No se pudo guardar el verde');
     }
 
-    responder(['ok' => true, 'bloqueado' => $bloquear]);
+    $hay = static function (string $t) use ($pdo, $par): bool {
+        $st = $pdo->prepare("SELECT 1 FROM $t WHERE profesor_id = ? AND materia_id = ? AND semestre_id = ?");
+        $st->execute($par);
+        return (bool) $st->fetchColumn();
+    };
+    responder([
+        'ok'        => true,
+        'bloqueado' => $hay('bloqueo_profesor_materia'),
+        'verde'     => $hay('verde_profesor_materia'),
+    ]);
 }
 
 // -----------------------------------------------------------------------------
@@ -235,10 +265,23 @@ foreach ($st->fetchAll() as $b) {
     $bloqueos[] = [(int) $b['profesor_id'], (int) $b['materia_id']];
 }
 
+$st = $pdo->prepare(
+    'SELECT v.profesor_id, v.materia_id
+       FROM verde_profesor_materia v
+       JOIN materia m ON m.id = v.materia_id
+      WHERE v.semestre_id = ? AND m.departamento_id = ?'
+);
+$st->execute([$semestreId, $deptoId]);
+$verdes = [];
+foreach ($st->fetchAll() as $v) {
+    $verdes[] = [(int) $v['profesor_id'], (int) $v['materia_id']];
+}
+
 responder([
     'publicado'  => $completo['publicado'],
     'secciones'  => $secciones,
     'profesores' => $profesores,
     'niveles'    => (object) $niveles,
     'bloqueos'   => $bloqueos,
+    'verdes'     => $verdes,
 ]);

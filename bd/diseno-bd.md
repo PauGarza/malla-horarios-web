@@ -636,6 +636,21 @@ y el profesor nunca ve el bloqueo.
 | bloqueado_at | datetime NOT NULL | UTC |
 | PK(profesor_id, materia_id, semestre_id) | | |
 
+### `verde_profesor_materia` (nueva 2026-10-21 — verde puesto por la jefatura)
+El inverso del bloqueo: la jefatura dice "para el motor, este profesor tiene esta materia en verde",
+aunque la haya contestado amarillo o rojo o no la haya contestado. Es **blando** como
+`preferencia_materia` (para forzar la asignación está `asignacion_fija`). Misma capa aparte: la
+respuesta del profesor no se toca y el profesor nunca la ve. Un par no está bloqueado y en verde a la
+vez: `api/respuestas.php` quita uno al poner el otro, en la misma transacción.
+| Columna | Tipo | Notas |
+|---|---|---|
+| profesor_id | int FK → profesor | |
+| materia_id | int FK → materia | |
+| semestre_id | int FK → semestre | |
+| marcado_por | int NOT NULL FK → profesor | quién de la jefatura lo puso |
+| marcado_at | datetime NOT NULL | UTC |
+| PK(profesor_id, materia_id, semestre_id) | | |
+
 ### `intento_login` (infraestructura del API — solo existe en MySQL, ver §14)
 Límite de intentos de login. PHP no guarda estado entre peticiones, así que el contador vive aquí.
 | Columna | Tipo | Notas |

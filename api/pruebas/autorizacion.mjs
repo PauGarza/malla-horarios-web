@@ -127,6 +127,7 @@ const gestion = [
   ['configuracion.php formulario', 'PUT', `configuracion.php?recurso=formulario&semestre_id=${s}`, {}],
   ['respuestas.php GET', 'GET', `respuestas.php?semestre_id=${s}`],
   ['respuestas.php bloqueo', 'POST', `respuestas.php?recurso=bloqueo&semestre_id=${s}`, { profesor_id: yo.id, materia_id: 1, bloqueado: true }],
+  ['respuestas.php verde', 'POST', `respuestas.php?recurso=verde&semestre_id=${s}`, { profesor_id: yo.id, materia_id: 1, verde: true }],
   ['respuestas.php num_cursos', 'POST', `respuestas.php?recurso=num_cursos&semestre_id=${s}`, { profesor_id: yo.id, num_cursos: 6 }],
   ['reporte.php GET', 'GET', `reporte.php?semestre_id=${s}`],
   ['asignaciones.php GET', 'GET', `asignaciones.php?semestre_id=${s}`],
