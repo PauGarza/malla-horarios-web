@@ -317,8 +317,9 @@ Sin `departamento_id` directo: un plan conjunto (ej. MCD/MR) pertenece a 2+ depa
 | Columna | Tipo | Notas |
 |---|---|---|
 | id | serial PK | |
+| clave | varchar(10) NULL UNIQUE | carrera-versión del export de Oracle, p.ej. 'ACT-H', 'M.A-F'. NULL para un plan dado de alta a mano. Agregada 2026-10-21 (solo en MySQL) |
 | nombre | text NOT NULL | p.ej. 'Lic. Actuaría', 'Maestría en Ciencia de Datos' |
-| activo | boolean NOT NULL DEFAULT true | |
+| activo | boolean NOT NULL DEFAULT true | en los planes de Oracle, true = la versión más nueva de la carrera (la letra más alta); las anteriores se cargan igual, porque todavía hay alumnos en ellas |
 
 ### `plan_estudio_departamento` (N:M — planes conjuntos entre 2+ departamentos)
 | Columna | Tipo | Notas |
@@ -1211,3 +1212,29 @@ Decisión D45 de `GUIA-DECISIONES.md`.
   formulario, no del departamento). Además, un grupo publicado sin ninguna clave del departamento
   del profesor no cuenta para su número de cursos: solo le aparta las horas (Rojas Nandayapa pidió
   1 curso en Estadística y lo sigue teniendo pendiente aunque dé ACT-25354).
+
+## 19. Cambio del 2026-10-21: el semestre de cada materia (planes de estudio)
+
+Ya está en `mysql/schema-mysql.sql`; en la base que corre se aplica con
+`migracion-2026-10-21-plan-estudio-clave.sql` y, encima, `datos-planes-estudio-mysql.sql`.
+
+- **La fuente.** `DACC/MATERIAS/WEB/planesOracle.csv`, el export de Oracle de los planes de
+  licenciatura que usa el proyecto de DACC: una fila por carrera + versión de plan + materia, con
+  su semestre (1-12). Un plan es carrera + versión, y eso es `plan_estudio.clave` (`'ACT-H'`).
+- **Los PDFs nuevos** de `DACE/Planes de estudio/` (Actuaría y Matemáticas Aplicadas, marzo 2025)
+  son ACT-H y M.A-F del export: coinciden materia por materia y semestre por semestre. Sus
+  tarjetas "Optativa" no tienen clave y no se cargan.
+- **Todas las carreras y todas las versiones** (decisión de la usuaria). Las materias de DACE
+  están en 231 planes de 89 carreras, no solo en los de Actuaría y Matemáticas Aplicadas (Cálculo
+  Univariado va en 1o en las ingenierías y en 2o en Actuaría). Entre versiones, en las carreras de
+  DACE el plan nuevo cambia sobre todo *qué* materias se llevan (Actuaría G→H: 11 claves MAT/EST/ACT
+  comunes, 16 nuevas, 22 que salen), y las que salen siguen en la base y se siguen dando a los
+  alumnos de plan viejo (MAT-14100, MAT-22600, EST-14101, ACT-15352). Con solo la versión más nueva,
+  8 claves se quedaban sin semestre. `activo` marca la más nueva.
+- **No da de alta materias.** La carga cruza por clave con `materia`; lo que no está, se
+  descarta, y no se crea un plan sin ninguna materia en la base.
+- **Generado por script** (`generar-planes-estudio.py`): es el único archivo de datos que no se
+  escribe a mano, por tamaño (≈2,700 filas). Idempotente: repetirlo corrige semestres y vigencia.
+- **Todavía no lo usa nadie.** El motor recibe `planes` en el paquete (`api/lib/motor.php`), con
+  todas las versiones, pero no evita empalmes por semestre (RN01, §10). Cuando se implemente,
+  hay que decidir si va solo con los planes `activo` o con todos.

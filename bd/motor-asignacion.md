@@ -140,11 +140,16 @@ Cómo escribe la subida (2026-10-13, `api/lib/motor.php`):
   2026-10-13, con la Materia de Maestría como horas en rojo, el ajuste de cursos ya resuelto en
   `num_cursos_max` y el campo nuevo `asignaciones_fijas`, ver su §3.9). Este documento dice de qué
   tablas sale cada dato y a cuáles se escribe; la convención, el formato de los archivos.
-- optV0 todavía lee y escribe la **versión 1**; el sistema ya solo habla la 2. Hasta que se
-  actualice (lista en `optV0/README.md`), su salida se rechaza al subirla.
+- optV0 se quedó en la **versión 1**; el sistema ya solo habla la 2. Desde el 2026-10-21 se usa
+  `optV1`, que lee y escribe la 2.
 - No hay vista de malla: lo subido queda en la base sin publicar. Tampoco hay vista para cargar
   salones; mientras tanto se corre en modo sin salones (D44).
-- No existe la protección de secuencias entre materias seriadas (RN01, "cálculos seriados a la misma
-  hora") — es una idea a futuro, no una regla que el motor deba imponer todavía.
+- **Materias del mismo plan y semestre** (2026-10-21): `plan_estudio_materia` ya está cargada (export
+  de Oracle) y la descarga manda `planes` con `clave` y `vigente`. optV1 evita que choquen: duro si
+  las dos materias tienen un solo grupo, blando si alguna tiene varios (`optV1/docs/modelo-matematico.md`
+  §3.5).
+- No existe la protección de secuencias entre materias **seriadas** de semestres distintos (RN01,
+  "cálculos seriados a la misma hora"): es una idea a futuro, no una regla que el motor deba imponer
+  todavía.
 - El scoring/balance histórico (§3, último punto) no tiene tabla propia todavía, solo el boceto de
   `diseno-bd.md` §10.1.

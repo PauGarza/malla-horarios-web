@@ -78,6 +78,10 @@ function resumirEntrada(e) {
   const estado = (p) => p.preferencia?.estado ?? 'no_iniciado';
   return {
     materias: conDemanda.length,
+    // El motor solo evita choques entre materias del mismo plan y semestre si la
+    // materia está en algún plan (plan_estudio_materia). Qué versiones cuentan lo
+    // decide el motor.
+    conSemestre: conDemanda.filter((m) => (m.planes ?? []).length > 0).length,
     sugeridos: conDemanda.reduce((n, m) => n + m.demanda.grupos_sugeridos, 0),
     profesores: e.profesores.length,
     enviados: e.profesores.filter((p) => estado(p) === 'enviado').length,
@@ -351,6 +355,11 @@ export default function MotorAsignacion({ onVolver }) {
             </p>
             <div className="motor-cifras">
               <Cifra valor={descargado.resumen.materias} texto="materias con demanda" alerta={descargado.resumen.materias === 0} />
+              <Cifra
+                valor={descargado.resumen.conSemestre}
+                texto="con semestre en algún plan"
+                alerta={descargado.resumen.conSemestre < descargado.resumen.materias}
+              />
               <Cifra valor={descargado.resumen.sugeridos} texto="grupos sugeridos" />
               <Cifra valor={descargado.resumen.profesores} texto="profesores" />
               <Cifra valor={descargado.resumen.enviados} texto="enviaron su formulario" />
@@ -364,6 +373,13 @@ export default function MotorAsignacion({ onVolver }) {
               <p className="formulario-aviso">
                 No hay demanda cargada para este alcance: el motor no tiene grupos que abrir. Carga la
                 estimación de demanda primero.
+              </p>
+            )}
+            {descargado.resumen.materias > 0 && descargado.resumen.conSemestre < descargado.resumen.materias && (
+              <p className="formulario-aviso">
+                {descargado.resumen.materias - descargado.resumen.conSemestre} materias con demanda no están en
+                ningún plan de estudios (casi siempre optativas): el motor no cuida que no choquen con las de
+                su semestre.
               </p>
             )}
             {descargado.resumen.sinContestar > 0 && (

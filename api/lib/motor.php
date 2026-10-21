@@ -562,16 +562,23 @@ function motor_armar_entrada(
         $st->execute(array_merge([$semestreId], $lista));
         $filas = $st->fetchAll();
 
+        // §3.4. Todas las versiones de cada plan: cuáles cuentan (la vigente, la
+        // anterior...) lo decide el motor, con clave ('ACT-H') y vigente.
         $planes = [];
         $st = $pdo->prepare(
-            'SELECT pem.materia_id, pe.nombre, pem.semestre_plan
+            'SELECT pem.materia_id, pe.clave, pe.nombre, pe.activo, pem.semestre_plan
                FROM plan_estudio_materia pem JOIN plan_estudio pe ON pe.id = pem.plan_estudio_id
               WHERE pem.materia_id IN (' . motor_marcas($lista) . ')
-              ORDER BY pem.materia_id, pe.nombre, pem.semestre_plan'
+              ORDER BY pem.materia_id, pe.clave, pe.nombre'
         );
         $st->execute($lista);
         foreach ($st->fetchAll() as $p) {
-            $planes[(int) $p['materia_id']][] = ['plan' => $p['nombre'], 'semestre_plan' => (int) $p['semestre_plan']];
+            $planes[(int) $p['materia_id']][] = [
+                'plan'          => $p['nombre'],
+                'clave'         => $p['clave'],
+                'vigente'       => (int) $p['activo'] === 1,
+                'semestre_plan' => (int) $p['semestre_plan'],
+            ];
         }
 
         // Un espejo de otro departamento que ya no está activo no se manda.
@@ -699,11 +706,15 @@ function motor_armar_entrada(
             'cobertura_departamental' => [],
             'bloqueos'                => [],
             'ocupado'                 => [],
+            'maestria'                => [],
         ];
     }
 
     // Disponibilidad: lo que marcó, y encima las horas de maestría en rojo
-    // (§3.9.1). Solo en el paquete: la base no se toca.
+    // (§3.9.1). Solo en el paquete: la base no se toca. Las de maestría van
+    // además en profesores[].maestria (2026-10-21): una asignación directa sin
+    // horario puede caer en rojo del profesor (la jefatura manda), pero nunca
+    // encima de su maestría, y el motor necesita distinguirlas.
     $celdas = [];
     $st = $pdo->prepare(
         "SELECT pref.profesor_id, d.dia, d.franja_id, d.nivel
@@ -722,14 +733,19 @@ function motor_armar_entrada(
           WHERE af.semestre_id = ? AND af.tipo = 'maestria'"
     );
     $st->execute([$semestreId]);
+    $maestria = [];
     foreach ($st->fetchAll() as $c) {
         $celdas[(int) $c['profesor_id']][$c['dia']][(int) $c['franja_id']] = 'rojo';
+        $maestria[(int) $c['profesor_id']][$c['dia']][(int) $c['franja_id']] = true;
     }
     foreach ($profesores as $id => &$p) {
         foreach (MOTOR_DIAS as $dia) {
             foreach ($rej['lista'] as $f) {
                 if (isset($celdas[$id][$dia][$f['id']])) {
                     $p['disponibilidad'][$dia][$f['inicio']] = $celdas[$id][$dia][$f['id']];
+                }
+                if (isset($maestria[$id][$dia][$f['id']])) {
+                    $p['maestria'][$dia][] = $f['inicio'];
                 }
             }
         }
@@ -1234,6 +1250,7 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
             $afUsadas[$afId][] = $etq;
         }
         $afConHorario = $afId !== null && $afs[$afId]['llaves'] !== [];
+        $enRojo = 0;    // bloques en rojo de una asignación sin horario (aviso, no error)
 
         // 3. sesiones
         $bloques = [];
@@ -1287,9 +1304,14 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
                     continue;
                 }
                 $nivel = $profs[$p]['disponibilidad'][$d][$h] ?? null;
-                if ($nivel === 'rojo' || ($nivel === null && $sinResp === 'rojo')) {
-                    if ($afConHorario) {
-                        $resumen['bloques']['fijados_en_rojo']++;   // la jefatura manda (§3.9.3)
+                if (in_array($h, $profs[$p]['maestria'][$d] ?? [], true)) {
+                    // Las horas de maestría no las pisa nadie, ni una asignación directa (§3.9.1).
+                    $err('disponibilidad', "$etq: " . $nombre($p) . " da su materia de maestría el $d a las $h.");
+                } elseif ($nivel === 'rojo' || ($nivel === null && $sinResp === 'rojo')) {
+                    if ($afId !== null) {
+                        // La jefatura manda sobre la disponibilidad (§3.9.3), con o sin horario fijado.
+                        $resumen['bloques']['fijados_en_rojo']++;
+                        $enRojo += $afConHorario ? 0 : 1;
                     } else {
                         $err('disponibilidad', "$etq: " . $nombre($p) . " no puede el $d a las $h (" . ($nivel ?? 'sin respuesta') . ').');
                     }
@@ -1317,6 +1339,10 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
         }
         if (!$esSalida) {
             continue;
+        }
+        if ($enRojo > 0) {
+            $avi('asignacion_en_rojo', "$etq cumple " . $etqAf($afId) . " con $enRojo bloques que el profesor no marcó"
+                . ' como disponibles: la jefatura la fijó sin horario y no le cabía en sus horas.');
         }
 
         $resumen['clases']++;
