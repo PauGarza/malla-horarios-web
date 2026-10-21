@@ -1022,6 +1022,87 @@ function motor_agrupar(array $porTipo): array
  *   plan: [...]                          los grupos nuevos, ya normalizados, para motor_aplicar()
  * }
  */
+/**
+ * Las clases compartidas de la co-oferta, como las arma el motor (decisión del 2026-10-21; igual que
+ * estrellas_co_oferta() de malla-horarios/optV1/optv1/convencion.py y que la vista de malla).
+ *
+ * En Matemáticas la co-oferta es una red de pares, así que no se junta por componentes: de mayor a
+ * menor demanda, una clave se pega a la clave principal de más demanda entre sus co-ofertas; si
+ * ninguna co-oferta suya es principal, ella lo es. Una estrella de varias claves pide
+ * demanda ajustada sumada / capacidad_planeacion de la principal clases, al entero más cercano y al
+ * menos 1, como redondea Escolares cada clave (salvo que ninguna de sus claves tenga grupos
+ * sugeridos: 0), y cada clase lleva todas sus claves. Una clave sola pide sus grupos_sugeridos.
+ *
+ * @param array $materias  las de la entrada (§3.4)
+ * @param array $conGrupos ids de las materias que abren grupos
+ * @return array [principal_de [materia_id => principal], clases [principal => n]]
+ */
+function motor_estrellas_co_oferta(array $materias, array $conGrupos): array
+{
+    $mat = [];
+    foreach ($materias as $m) {
+        $mat[$m['id']] = $m;
+    }
+    $ids = [];
+    $sug = [];
+    $aj = [];
+    foreach (array_unique($conGrupos) as $x) {
+        if (!isset($mat[$x])) {
+            continue;
+        }
+        $d = $mat[$x]['demanda'] ?? [];
+        $ids[] = $x;
+        $sug[$x] = (int) ($d['grupos_sugeridos'] ?? 0);
+        $aj[$x] = isset($d['demanda_ajustada']) ? (float) $d['demanda_ajustada'] : null;
+    }
+    $orden = function ($x) use ($aj, $mat): array {
+        return [-($aj[$x] ?? 0.0), $mat[$x]['clave']];
+    };
+    usort($ids, function ($a, $b) use ($aj, $sug, $mat) {
+        return [-($aj[$a] ?? 0.0), -$sug[$a], $mat[$a]['clave']] <=> [-($aj[$b] ?? 0.0), -$sug[$b], $mat[$b]['clave']];
+    });
+    $principal = [];
+    foreach ($ids as $x) {
+        $mejor = null;
+        foreach ($mat[$x]['co_oferta'] ?? [] as $o) {
+            if (($principal[$o] ?? null) === $o && ($mejor === null || ($orden($o) <=> $orden($mejor)) < 0)) {
+                $mejor = $o;
+            }
+        }
+        $principal[$x] = $mejor ?? $x;
+    }
+    $miembros = [];
+    foreach ($principal as $x => $p) {
+        $miembros[$p][] = $x;
+    }
+    $clases = [];
+    foreach ($miembros as $p => $ms) {
+        if (count($ms) === 1) {
+            $clases[$p] = $sug[$p];
+            continue;
+        }
+        $algunSug = false;
+        $conAj = false;
+        $suma = 0.0;
+        $maxSug = 0;
+        foreach ($ms as $x) {
+            $algunSug = $algunSug || $sug[$x] > 0;
+            $conAj = $conAj || $aj[$x] !== null;
+            $suma += $aj[$x] ?? 0.0;
+            $maxSug = max($maxSug, $sug[$x]);
+        }
+        if (!$algunSug) {
+            $clases[$p] = 0;
+        } elseif (!$conAj) {
+            $clases[$p] = $maxSug;
+        } else {
+            $cap = (int) ($mat[$p]['demanda']['capacidad_planeacion'] ?? 0);
+            $clases[$p] = max(1, (int) floor(round($suma, 6) / ($cap > 0 ? $cap : 30) + 0.5));
+        }
+    }
+    return [$principal, $clases];
+}
+
 function motor_validar_salida(array $rej, array $ent, $sal): array
 {
     $errores = [];
@@ -1224,8 +1305,16 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
             continue;
         }
         if (count($mIds) > 1) {
+            // Una clase compartida es una estrella: una clave de la que todas las demás son co-oferta
+            // directa (motor_estrellas_co_oferta). Si ninguna lo es, se reporta contra la primera.
             $base = $mIds[0];
-            foreach (array_slice($mIds, 1) as $mid) {
+            foreach ($mIds as $centro) {
+                if (array_diff($mIds, [$centro], $mats[$centro]['co_oferta']) === []) {
+                    $base = $centro;
+                    break;
+                }
+            }
+            foreach (array_diff($mIds, [$base]) as $mid) {
                 if (!in_array($mid, $mats[$base]['co_oferta'], true)) {
                     $err('co_oferta', "$etq: {$mats[$mid]['clave']} no es co-oferta de {$mats[$base]['clave']}, no pueden ser la misma clase.");
                 }
@@ -1530,19 +1619,28 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
     foreach ($afs as $a) {
         $afPorMateria[$a['materia_id']] = ($afPorMateria[$a['materia_id']] ?? 0) + 1;
     }
+    // Lo que pide la demanda de cada clave es lo de su estrella de co-oferta: una clave espejo va en
+    // todas las clases de su principal (motor_estrellas_co_oferta).
+    $conGrupos = array_keys($afPorMateria);
     foreach ($mats as $m) {
-        $sug = $m['demanda']['grupos_sugeridos'] ?? null;
-        if ($sug === null) {
+        if (($m['demanda']['grupos_sugeridos'] ?? null) !== null) {
+            $conGrupos[] = $m['id'];
+        }
+    }
+    list($principalDe, $clasesEstrella) = motor_estrellas_co_oferta(array_values($mats), $conGrupos);
+    foreach ($mats as $m) {
+        if (($m['demanda']['grupos_sugeridos'] ?? null) === null) {
             continue;
         }
+        $sug = $clasesEstrella[$principalDe[$m['id']]] ?? 0;
         $fijos = $fijosPorMateria[$m['id']] ?? 0;
         $n = ($abiertos[$m['id']] ?? 0) + $fijos;
-        // Más asignaciones directas que sugeridos es decisión de la jefatura (§3.9.3).
+        // Más asignaciones directas que las que pide la demanda es decisión de la jefatura (§3.9.3).
         $tope = max($sug, ($afPorMateria[$m['id']] ?? 0) + $fijos);
         if ($n > $tope) {
-            $avi('grupos_de_mas', "{$m['clave']}: $n grupos y la demanda sugiere $sug.");
+            $avi('grupos_de_mas', "{$m['clave']}: $n grupos y la demanda pide $sug.");
         } elseif ($n + ($faltan[$m['id']] ?? 0) < $sug) {
-            $avi('grupos_de_menos', "{$m['clave']}: $n grupos de $sug sugeridos, y la diferencia no viene en sin_asignar.");
+            $avi('grupos_de_menos', "{$m['clave']}: $n grupos de $sug que pide la demanda, y la diferencia no viene en sin_asignar.");
         }
     }
     foreach ($carga as $p => $n) {

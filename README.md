@@ -121,9 +121,14 @@ Estadística (materias y co-oferta); cada profesor crea su propia cuenta. Lo que
   ida y vuelta) está en `docs/convencion-datos-motor.md` del repo del servicio social
   (`malla-horarios`), donde también viven el motor (`optV1/`; `optV0/` es el original) y el diagrama
   del flujo completo (`docs/flujo-del-sistema.md`).
+- **Malla horaria** (jefatura, 2026-10-21, solo lectura): los grupos que dejó el motor y los
+  publicados, por profesor, por salón o por semana, con los choques y avisos recalculados contra los
+  datos de hoy (las mismas reglas con que se valida la subida), lo que falta por asignar, quién más
+  puede dar cada grupo a esa hora, y la semana de cada plan y semestre. Cada jefe ve su departamento;
+  el admin elige uno o los tres. Es el mockup que ya vieron los jefes, conectado a la base
+  (`api/malla.php`, `frontend/src/lib/mallaVista.js`).
 
-Pendiente: la vista de malla (revisar, editar y publicar lo que dejó el motor), cargar los salones del
-semestre, y probar optV1 de punta a punta con una descarga real. También las cartas de asignación, y
+Pendiente: editar y publicar desde la vista de malla, cargar los salones del semestre, y probar optV1 de punta a punta con una descarga real. También las cartas de asignación, y
 cargar Actuaría. `backend/` es el backend anterior (Supabase), ya reemplazado por `api/`.
 
 ## Cómo contribuir

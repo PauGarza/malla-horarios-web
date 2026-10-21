@@ -9,10 +9,8 @@ import { etiquetaSemestre } from '../lib/semestre';
 
 // Vistas "próximamente" por rol — además de las que se calculan aparte
 // (dependen de tipo_contrato o de si el rol gestiona un departamento).
+// Los grupos y la asignación de la jefatura ya son la vista de malla.
 const VISTAS_PENDIENTES_POR_ROL = {
-  jefe_departamento: ['Panel de Jefe de Departamento (grupos y asignación de tu departamento)'],
-  // Por ahora la jefatura de división ve solo Matemáticas (DIVISION_SOLO_SU_DEPARTAMENTO).
-  jefe_division: ['Panel de División (grupos y asignación de tu departamento)'],
   servicios_escolares: ['Panel de Servicios Escolares'],
   nomina: ['Reporte de horas para Nómina'],
   // admin no tiene pendiente: el avance de los 3 departamentos lo ve en
@@ -32,6 +30,7 @@ export default function HomePage({
   onAbrirCargaDemanda,
   onAbrirSemestres,
   onAbrirMotor,
+  onAbrirMalla,
 }) {
   const { profesor, nombreDepartamento, formularioPublicado, semestre } = useAuth();
 
@@ -156,17 +155,27 @@ export default function HomePage({
           </section>
         )}
 
-        {/* Solo admin por ahora (D43): baja los datos para el motor y sube su
-            resultado. Para abrirlo a jefatura, cambiar también motor-*.php. */}
-        {profesor.rol === 'admin' && (
+        {gestionaDepartamento && (
           <section className="home-seccion">
             <h2>Malla</h2>
             <div className="opciones-grid">
-              <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
-                <strong>Datos para el motor</strong>
+              {/* Solo admin por ahora (D43): baja los datos para el motor y sube su
+                  resultado. Para abrirlo a jefatura, cambiar también motor-*.php. */}
+              {profesor.rol === 'admin' && (
+                <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
+                  <strong>Datos para el motor</strong>
+                  <span>
+                    Descargar los datos del semestre para correr el motor de asignación, y subir su
+                    resultado para crear los grupos.
+                  </span>
+                </button>
+              )}
+
+              <button className="opcion-card opcion-activa" onClick={onAbrirMalla}>
+                <strong>Malla horaria</strong>
                 <span>
-                  Descargar los datos del semestre para correr el motor de asignación, y subir su
-                  resultado para crear los grupos.
+                  Los grupos de {etiquetaSemestre(semestre)} {veTodos ? 'de cada departamento' : 'de tu departamento'} por
+                  día, hora, profesor y salón, con los choques y avisos que hay que resolver.
                 </span>
               </button>
             </div>
