@@ -17,6 +17,7 @@ archivos son material nuevo y se editan aquí.
 5. datos-matematicas-mysql.sql
 6. datos-matematicas-cuestionario-mysql.sql
 7. datos-estadistica-mysql.sql, datos-estadistica-co-oferta-mysql.sql
+8. datos-planes-estudio-mysql.sql  <- al final: solo cubre las materias que ya existen
 ```
 
 No hay paso de profesores: desde el 2026-10-02 **cada profesor crea su propia cuenta** en "Crear
@@ -101,6 +102,10 @@ migracion-2026-10-19-profesor-sin-cuenta.sql   profesor.cu y password_hash acept
                                                publicados de un departamento que no usa el
                                                sistema. No toca el API. ANTES de
                                                datos-actuaria-primavera-2027-mysql.sql.
+migracion-2026-10-21-plan-estudio-clave.sql    plan_estudio.clave (UNIQUE, ej. 'ACT-H'): la carga
+                                               de planes de Oracle los resuelve por clave. No toca
+                                               el API. ANTES de datos-planes-estudio-mysql.sql.
+                                               Una sola vez.
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por
@@ -147,7 +152,38 @@ datos-actuaria-primavera-2027-mysql.sql
                                  de co-oferta (uno con MAT-22600), 13 profesores sin cuenta y 23
                                  grupos publicados sin salón. DESPUÉS de la migración del
                                  2026-10-19. Una sola vez: repetida, falla y no cambia nada.
+datos-planes-estudio-mysql.sql   el semestre de cada materia en cada plan de estudios
+                                 (plan_estudio + plan_estudio_materia), de los planes de Oracle.
+                                 GENERADO por generar-planes-estudio.py (ver abajo). DESPUÉS de
+                                 la migración del 2026-10-21 y de todos los datos-* de materias.
+                                 No da de alta materias. Idempotente: repetido corrige
+                                 semestres y vigencia sin duplicar.
+generar-planes-estudio.py        genera el archivo anterior. No se sube al servidor.
 ```
+
+### Los planes de estudio: el único archivo de datos generado por script
+
+`datos-planes-estudio-mysql.sql` es el único archivo de datos que no se escribe a mano. Son unas
+2,700 filas (cada carrera × versión de plan × materia MAT/EST/ACT), y el original no está en
+este repo: es `DACC/MATERIAS/WEB/planesOracle.csv`, el export de Oracle que usa el proyecto de
+DACC. Si cambian los planes, se regenera, no se edita:
+
+```
+py -I generar-planes-estudio.py <DACC>/MATERIAS/WEB/planesOracle.csv <DACC>/MATERIAS/herramientas/datos/carreras.csv
+```
+
+- Un plan es carrera + versión (`plan_estudio.clave` = `'ACT-H'`). Se cargan **todas** las
+  versiones, porque los alumnos de semestres altos siguen en planes viejos, que usan claves que se
+  siguen dando (MAT-14100, MAT-22600, ACT-15352...). `activo = 1` marca la más nueva de cada
+  carrera (la letra más alta).
+- **No da de alta materias.** El SQL cruza cada fila con `materia` por clave y descarta la que no
+  está. Una materia que se dé de alta después recibe su semestre volviendo a correr el archivo.
+- Usa tablas temporales con `INSERT ... VALUES (...), (...)` de varias filas, que 5.5 sí tiene (lo
+  que le falta es el `VALUES` como tabla dentro de un `FROM`). Cada consulta lee cada tabla
+  temporal a lo más una vez: MySQL no deja reabrir una tabla temporal en la misma consulta.
+- Los PDFs nuevos de `DACE/Planes de estudio/` (Actuaría, Matemáticas Aplicadas) son ACT-H y
+  M.A-F, y coinciden con el export materia por materia. Sus tarjetas "Optativa" no tienen clave y
+  no se cargan.
 
 ### Los datos reales
 

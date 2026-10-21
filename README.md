@@ -115,13 +115,15 @@ Estadística (materias y co-oferta); cada profesor crea su propia cuenta. Lo que
   y contrato: se contesta y se valida como el real, pero no se guarda nada.
 - **Datos para el motor** (solo admin, 2026-10-13): descargar el paquete del semestre para el
   motor de asignación (un departamento o los tres, con o sin salones) y subir su resultado, que se
-  revisa contra las reglas y, si no tiene errores, crea los grupos sin publicar. El contrato (JSON de
+  revisa contra las reglas y, si no tiene errores, crea los grupos sin publicar. Desde el 2026-10-21
+  el paquete trae el semestre de cada materia en cada plan de estudios (`planes`, con `clave` y
+  `vigente`), y el resumen de la descarga dice cuántas materias lo tienen. El contrato (JSON de
   ida y vuelta) está en `docs/convencion-datos-motor.md` del repo del servicio social
-  (`malla-horarios`), donde también viven el motor v0 (`optV0/`) y el diagrama del flujo completo
-  (`docs/flujo-del-sistema.md`).
+  (`malla-horarios`), donde también viven el motor (`optV1/`; `optV0/` es el original) y el diagrama
+  del flujo completo (`docs/flujo-del-sistema.md`).
 
 Pendiente: la vista de malla (revisar, editar y publicar lo que dejó el motor), cargar los salones del
-semestre, y actualizar optV0 a la versión 2 de la convención. También las cartas de asignación, y
+semestre, y probar optV1 de punta a punta con una descarga real. También las cartas de asignación, y
 cargar Actuaría. `backend/` es el backend anterior (Supabase), ya reemplazado por `api/`.
 
 ## Cómo contribuir

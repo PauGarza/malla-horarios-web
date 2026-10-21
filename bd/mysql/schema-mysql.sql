@@ -91,8 +91,11 @@ CREATE TABLE profesor (
 
 CREATE TABLE plan_estudio (
     id     INT AUTO_INCREMENT PRIMARY KEY,
+    clave  VARCHAR(10)  NULL
+           COMMENT 'Carrera-version de Oracle, ej. ACT-H, M.A-F. Ver datos-planes-estudio-mysql.sql.',
     nombre VARCHAR(255) NOT NULL,
-    activo TINYINT(1)   NOT NULL DEFAULT 1
+    activo TINYINT(1)   NOT NULL DEFAULT 1,
+    UNIQUE KEY uq_plan_estudio_clave (clave)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Puede ser un plan conjunto entre departamentos (ver plan_estudio_departamento).';
 
