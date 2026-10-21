@@ -279,3 +279,15 @@ export const aplicarSalidaMotor = (token, salida, confirmarDesfase) =>
 
 export const leerCorridasMotor = (token, semestreId) =>
   pedir(`motor-salida.php?semestre_id=${semestreId}`, token);
+
+// --- Vista de malla (jefatura) -----------------------------------------------
+
+/**
+ * { entrada, grupos, corrida } de api/malla.php. `departamentos` solo cuenta
+ * para quien ve todos los departamentos; a los demás el servidor les da el suyo.
+ */
+export const leerMalla = (token, semestreId, departamentos) =>
+  pedir(
+    `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
+    token,
+  );

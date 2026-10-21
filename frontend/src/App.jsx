@@ -15,6 +15,7 @@ import PerfilUsuario from './pages/PerfilUsuario';
 import CargaDemanda from './pages/CargaDemanda';
 import Semestres from './pages/Semestres';
 import MotorAsignacion from './pages/MotorAsignacion';
+import MallaHorarios from './pages/MallaHorarios';
 import RestablecerPasswordPage from './pages/RestablecerPasswordPage';
 import CapturarCorreoPage from './pages/CapturarCorreoPage';
 import BarraSuperior from './components/BarraSuperior';
@@ -167,6 +168,9 @@ function Vista({ vista, setVista }) {
   if (vista.nombre === 'motor') {
     return <MotorAsignacion onVolver={() => setVista({ nombre: 'home' })} />;
   }
+  if (vista.nombre === 'malla') {
+    return <MallaHorarios onVolver={() => setVista({ nombre: 'home' })} />;
+  }
   return (
     <HomePage
       onAbrirFormulario={() => setVista({ nombre: 'formulario' })}
@@ -181,6 +185,7 @@ function Vista({ vista, setVista }) {
       onAbrirCargaDemanda={() => setVista({ nombre: 'carga-demanda' })}
       onAbrirSemestres={() => setVista({ nombre: 'semestres' })}
       onAbrirMotor={() => setVista({ nombre: 'motor' })}
+      onAbrirMalla={() => setVista({ nombre: 'malla' })}
     />
   );
 }

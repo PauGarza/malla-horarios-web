@@ -1,6 +1,6 @@
 # `api/` — el backend en PHP
 
-Veinte endpoints y siete archivos de librería que corren en
+Veintiún endpoints y siete archivos de librería que corren en
 `https://horariosdace.itam.mx/api/`, contra el MySQL del ITAM
 (`../bd/mysql/`).
 
@@ -93,6 +93,7 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 | `semestres.php` | GET, POST | Ciclo de semestres: listar, abrir el siguiente, reactivar uno (admin y jefa de división) |
 | `motor-entrada.php` | GET | `?semestre_id=&departamentos=1,2,3&salones=0|1` → el paquete `autoplanear-entrada/2` para el motor (convención en `malla-horarios/docs/convencion-datos-motor.md`). Registra la descarga y su huella en `motor_descarga`. `salones=0` manda `salones: []` (modo sin salones, D44). `?recurso=salones` cuenta los salones con disponibilidad. **Solo admin** (D43). Lo arma `lib/motor.php` (2026-10-13) |
 | `motor-salida.php` | GET, POST | `POST ?accion=validar` revisa una `autoplanear-salida/2` contra §5 sin escribir; `?accion=aplicar` `{salida, confirmar_desfase}` revalida y, en una transacción, borra los grupos sin publicar del alcance y crea los nuevos (`grupo` con `crn` NULL, `imparte`, `imparte_profesor`, `imparte_co_oferta`, `imparte_horario`), sin publicar; 422 `salida_invalida`, 409 `desfasada` (cambió algo desde la descarga y no se confirmó), 409 `rechazado_por_la_base`. GET `?semestre_id=` → corridas aplicadas (`motor_corrida`) y grupos por estado. **Solo admin** (D43) |
+| `malla.php` | GET | `?semestre_id=[&departamentos=1,2,3]` → `{entrada, grupos, corrida}` para la vista de malla (2026-10-21). `entrada` es el mismo `autoplanear-entrada/2` de la descarga del motor (con salones si los hay), con los publicados en `grupos_fijos`; `grupos`, los sin publicar del alcance en el formato de un grupo de la salida, con su `grupo_id`; `corrida`, la última de `motor_corrida` que toca el alcance (sin sus avisos: señalan `ref` que no sobreviven a la subida, y la vista los recalcula). Empareja cada asignación directa con el grupo que la cumple, porque la base no lo guarda. Jefatura; `departamentos` solo para quien `ve_todos_los_departamentos()`, los demás reciben el suyo. **Solo lectura** |
 
 Los que aceptan varias operaciones las distinguen con `?recurso=` (`materias.php?recurso=co_oferta`,
 `configuracion.php?recurso=formulario|publicar`, `respuestas.php?recurso=bloqueo|num_cursos`, `reporte.php?recurso=horas`). Los de
