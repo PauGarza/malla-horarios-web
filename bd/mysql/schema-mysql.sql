@@ -80,6 +80,12 @@ CREATE TABLE profesor (
     estado_especial         VARCHAR(255) NULL
                             COMMENT 'Sabatico/licencia/jubilacion. Distinto de activo, que es si la cuenta sirve para entrar.',
     activo                  TINYINT(1) NOT NULL DEFAULT 1,
+    -- 2026-10-23: el "Profesor por asignar" de cada departamento. Es un
+    -- profesor sin cuenta (D45) que marca un grupo sin profesor todavia: lo
+    -- fija la jefatura en Asignaciones directas o lo pone el motor cuando nadie
+    -- puede darlo. Se reconoce por esta columna, nunca por el nombre.
+    por_asignar             TINYINT(1) NOT NULL DEFAULT 0
+                            COMMENT '1 = "Profesor por asignar" de su departamento: no es una persona, marca un grupo sin profesor todavia (2026-10-23).',
     UNIQUE KEY uq_profesor_correo (correo),
     CONSTRAINT fk_profesor_departamento FOREIGN KEY (departamento_id) REFERENCES departamento(id),
     CONSTRAINT chk_profesor_depto CHECK (

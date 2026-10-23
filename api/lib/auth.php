@@ -407,3 +407,20 @@ function departamento_de_materia(int $materiaId): ?int
     $v = $st->fetchColumn();
     return $v === false ? null : (int) $v;
 }
+
+/**
+ * El "Profesor por asignar" de cada departamento (profesor.por_asignar = 1,
+ * 2026-10-23): [departamento_id => profesor_id]. No es una persona: marca un
+ * grupo que todavía no tiene profesor. Ver migracion-2026-10-23-profesor-por-asignar.sql.
+ */
+function profesores_por_asignar(): array
+{
+    static $ids = null;
+    if ($ids === null) {
+        $ids = [];
+        foreach (db()->query('SELECT id, departamento_id FROM profesor WHERE por_asignar = 1 ORDER BY id') as $p) {
+            $ids[(int) $p['departamento_id']] = $ids[(int) $p['departamento_id']] ?? (int) $p['id'];
+        }
+    }
+    return $ids;
+}

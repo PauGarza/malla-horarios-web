@@ -358,8 +358,14 @@ function motor_clases(PDO $pdo, int $semestreId): array
         }
     }
 
+    // "Profesor por asignar" (2026-10-23) no se cuenta: la clase queda sin
+    // profesor, que es lo que significa (§4.2, profesores vacío).
     $profesores = [];
-    $st = $pdo->prepare("SELECT t.imparte_id, t.profesor_id FROM imparte_profesor t $deSemestre ORDER BY t.profesor_id");
+    $st = $pdo->prepare(
+        "SELECT t.imparte_id, t.profesor_id FROM imparte_profesor t
+           JOIN profesor pa ON pa.id = t.profesor_id AND pa.por_asignar = 0
+         $deSemestre ORDER BY t.profesor_id"
+    );
     $st->execute([$semestreId]);
     foreach ($st->fetchAll() as $p) {
         $profesores[(int) $p['imparte_id']][] = (int) $p['profesor_id'];
@@ -883,9 +889,13 @@ function motor_armar_entrada(
     }
 
     // --- asignaciones_fijas (§3.9.3), solo tipo materia ---
+    // Con "Profesor por asignar" (2026-10-23) va profesor_id null: el grupo
+    // se abre sin profesor.
     $st = $pdo->prepare(
-        "SELECT af.id, af.materia_id, af.profesor_id, afh.dia, afh.franja_id
+        "SELECT af.id, af.materia_id, IF(pa.por_asignar = 1, NULL, af.profesor_id) AS profesor_id,
+                afh.dia, afh.franja_id
            FROM asignacion_fija af
+           JOIN profesor pa ON pa.id = af.profesor_id
            LEFT JOIN asignacion_fija_horario afh ON afh.asignacion_fija_id = af.id
           WHERE af.semestre_id = ? AND af.tipo = 'materia' AND af.departamento_id IN ($enDeptos)
           ORDER BY af.id"
@@ -896,7 +906,8 @@ function motor_armar_entrada(
         $id = (int) $f['id'];
         if (!isset($porAsignacion[$id])) {
             $porAsignacion[$id] = [
-                'id' => $id, 'materia_id' => (int) $f['materia_id'], 'profesor_id' => (int) $f['profesor_id'], 'bloques' => [],
+                'id' => $id, 'materia_id' => (int) $f['materia_id'],
+                'profesor_id' => $f['profesor_id'] === null ? null : (int) $f['profesor_id'], 'bloques' => [],
             ];
         }
         if ($f['dia'] !== null) {
@@ -917,6 +928,7 @@ function motor_armar_entrada(
     $st = $pdo->prepare(
         "SELECT CONCAT(s.tipo, '-', s.anio) AS semestre, ip.profesor_id, g.materia_id, COUNT(*) AS grupos
            FROM imparte_profesor ip
+           JOIN profesor pa ON pa.id = ip.profesor_id AND pa.por_asignar = 0
            JOIN imparte i  ON i.id = ip.imparte_id
            JOIN grupo g    ON g.id = i.grupo_id
            JOIN semestre s ON s.id = g.semestre_id
@@ -1136,7 +1148,10 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
     foreach ($ent['salones'] as $s) {
         $salones[$s['id']] = $s;
     }
-    $nombre = function (int $p) use ($profs): string {
+    $nombre = function (?int $p) use ($profs): string {
+        if ($p === null) {
+            return 'Profesor por asignar';
+        }
         return isset($profs[$p]) ? $profs[$p]['nombre'] : "profesor $p";
     };
     $afs = [];
@@ -1515,7 +1530,10 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
         // 9. la asignación que cumple
         if ($afId !== null) {
             $a = $afs[$afId];
-            if (!in_array($a['materia_id'], $mIds, true) || !in_array($a['profesor_id'], $pIds, true)) {
+            // Con "Profesor por asignar" (profesor_id null) cualquiera sirve: sin
+            // profesor, o con el que la jefatura le puso después en la malla.
+            $conSuProfesor = $a['profesor_id'] === null || in_array($a['profesor_id'], $pIds, true);
+            if (!in_array($a['materia_id'], $mIds, true) || !$conSuProfesor) {
                 $err('asignacion_fija', "$etq dice cumplir " . $etqAf($afId) . ' pero no trae esa materia con ese profesor.');
             }
             if ($afConHorario) {
@@ -1533,6 +1551,7 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
         }
         $plan[] = [
             'ref'                => $ref,
+            'departamento_id'    => $depto,
             'materias'           => $materiasPlan,
             'profesores'         => $pIds,
             'bloques'            => array_values($bloques),
@@ -1765,10 +1784,23 @@ function motor_aplicar(PDO $pdo, array $rej, array $ent, array $plan, array $ree
     );
     $insHorario = $pdo->prepare('INSERT INTO imparte_horario (imparte_id, dia, franja_id, salon_id) VALUES (?, ?, ?, ?)');
 
+    // Un grupo sin profesor (§4.2) se guarda con el "Profesor por asignar" de
+    // su departamento (2026-10-23), y sigue 'en_asignacion'.
+    $porAsignar = profesores_por_asignar();
+
     $ahora = ahora_utc();
     $creados = 0;
     foreach ($plan as $c) {
         try {
+            $profesores = $c['profesores'];
+            if ($profesores === []) {
+                if (!isset($porAsignar[$c['departamento_id']])) {
+                    throw new RuntimeException(
+                        "{$c['ref']}: va sin profesor y su departamento no tiene \"Profesor por asignar\" (falta migracion-2026-10-23-profesor-por-asignar.sql)"
+                    );
+                }
+                $profesores = [$porAsignar[$c['departamento_id']]];
+            }
             $completo = $c['profesores'] !== [] && $c['bloques'] !== [];
             foreach ($c['bloques'] as $b) {
                 $completo = $completo && $b[2] !== null;
@@ -1782,7 +1814,7 @@ function motor_aplicar(PDO $pdo, array $rej, array $ent, array $plan, array $ree
                 $insGrupo->execute([$mid, $semestreId, motor_numero_libre($usados, $mid, $mm['numero']), $cupo, $estado]);
                 $insImparte->execute([(int) $pdo->lastInsertId(), $ahora]);
                 $iid = (int) $pdo->lastInsertId();
-                foreach ($c['profesores'] as $p) {
+                foreach ($profesores as $p) {
                     $insProfesor->execute([$iid, $p]);
                 }
                 $impartes[] = [$iid, $mm['porcentaje'] ?? ($k === 0 ? 100.0 : 0.0)];

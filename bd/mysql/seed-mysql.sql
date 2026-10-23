@@ -14,6 +14,15 @@ INSERT INTO departamento (nombre, clave_prefijo) VALUES
     ('Actuaría',    'ACT'),
     ('Estadística', 'EST');
 
+-- "Profesor por asignar" de cada departamento (2026-10-23): no es una persona,
+-- marca un grupo sin profesor todavía. Sin cuenta y fuera de todo roster
+-- (activo = 0, tipo_contrato NULL), como los profesores sin cuenta de D45.
+INSERT INTO profesor
+       (cu, password_hash, nombre, correo, rol, departamento_id, tipo_contrato,
+        password_predeterminada, estado_especial, activo, por_asignar)
+SELECT NULL, NULL, 'Profesor por asignar', NULL, 'profesor', d.id, NULL, 0, NULL, 0, 1
+  FROM departamento d;
+
 -- -----------------------------------------------------------------------------
 -- Franja horaria: Lunes-Viernes 07:00-14:00 y 16:00-20:00, bloques de 30 min.
 -- 22 franjas — igual que malla-horarios/interfaz/mockup-cuestionario.html.

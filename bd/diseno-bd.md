@@ -1253,3 +1253,31 @@ Ya está en `mysql/schema-mysql.sql`; en la base que corre se aplica con
 - **Todavía no lo usa nadie.** El motor recibe `planes` en el paquete (`api/lib/motor.php`), con
   todas las versiones, pero no evita empalmes por semestre (RN01, §10). Cuando se implemente,
   hay que decidir si va solo con los planes `activo` o con todos.
+
+## 20. Cambio del 2026-10-23: "Profesor por asignar"
+
+Ya está en `mysql/schema-mysql.sql`, `mysql/triggers-mysql.sql` y `mysql/seed-mysql.sql`; en la
+base que corre se aplica con `migracion-2026-10-23-profesor-por-asignar.sql`.
+
+- **Qué es.** Un profesor comodín por departamento que no es una persona. Sirve para dos cosas:
+  fijar en Asignaciones directas una materia que todavía no tiene profesor ("este grupo se abre,
+  el profesor se ve después"), y que el motor le ponga horario a un grupo que ningún profesor
+  puede dar en vez de dejarlo fuera de la malla (`sin_asignar`).
+- **Cómo se guarda.** Una fila de `profesor` como las de los profesores sin cuenta (§18): `cu` y
+  `password_hash` NULL, `activo = 0`, `tipo_contrato` NULL, así que ya queda fuera de login,
+  paneles, reportes, respuestas y del paquete del motor. Lo que lo distingue es la columna nueva
+  `profesor.por_asignar = 1`; el código pregunta por ella, nunca por el nombre.
+- **Uno por departamento**, no uno global: Asignaciones directas exige que el profesor sea del
+  departamento de la materia, y "por asignar en Matemáticas" es distinto de "por asignar en
+  Estadística". MariaDB 5.5 no tiene índices parciales para exigir uno solo; lo cuida el `INSERT`
+  de la migración.
+- **No choca consigo mismo.** `sp_validar_imparte_horario` (chequeo 1, traslape de profesor) lo
+  ignora: diez grupos por asignar a la misma hora los van a dar diez personas distintas. Por lo
+  mismo, Asignaciones directas no revisa choques entre sus asignaciones fijas, y no tiene
+  disponibilidad, contrato, número de cursos ni bloqueos. No sirve para maestría (maestría aparta
+  horas de alguien).
+- **Hacia el motor viaja como "sin profesor"**, no como un profesor más (convención, §3.9.3 y
+  §4.2): una asignación fija suya va con `profesor_id: null`, y un grupo de la salida con
+  `profesores: []` se escribe con el "Profesor por asignar" de su departamento y queda
+  `en_asignacion`. Al leer `imparte_profesor` para el motor o la malla (`motor_clases`,
+  `historial`) se descarta, así que un grupo por asignar se ve sin profesor en todos lados.

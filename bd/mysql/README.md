@@ -112,6 +112,15 @@ migracion-2026-10-21b-verdes-jefatura.sql      tabla verde_profesor_materia: la 
                                                correr ANTES de desplegar el API nuevo
                                                (respuestas.php, asignaciones.php y la descarga
                                                del motor la leen; sin ella dan 500).
+migracion-2026-10-23-profesor-por-asignar.sql  profesor.por_asignar y un "Profesor por asignar"
+                                               por departamento (sin cuenta, activo = 0): fija
+                                               materias sin profesor en Asignaciones directas y
+                                               guarda los grupos que el motor deja sin profesor.
+                                               Rehace sp_validar_imparte_horario para que no
+                                               cuente sus traslapes. ADITIVA: correr ANTES de
+                                               desplegar el API nuevo (sin la columna,
+                                               Asignaciones directas, el motor y la malla dan
+                                               500). Una sola vez (ADD COLUMN).
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por

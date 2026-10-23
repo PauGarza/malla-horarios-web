@@ -23,6 +23,8 @@ DELIMITER $$
 -- 2026-10-13 (migracion-2026-10-13d-motor.sql): los chequeos 1 y 2 ignoran
 -- el grupo espejo de la misma clase (imparte_co_oferta), y con salon_id NULL
 -- (modo sin salones, D44) se saltan los de salon.
+-- 2026-10-23 (migracion-2026-10-23-profesor-por-asignar.sql): el chequeo 1
+-- ignora al "Profesor por asignar" (profesor.por_asignar = 1).
 CREATE PROCEDURE sp_validar_imparte_horario(
     IN p_id INT, IN p_imparte_id INT, IN p_dia VARCHAR(10),
     IN p_franja_id INT, IN p_salon_id INT
@@ -56,6 +58,11 @@ BEGIN
        AND g2.semestre_id = v_semestre_id
        AND ip.profesor_id IN (
            SELECT profesor_id FROM imparte_profesor WHERE imparte_id = p_imparte_id
+       )
+       -- "Profesor por asignar" (2026-10-23) no es una persona: puede estar
+       -- en muchos grupos a la misma hora.
+       AND NOT EXISTS (
+           SELECT 1 FROM profesor pa WHERE pa.id = ip.profesor_id AND pa.por_asignar = 1
        )
        AND NOT EXISTS (
            SELECT 1 FROM imparte_co_oferta ico

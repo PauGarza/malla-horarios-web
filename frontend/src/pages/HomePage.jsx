@@ -155,21 +155,20 @@ export default function HomePage({
           </section>
         )}
 
-        {gestionaDepartamento && (
+        {/* Solo admin por ahora: los datos para el motor (D43) y la malla, que los
+            jefes todavía no ven (2026-10-21). Para abrirla a jefatura, cambiar
+            también exigir_rol en api/malla.php; para el motor, en motor-*.php. */}
+        {profesor.rol === 'admin' && (
           <section className="home-seccion">
             <h2>Malla</h2>
             <div className="opciones-grid">
-              {/* Solo admin por ahora (D43): baja los datos para el motor y sube su
-                  resultado. Para abrirlo a jefatura, cambiar también motor-*.php. */}
-              {profesor.rol === 'admin' && (
-                <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
-                  <strong>Datos para el motor</strong>
-                  <span>
-                    Descargar los datos del semestre para correr el motor de asignación, y subir su
-                    resultado para crear los grupos.
-                  </span>
-                </button>
-              )}
+              <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
+                <strong>Datos para el motor</strong>
+                <span>
+                  Descargar los datos del semestre para correr el motor de asignación, y subir su
+                  resultado para crear los grupos.
+                </span>
+              </button>
 
               <button className="opcion-card opcion-activa" onClick={onAbrirMalla}>
                 <strong>Malla horaria</strong>
