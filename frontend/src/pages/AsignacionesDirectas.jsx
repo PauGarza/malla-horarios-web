@@ -27,6 +27,12 @@ import SelectorDepartamento from '../components/SelectorDepartamento';
 // (el algoritmo no le pone nada ahí, como si fueran rojo) y NO cuenta como
 // curso: quien pidió 1 curso y tiene una de maestría todavía recibe 1. Su
 // horario es obligatorio y no depende de créditos.
+//
+// "Profesor por asignar" (2026-10-23): el primero de la lista de profesores
+// (por_asignar = true). Fija una materia que todavía no tiene profesor: el
+// algoritmo abre ese grupo (en esas horas, si se fijan) y lo deja sin profesor.
+// No es una persona: no tiene disponibilidad, cursos ni contrato que avisar, y
+// sus asignaciones no chocan entre sí. No sirve para maestría.
 
 const GRUPOS_PROFESOR = [
   { nivel: 'verde', etiqueta: 'En verde (lo marcó o lo puso la jefatura)' },
@@ -83,6 +89,13 @@ function avisosDe({ materia, profesor, horario, otras, nivelMateria, materiasPor
   // es curso ni grupo del departamento.
   if (materia === MATERIA_MAESTRIA) return avisos;
 
+  const grupos = otras.filter((a) => a.materia_id === materia.id).length + 1;
+  const avisoGrupos =
+    materia.grupos_sugeridos !== null && grupos > materia.grupos_sugeridos
+      ? { grave: false, texto: `Son ${grupos} grupos fijados de esta materia y la demanda sugiere ${materia.grupos_sugeridos}.` }
+      : null;
+  if (profesor.por_asignar) return avisoGrupos ? [avisoGrupos] : avisos;
+
   if (nivelMateria === 'rojo') avisos.push({ grave: true, texto: 'Marcó esta materia en rojo.' });
 
   const enRojo = horario.filter(([, , n]) => n === 'rojo').length;
@@ -117,13 +130,7 @@ function avisosDe({ materia, profesor, horario, otras, nivelMateria, materiasPor
     }
   }
 
-  const grupos = otras.filter((a) => a.materia_id === materia.id).length + 1;
-  if (materia.grupos_sugeridos !== null && grupos > materia.grupos_sugeridos) {
-    avisos.push({
-      grave: false,
-      texto: `Son ${grupos} grupos fijados de esta materia y la demanda sugiere ${materia.grupos_sugeridos}.`,
-    });
-  }
+  if (avisoGrupos) avisos.push(avisoGrupos);
   return avisos;
 }
 
@@ -265,6 +272,11 @@ export default function AsignacionesDirectas({ onVolver }) {
   // (al abrir la rejilla con él elegido) y se guarda para el resto de la visita.
   function asegurarDisponibilidad(profesorId) {
     if (!profesorId || disponibilidades[profesorId] !== undefined) return;
+    if (profesoresPorId.get(profesorId)?.por_asignar) {
+      // No es una persona: no hay disponibilidad que pedir.
+      setDisponibilidades((prev) => ({ ...prev, [profesorId]: {} }));
+      return;
+    }
     setDisponibilidades((prev) => ({ ...prev, [profesorId]: 'cargando' }));
     leerDisponibilidadProfesor(token, semestre.id, departamentoId, profesorId)
       .then((r) =>
@@ -302,17 +314,19 @@ export default function AsignacionesDirectas({ onVolver }) {
     [datos, editor?.id],
   );
 
-  // Horas que el profesor elegido ya tiene en OTRAS asignaciones fijas.
+  // Horas que el profesor elegido ya tiene en OTRAS asignaciones fijas. Las de
+  // "Profesor por asignar" no chocan: cada grupo lo dará alguien distinto.
+  const porAsignarEditor = Boolean(profesorEditorObj?.por_asignar);
   const ocupadasEditor = useMemo(() => {
     const m = new Map();
-    if (profesorEditor === null) return m;
+    if (profesorEditor === null || porAsignarEditor) return m;
     for (const a of otrasQueLaEditada) {
       if (a.profesor_id !== profesorEditor) continue;
       const nombre = nombreMateria(a, materiasPorId);
       for (const [dia, franjaId] of a.horario) m.set(claveDisponibilidad(dia, franjaId), nombre);
     }
     return m;
-  }, [otrasQueLaEditada, profesorEditor, materiasPorId]);
+  }, [otrasQueLaEditada, profesorEditor, porAsignarEditor, materiasPorId]);
 
   const horarioEditor = useMemo(() => {
     if (!conHorarioEditor) return [];
@@ -359,6 +373,8 @@ export default function AsignacionesDirectas({ onVolver }) {
       ? 'Elige la materia.'
       : !profesorEditorObj
         ? 'Elige al profesor.'
+        : esMaestriaEditor && porAsignarEditor
+          ? 'Una materia de maestría aparta horas de un profesor: elige a uno.'
         : esMaestriaEditor && editor.horario.size === 0
           ? 'Elige las horas de la materia de maestría: es lo que se le aparta.'
           : !esMaestriaEditor && editor.conHorario && editor.horario.size !== materiaEditor.creditos
@@ -476,7 +492,8 @@ export default function AsignacionesDirectas({ onVolver }) {
       <p className="formulario-nota">
         Fija aquí lo que ya está decidido antes de correr el algoritmo. Cada asignación es <strong>un grupo</strong>:
         el algoritmo le dará esa materia a ese profesor y, si fijas el horario, en esas horas exactas. El salón y
-        el resto de los grupos los decide él. Los profesores no ven esta pantalla.
+        el resto de los grupos los decide él. Si la materia todavía no tiene profesor, fíjala con{' '}
+        <strong>Profesor por asignar</strong>: el grupo se abre sin profesor. Los profesores no ven esta pantalla.
       </p>
 
       {error && <p className="formulario-error">{error}</p>}
@@ -514,8 +531,15 @@ export default function AsignacionesDirectas({ onVolver }) {
                 onChange={(e) => cambiarEditor({ profesorId: e.target.value })}
               >
                 <option value="">Elige un profesor…</option>
+                {candidatos
+                  .filter((p) => p.por_asignar)
+                  .map((p) => (
+                    <option key={p.id} value={p.id} disabled={esMaestriaEditor}>
+                      {p.nombre} (el grupo se abre sin profesor){p.fijadas > 0 ? ` · ${p.fijadas} ya fijada${p.fijadas === 1 ? '' : 's'}` : ''}
+                    </option>
+                  ))}
                 {GRUPOS_PROFESOR.map((g) => {
-                  const lista = candidatos.filter((p) => !p.bloqueado && p.nivel === g.nivel);
+                  const lista = candidatos.filter((p) => !p.por_asignar && !p.bloqueado && p.nivel === g.nivel);
                   if (lista.length === 0) return null;
                   return (
                     <optgroup key={g.nivel ?? 'sin'} label={editor.materiaId && !esMaestriaEditor ? g.etiqueta : 'Profesores'}>
@@ -563,6 +587,38 @@ export default function AsignacionesDirectas({ onVolver }) {
           {conHorarioEditor &&
             (!profesorEditorObj ? (
               <p className="formulario-nota">Elige al profesor para ver su disponibilidad.</p>
+            ) : porAsignarEditor ? (
+              <div className="asig-horario">
+                <div className="asig-horario-barra">
+                  <span className={faltaParaGuardar && materiaEditor ? 'nota-falta' : 'nota-ok'}>
+                    {editor.horario.size}
+                    {materiaEditor?.creditos ? ` de ${materiaEditor.creditos}` : ''} medias horas elegidas
+                  </span>
+                  {editor.horario.size > 0 && (
+                    <button type="button" className="btn-link" onClick={() => cambiarEditor({ horario: new Set() })}>
+                      Limpiar
+                    </button>
+                  )}
+                  {editor.horario.size > 0 && (
+                    <span className="formulario-nota">
+                      {resumenHorario(
+                        horarioEditor.map(([d, f]) => [d, f]),
+                        franjasPorId,
+                      )}
+                    </span>
+                  )}
+                </div>
+                <p className="formulario-nota">
+                  Sin profesor todavía no hay disponibilidad que cuidar: elige las horas del grupo.
+                </p>
+                <RejillaHorarioFijo
+                  franjas={franjasDepto}
+                  seleccion={editor.horario}
+                  niveles={null}
+                  ocupadas={ocupadasEditor}
+                  onAlternar={alternarBloque}
+                />
+              </div>
             ) : dispEditor === 'cargando' || dispEditor === undefined ? (
               <p className="formulario-nota">Cargando su disponibilidad…</p>
             ) : (
@@ -687,7 +743,9 @@ export default function AsignacionesDirectas({ onVolver }) {
                         {/* Un profesor dado de baja después de fijarlo ya no está en el roster. */}
                         {p ? p.nombre : 'Profesor inactivo'}
                         {p && (
-                          <span className="respuestas-sub">{TIPO_CONTRATO_LABELS[p.tipo_contrato] ?? p.tipo_contrato}</span>
+                          <span className="respuestas-sub">
+                            {p.por_asignar ? 'sin profesor todavía' : (TIPO_CONTRATO_LABELS[p.tipo_contrato] ?? p.tipo_contrato)}
+                          </span>
                         )}
                       </td>
                       <td>

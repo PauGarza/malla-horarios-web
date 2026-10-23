@@ -22,6 +22,14 @@
 // curso ni como grupo. Por eso su horario es obligatorio y no se ata a
 // créditos, y no le aplican los bloqueos. Qué materia es va, si acaso, en nota.
 //
+// "Profesor por asignar" (2026-10-23): el primero de profesores[], con
+// por_asignar = true. Fijar una materia con él dice "este grupo se abre y el
+// profesor se ve después": el motor le respeta la materia y, si lo trae, el
+// horario, y la deja sin profesor. No es una persona, así que no tiene
+// disponibilidad, contrato ni bloqueos, y dos asignaciones suyas a la misma
+// hora no chocan. Con tipo = 'maestria' no aplica: maestría aparta horas de
+// alguien.
+//
 // Se rechaza (400/409) lo que el motor no podría cumplir nunca:
 //   - materia o profesor de otro departamento, o profesor inactivo/sin contrato;
 //   - un par profesor-materia bloqueado por la jefatura (hay que desbloquearlo
@@ -151,7 +159,7 @@ function validar_asignacion(PDO $pdo, int $semestreId, int $deptoId, array $body
         }
     }
 
-    $st = $pdo->prepare('SELECT nombre, departamento_id, tipo_contrato, activo FROM profesor WHERE id = ?');
+    $st = $pdo->prepare('SELECT nombre, departamento_id, tipo_contrato, activo, por_asignar FROM profesor WHERE id = ?');
     $st->execute([(int) $profesorId]);
     $profesor = $st->fetch();
     if (!$profesor) {
@@ -160,7 +168,11 @@ function validar_asignacion(PDO $pdo, int $semestreId, int $deptoId, array $body
     if ($profesor['departamento_id'] === null || (int) $profesor['departamento_id'] !== $deptoId) {
         error_json('Ese profesor no es de este departamento', 403);
     }
-    if ($profesor['tipo_contrato'] === null || (int) $profesor['activo'] !== 1) {
+    $porAsignar = (int) $profesor['por_asignar'] === 1;
+    if ($porAsignar && $esMaestria) {
+        error_json('Una materia de maestría aparta horas de un profesor: no puede ir con "Profesor por asignar"', 400);
+    }
+    if (!$porAsignar && ($profesor['tipo_contrato'] === null || (int) $profesor['activo'] !== 1)) {
         error_json('Ese profesor no está activo o no tiene tipo de contrato', 400);
     }
 
@@ -168,7 +180,7 @@ function validar_asignacion(PDO $pdo, int $semestreId, int $deptoId, array $body
     $st = $pdo->prepare(
         'SELECT 1 FROM bloqueo_profesor_materia WHERE profesor_id = ? AND materia_id = ? AND semestre_id = ?'
     );
-    if (!$esMaestria && $st->execute([(int) $profesorId, (int) $materiaId, $semestreId]) && $st->fetchColumn()) {
+    if (!$esMaestria && !$porAsignar && $st->execute([(int) $profesorId, (int) $materiaId, $semestreId]) && $st->fetchColumn()) {
         error_json(
             "{$materia['nombre']} está bloqueada para {$profesor['nombre']}. Desbloquéala primero en Respuestas y bloqueos.",
             409,
@@ -221,7 +233,8 @@ function validar_asignacion(PDO $pdo, int $semestreId, int $deptoId, array $body
         }
 
         // Choques con otras asignaciones fijas del mismo profesor, en
-        // cualquier departamento (un profesor no se parte en dos).
+        // cualquier departamento (un profesor no se parte en dos). "Profesor
+        // por asignar" no es uno solo: sus asignaciones no chocan entre sí.
         $st = $pdo->prepare(
             'SELECT afh.dia, afh.franja_id, COALESCE(m.nombre, \'una materia de maestría\') AS nombre
                FROM asignacion_fija af
@@ -231,7 +244,7 @@ function validar_asignacion(PDO $pdo, int $semestreId, int $deptoId, array $body
         );
         $st->execute([(int) $profesorId, $semestreId, $excluirId === null ? 0 : $excluirId]);
         $ocupado = [];
-        foreach ($st->fetchAll() as $o) {
+        foreach ($porAsignar ? [] : $st->fetchAll() as $o) {
             $ocupado[$o['dia'] . '|' . (int) $o['franja_id']] = $o['nombre'];
         }
         foreach ($horario as [$dia, $franjaId]) {
@@ -394,7 +407,21 @@ foreach ($st->fetchAll() as $m) {
 }
 
 // Mismo roster que panel.php y respuestas.php, con el número de cursos que
-// cuenta (el ajuste de jefatura encima del suyo).
+// cuenta (el ajuste de jefatura encima del suyo). Primero, "Profesor por
+// asignar" del departamento, que no está en ese roster (activo = 0).
+$profesores = [];
+$idPorAsignar = profesores_por_asignar()[$deptoId] ?? null;
+if ($idPorAsignar !== null) {
+    $profesores[] = [
+        'id'               => $idPorAsignar,
+        'nombre'           => 'Profesor por asignar',
+        'tipo_contrato'    => null,
+        'estado'           => null,
+        'num_cursos'       => null,
+        'cursos_ajustados' => false,
+        'por_asignar'      => true,
+    ];
+}
 $st = $pdo->prepare(
     'SELECT p.id, p.nombre, p.tipo_contrato, pref.estado, pref.num_cursos_max,
             anc.num_cursos AS ajuste_num_cursos
@@ -405,7 +432,6 @@ $st = $pdo->prepare(
       ORDER BY p.nombre'
 );
 $st->execute([$semestreId, $semestreId, $deptoId]);
-$profesores = [];
 foreach ($st->fetchAll() as $p) {
     $profesores[] = [
         'id'            => (int) $p['id'],
@@ -416,6 +442,7 @@ foreach ($st->fetchAll() as $p) {
             ? (int) $p['ajuste_num_cursos']
             : ($p['num_cursos_max'] === null ? null : (int) $p['num_cursos_max']),
         'cursos_ajustados' => $p['ajuste_num_cursos'] !== null,
+        'por_asignar'      => false,
     ];
 }
 

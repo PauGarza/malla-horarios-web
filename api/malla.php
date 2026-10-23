@@ -26,9 +26,10 @@
 //   - Los avisos del motor: señalan grupos por su `ref` de la salida, que no
 //     sobrevive a la subida. No se mandan; la vista los recalcula.
 //
-// Autorización: jefatura (ROLES_GESTION). Quien ve_todos_los_departamentos()
-// elige el alcance con ?departamentos=; los demás ven solo el suyo. Solo
-// lectura: mover grupos y publicar llegan después.
+// Autorización: solo admin por ahora; los jefes todavía no ven la malla
+// (2026-10-21). Abrirla a jefatura es cambiar exigir_rol a ROLES_GESTION: quien
+// ve_todos_los_departamentos() elige el alcance con ?departamentos=, los demás
+// ven solo el suyo. Solo lectura: mover grupos y publicar llegan después.
 // =============================================================================
 
 declare(strict_types=1);
@@ -39,7 +40,7 @@ require_once __DIR__ . '/lib/semestre.php';
 require_once __DIR__ . '/lib/motor.php';
 
 exigir_metodo('GET');
-exigir_rol(...ROLES_GESTION);
+exigir_rol('admin');
 
 $pdo        = db();
 $semestreId = param_id('semestre_id');
@@ -102,7 +103,9 @@ try {
 
     // --- qué grupo cumple cada asignación directa ---
     // Primero los que están en el horario fijado; después cualquiera con la
-    // materia y el profesor. Un grupo cumple a lo más una asignación.
+    // materia y el profesor. Un grupo cumple a lo más una asignación. Una con
+    // "Profesor por asignar" (profesor_id null) busca primero un grupo sin
+    // profesor y, al final, uno al que la jefatura ya le puso profesor.
     $lugares = [];
     foreach ($grupos as $k => $g) {
         $lugares[] = ['lista' => 'grupos', 'k' => $k, 'g' => $g];
@@ -111,15 +114,18 @@ try {
         $lugares[] = ['lista' => 'grupos_fijos', 'k' => $k, 'g' => $g];
     }
     $usado = [];
-    foreach ([true, false] as $exigirHorario) {
+    foreach ([[true, true], [false, true], [true, false], [false, false]] as list($exigirHorario, $sinProfesor)) {
         foreach ($entrada['asignaciones_fijas'] as $a) {
             if (isset($usado['a' . $a['id']])) {
                 continue;
             }
             foreach ($lugares as $i => $l) {
                 $g = $l['g'];
+                $conSuProfesor = $a['profesor_id'] === null
+                    ? (!$sinProfesor || $g['profesores'] === [])
+                    : in_array($a['profesor_id'], $g['profesores'], true);
                 if (isset($usado[$i])
-                    || !in_array($a['profesor_id'], $g['profesores'], true)
+                    || !$conSuProfesor
                     || !in_array($a['materia_id'], array_column($g['materias'], 'materia_id'), true)) {
                     continue;
                 }

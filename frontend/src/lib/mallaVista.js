@@ -412,7 +412,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
       // 9. asignación directa: su materia, su profesor y, si los fijó, sus horarios
       if (a) {
         const por = [];
-        if (!g.profs.includes(a.pid)) por.push('no lo da ' + pName(a.pid));
+        // con «Profesor por asignar» (pid null) cualquiera sirve: sin profesor, o el que ya le pusieron
+        if (a.pid != null && !g.profs.includes(a.pid)) por.push('no lo da ' + pName(a.pid));
         if (!g.items.some((i) => i.mid === a.mid)) por.push('no trae ' + ((M.mats[a.mid] || {}).clave || a.mid));
         if (a.conHorario && (a.cells.size !== cs.size || [...a.cells].some((c) => !cs.has(c)))) por.push('no está en ' + (cellsTxt([...a.cells]) || 'el horario fijado'));
         if (por.length) add('fija', 'hard', [g.id], [...a.cells], { fija: a.id, por });
@@ -899,7 +900,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
       <h2>${esc(gName(g))}</h2>
       <div class="sub">${g.items.length > 1 ? 'Grupo espejo: ' + esc(gNames(g)) + ' · ' : ''}${m.cr ?? '–'} créditos · ${esc((M.deptos[dep] || {}).nombre || '')}${g.cupo != null ? ' · cupo ' + g.cupo : ''}</div>
       ${g.locked ? `<div class="tag lock">🔒 Publicado: ya no lo mueve el motor ni esta vista</div>` : ''}
-      ${a ? `<div class="tag af">◆ Asignación directa de la jefatura: ${esc(pName(a.pid))}${a.conHorario ? ', con horario fijado' : ', el horario lo eligió el motor'}</div>` : ''}`;
+      ${a ? `<div class="tag af">◆ Asignación directa de la jefatura: ${a.pid == null ? 'Profesor por asignar' : esc(pName(a.pid))}${a.conHorario ? ', con horario fijado' : ', el horario lo eligió el motor'}</div>` : ''}`;
     const sched = `<div class="field"><label>Horario</label><div class="sched">${g.sessions.length ? g.sessions.map((s) => `<div><span>${DN(s.d)}</span><b>${range(s.s, s.len)}</b></div>`).join('') : '<div><span>Sin horario</span></div>'}</div></div>`;
     if (g.locked) return `<div class="det">${head}<div class="field"><label>Profesor</label><div>${esc(gProfFull(g))}</div></div>${ROOMS.length ? `<div class="field"><label>Salón</label><div>${esc(rName(g.roomId))}</div></div>` : ''}${sched}</div>`;
     const pid = g.profs[0];
