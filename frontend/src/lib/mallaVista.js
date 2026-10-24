@@ -15,9 +15,10 @@
 // malla-horarios/docs/convencion-datos-motor.md, igual que optv1/validar.py:
 // rojo = la subida lo rechazaría; ámbar = aviso.
 //
-// Hoy es de solo lectura (opciones.editable = false): se puede filtrar, ver los
-// choques y la disponibilidad, pero no mover. El arrastre ya está escrito y
-// queda apagado hasta que existan los endpoints para guardar.
+// Lo único que se guarda hoy es el profesor de un grupo, desde su tarjeta
+// (opciones.onProfesor, el POST de api/malla.php). El arrastre ya está escrito
+// y queda apagado (opciones.editable = false) hasta que existan los endpoints
+// para guardar horario y salón.
 
 const DIA_TXT = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado' };
 const DIA_CORTO = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb' };
@@ -89,7 +90,9 @@ const ESQUELETO = `
  * Pinta la malla dentro de `raiz` y devuelve { destruir }.
  *
  * opciones:
- *   editable   false por ahora (solo lectura)
+ *   editable   false por ahora: el arrastre no guarda
+ *   onProfesor (grupoId, profesorId | null) => Promise<{ profesores }>: cambiar
+ *              el profesor desde la tarjeta; sin ella, la tarjeta solo informa
  *   onVolver   el botón "← Inicio"
  *   alcances   [{ valor, etiqueta }] para el selector de departamento (admin), o null
  *   alcance    el valor elegido
@@ -97,9 +100,12 @@ const ESQUELETO = `
  */
 export function montarMalla(raiz, datos, opciones = {}) {
   const ED = Boolean(opciones.editable);
+  const EDP = typeof opciones.onProfesor === 'function';
   raiz.innerHTML = ESQUELETO;
   const $m = (k) => raiz.querySelector(`[data-m="${k}"]`);
   const limpiezas = [];
+  let vivo = true; // para lo que llega del servidor después de destruir()
+  limpiezas.push(() => { vivo = false; });
   const escuchar = (blanco, ev, fn, o) => {
     blanco.addEventListener(ev, fn, o);
     limpiezas.push(() => blanco.removeEventListener(ev, fn, o));
@@ -530,7 +536,11 @@ export function montarMalla(raiz, datos, opciones = {}) {
   const wrap = $m('gridwrap');
   const GUT = 58, TOP = 10;
   const geo = { row: 26, gap: 22, colW: 100, cols: [], gb: [] };
-  const oneProf = () => (ui.profs.size === 1 ? +[...ui.profs][0] : null);
+  // «Sin profesor» en el filtro de profesores: los grupos sin publicar que no tienen ninguno.
+  // Un publicado sin profesores es la programación de otro departamento, no uno por asignar.
+  const SIN = '-';
+  const sinProf = (g) => !g.locked && !g.profs.length;
+  const oneProf = () => { const v = ui.profs.size === 1 ? [...ui.profs][0] : null; return v == null || v === SIN ? null : +v; };
   const yOf = (s) => TOP + s * geo.row + geo.gb[s] * geo.gap;
   const yEnd = (s, len) => yOf(s + len - 1) + geo.row;
   const totalH = () => yEnd(NS() - 1, 1) + 6;
@@ -556,7 +566,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
         return { key: 'p' + id, profId: id, title: P[id].short, full: titleCase(P[id].nombre), over,
           sub: `${c.cursos}${c.max != null ? '/' + c.max : ''} curso${c.cursos === 1 && c.max == null ? '' : 's'} · ${horas(c.bl)} h` };
       });
-      if (!ui.profs.size && groups.some((g) => !g.locked && !g.profs.length && g.sessions.some((se) => se.d === ui.day))) cols.push({ key: 'p-', profId: null, title: 'Sin profesor', sub: 'por asignar', nosalon: true });
+      if ((!ui.profs.size || ui.profs.has(SIN)) && groups.some((g) => sinProf(g) && g.sessions.some((se) => se.d === ui.day))) cols.push({ key: 'p-', profId: null, title: 'Sin profesor', sub: 'por asignar', nosalon: true });
       return cols;
     }
     return M.dias.map((d, i) => ({ key: 'd' + i, day: i, title: DN(i), sub: '' }));
@@ -639,7 +649,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
   const cohMats = () => { const s = new Set(); for (const k of ui.cohs) { const c = M.cohortes.find((x) => x.key === k); if (c) c.mids.forEach((m) => s.add(m)); } return s; };
   const matches = (g) => {
     if (!depOk(g)) return false;
-    if (ui.profs.size && !g.profs.some((p) => ui.profs.has(String(p)))) return false;
+    if (ui.profs.size && !g.profs.some((p) => ui.profs.has(String(p))) && !(ui.profs.has(SIN) && sinProf(g))) return false;
     if (ui.rooms.size && !g.sessions.some((se) => ui.rooms.has(String(roomOf(g, se))))) return false;
     if (ui.mats.size && !g.items.some((i) => ui.mats.has(String(i.mid)))) return false;
     if (ui.cohs.size) { const cm = cohMats(); if (!g.items.some((i) => cm.has(i.mid))) return false; }
@@ -712,7 +722,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const perDay = M.dias.map(() => 0);
     for (const c of AN.list) if (c.sev === 'hard') new Set(c.cells.map((x) => Math.floor(x / 100))).forEach((d) => perDay[d]++);
     dp.innerHTML = M.dias.map((d, i) => `<button data-d="${i}" class="${i === ui.day ? 'on' : ''}">${DN(i)}${perDay[i] ? `<span class="badge">${perDay[i]}</span>` : ''}</button>`).join('');
-    const clic = 'Clic en un grupo para ver con qué choca, quién más puede darlo y la disponibilidad de su profesor.';
+    const clic = 'Clic en un grupo para ver con qué choca, quién más puede darlo y la disponibilidad de su profesor' + (EDP ? ', y para cambiarle el profesor.' : '.');
     $m('hint').textContent = {
       salon: (ED ? 'Arrastra un grupo a otro salón u otra hora. ' : '') + clic,
       prof: 'Cada columna es un profesor, con su disponibilidad de fondo (rojo = no puede, amarillo = la evita). ' + (ED ? 'Arrastra un grupo a otra columna para cambiarle el profesor. ' : '') + clic,
@@ -932,8 +942,9 @@ export function montarMalla(raiz, datos, opciones = {}) {
       }
       mini += '</div>';
     }
-    // A una asignación directa no se le sugieren otros profesores: cambiarlo la rompe.
-    const cl = a || !g.sessions.length ? [] : candidatos(g).filter((x) => !x.cur).slice(0, 8);
+    // A una asignación directa no se le sugieren otros profesores: cambiarlo la rompe. Salvo
+    // con «Profesor por asignar»: ahí falta justo eso.
+    const cl = (a && a.pid != null) || !g.sessions.length ? [] : candidatos(g).filter((x) => !x.cur).slice(0, 8);
     return `<div class="det">${head}
       <div class="field"><label>Profesor</label><div>${esc(gProfFull(g))}${t ? ` · ${load.cursos}${load.max != null ? ' de ' + load.max : ''} cursos` : ''}</div></div>
       ${cl.length ? `<div class="field"><label>Pueden darlo a esta hora</label><div class="cands">${cl.map((x) => `<div class="cand"><span>${esc(x.p.short)}</span><small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos${x.amar ? ' · ' + x.amar + ' amarillas' : ''}</small></div>`).join('')}</div><div class="hint" style="margin-top:4px">Sin bloqueo, sin rojo a esa hora, libres y sin pasar su tope.</div></div>` : ''}
@@ -1141,6 +1152,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
       <div class="cd">${g.items.map((i) => esc(i.clave) + (i.numero ? ' · ' + esc(i.numero) : '')).join('  +  ')}</div>
       <h4>${esc(gNames(g))}</h4>
       <div class="meta"><span>Profesor</span><b>${esc(gProfFull(g))}</b><span>Horario</span><b>${sesTxt(g)}</b>${ROOMS.length ? `<span>Salón</span><b>${esc(rName(g.roomId))}${g.roomId != null && R[g.roomId] && R[g.roomId].cap ? ' (cap. ' + R[g.roomId].cap + ')' : ''}</b>` : ''}</div>`;
+    const editaProf = EDP && !g.locked && g.grupoId != null;
+    if (editaProf) h += profEditorHTML(g);
     if (g.locked) h += `<div class="lockn">🔒 Publicado.</div>`;
     if (st.hard.length || st.soft.length) {
       h += `<div class="sec">Choques y avisos</div>`;
@@ -1152,16 +1165,81 @@ export function montarMalla(raiz, datos, opciones = {}) {
       h += `<div class="sec">Salones libres y autorizados en este horario (${free.length})</div>`;
       h += free.length ? `<div class="rooms">${free.map((r) => `<span>${esc(r.name)}<small>${r.cap ? 'cap. ' + r.cap + (g.cupo && r.cap < g.cupo ? ' < cupo' : '') : '&nbsp;'}</small></span>`).join('')}</div>` : `<div class="note">Ningún otro salón está libre y autorizado a esa hora.</div>`;
     }
-    if (!g.locked && g.fijaId == null) {
+    const a = g.fijaId != null ? M.asig[g.fijaId] : null;
+    if (!g.locked && (!a || a.pid == null)) {
       const cl = candidatos(g).filter((x) => !x.cur).slice(0, 6);
       h += `<div class="sec">Otros profesores que pueden darlo a esta hora (${cl.length}${cl.length === 6 ? '+' : ''})</div>`;
-      h += cl.length ? `<div class="rooms">${cl.map((x) => `<span>${esc(x.p.short)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></span>`).join('')}</div>
-        <div class="note">Sin bloqueo, sin rojo a esa hora, libres y sin pasar su tope.</div>` : `<div class="note">Nadie más cumple: sin bloqueo, sin rojo a esa hora y libre.</div>`;
+      h += cl.length ? `<div class="rooms">${cl.map((x) => editaProf
+        ? `<button type="button" data-p="${x.p.id}">${esc(x.p.short)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></button>`
+        : `<span>${esc(x.p.short)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></span>`).join('')}</div>
+        <div class="note">Sin bloqueo, sin rojo a esa hora, libres y sin pasar su tope.${editaProf ? ' Clic en uno para elegirlo arriba.' : ''}</div>` : `<div class="note">Nadie más cumple: sin bloqueo, sin rojo a esa hora y libre.</div>`;
     }
     card.innerHTML = h;
     card.style.display = 'block';
     $m('cardX').onclick = closeCard;
+    if (editaProf) bindProfEditor(g);
     placeCard();
+  }
+
+  // ---------- Cambiar el profesor desde la tarjeta ----------
+  // Primero los que pueden darlo a esa hora (candidatos), luego los demás. Al
+  // elegir, se revisa la malla con ese profesor antes de guardar; lo que la base
+  // rechazaría (otra clase suya a esa hora, un bloqueo) no deja guardar.
+  function profEditorHTML(g) {
+    const cur = g.profs.length ? g.profs[0] : null;
+    const cands = candidatos(g), ok = new Set(cands.map((x) => x.p.id));
+    const resto = Object.values(P).filter((p) => !ok.has(p.id)).sort((a, b) => natural(a.short, b.short));
+    const opt = (id, txt) => `<option value="${id}" ${id === cur ? 'selected' : ''}>${esc(txt)}</option>`;
+    return `<div class="sec">Cambiar profesor</div>
+      <div class="cprof"><select data-m="cardProf">
+        <option value="" ${cur == null ? 'selected' : ''}>Sin profesor</option>
+        ${cands.length ? `<optgroup label="Pueden darlo a esta hora">${cands.map((x) => opt(x.p.id, `${x.p.short} · ${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos`)).join('')}</optgroup>` : ''}
+        ${resto.length ? `<optgroup label="Los demás: chocan, no la marcaron o la evitan">${resto.map((p) => opt(p.id, p.short)).join('')}</optgroup>` : ''}
+      </select><button type="button" class="btn" data-m="cardProfOk" disabled>Guardar</button></div>
+      ${g.profs.length > 1 ? `<div class="note">Hoy lo dan ${esc(g.profs.map(pName).join(' y '))}: al guardar queda solo el que elijas.</div>` : ''}
+      <div data-m="cardProfPrev"></div>`;
+  }
+  function bindProfEditor(g) {
+    const sel = $m('cardProf'), btn = $m('cardProfOk'), prev = $m('cardProfPrev');
+    if (!sel) return;
+    const elegido = () => (sel.value === '' ? null : +sel.value);
+    const revisar = () => {
+      const v = elegido();
+      if (v == null ? !g.profs.length : g.profs.length === 1 && g.profs[0] === v) { btn.disabled = true; prev.innerHTML = ''; placeCard(); return; }
+      const p = { ...g, profs: v == null ? [] : [v] };
+      const gs = groups.map((x) => (x.id === g.id ? p : x));
+      const saveById = byId; byId = Object.fromEntries(gs.map((x) => [x.id, x]));
+      const st = analyze(gs).per.get(p.id) || { hard: [], soft: [] };
+      let h = '';
+      h += st.hard.map((c) => { const o = other(c, p.id) && byId[other(c, p.id)]; return `<div class="ch1"><div class="t">${cfText(c).t}</div>${o ? `Choca con ${gFull(o)} de ${esc(gProf(o))}` : cfText(c).s}</div>`; }).join('');
+      h += st.soft.map((c) => `<div class="ch1 soft"><div class="t">${cfText(c).t}</div>${cfText(c).s}</div>`).join('');
+      byId = saveById;
+      const veta = v != null && st.hard.some((c) => c.p === v && (c.type === 'prof' || c.type === 'ocupado' || c.type === 'bloqueo'));
+      const quien = v == null ? 'Sin profesor' : 'Con ' + esc(pName(v));
+      prev.innerHTML = (h ? `<div class="note" style="margin:6px 0 4px">${quien} quedaría así:</div>${h}` : `<div class="okc" style="margin-top:6px">✓ ${quien} no choca con nada</div>`)
+        + (veta ? `<div class="note">No se puede guardar: un profesor no puede estar en dos grupos a la vez ni dar una materia para la que la jefatura lo bloqueó.</div>` : '');
+      btn.disabled = veta;
+      placeCard();
+    };
+    sel.onchange = revisar;
+    card.querySelectorAll('.rooms button[data-p]').forEach((b) => (b.onclick = () => { sel.value = b.dataset.p; revisar(); sel.focus(); }));
+    btn.onclick = () => {
+      const v = elegido();
+      btn.disabled = true; sel.disabled = true; btn.textContent = 'Guardando…';
+      opciones.onProfesor(g.grupoId, v)
+        .then((r) => {
+          if (!vivo) return;
+          g.profs = (r && r.profesores) || (v == null ? [] : [v]);
+          render();
+          flash([g.id]);
+        })
+        .catch((err) => {
+          if (!vivo || cardId !== g.id) return;
+          btn.disabled = false; sel.disabled = false; btn.textContent = 'Guardar';
+          prev.insertAdjacentHTML('afterbegin', `<div class="ch1"><div class="t">No se guardó</div>${esc(err.message)}</div>`);
+          placeCard();
+        });
+    };
   }
   function placeCard() {
     if (!cardId || card.style.display === 'none') return;
@@ -1219,10 +1297,11 @@ export function montarMalla(raiz, datos, opciones = {}) {
   const nGroups = (f) => groups.filter((g) => g.sessions.length && f(g)).length;
   const gr = (n) => plural(n, 'grupo');
   multiSelect('msDep', 'Departamentos', () => M.alcance.map((id) => ({ id, label: (M.deptos[id] || {}).nombre || id, sub: gr(nGroups((g) => gDep(g) === id)) })), ui.deps, () => M.alcance.length > 1);
-  multiSelect('msProf', 'Profesores', () => Object.values(P)
-    .filter((p) => groups.some((g) => g.profs.includes(p.id)) || (p.pref && p.pref.num_cursos_max))
-    .sort((a, b) => natural(a.short, b.short))
-    .map((p) => { const c = carga(p.id); return { id: p.id, label: p.short, sub: titleCase(p.nombre) + ' · ' + c.cursos + (c.max != null ? ' de ' + c.max : '') + ' cursos' }; }), ui.profs);
+  multiSelect('msProf', 'Profesores', () => [{ id: SIN, label: 'Sin profesor', sub: 'Por asignar · ' + gr(nGroups(sinProf)) },
+    ...Object.values(P)
+      .filter((p) => groups.some((g) => g.profs.includes(p.id)) || (p.pref && p.pref.num_cursos_max))
+      .sort((a, b) => natural(a.short, b.short))
+      .map((p) => { const c = carga(p.id); return { id: p.id, label: p.short, sub: titleCase(p.nombre) + ' · ' + c.cursos + (c.max != null ? ' de ' + c.max : '') + ' cursos' }; })], ui.profs);
   multiSelect('msRoom', 'Salones', () => ROOMS.map((r) => ({ id: r.id, label: 'Salón ' + r.name, sub: (r.cap ? 'cap. ' + r.cap + ' · ' : '') + gr(nGroups((g) => g.sessions.some((se) => roomOf(g, se) === r.id))) })), ui.rooms, () => ROOMS.length > 0);
   multiSelect('msMat', 'Materias', () => {
     const n = new Map();

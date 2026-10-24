@@ -2326,6 +2326,12 @@ select.editor-mini {
 .malla .m-card .rooms span{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 10px;font-size:13px;font-weight:600;line-height:1.15;text-align:left}
 .malla .m-card .rooms span small{display:block;font-weight:400;color:var(--ink3);font-size:11px}
 .malla .m-card .rooms span.cur{border-color:var(--accent);background:var(--accent-soft);cursor:default}
+.malla .m-card .rooms button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;font-weight:600;line-height:1.15;text-align:left;color:var(--ink);cursor:pointer}
+.malla .m-card .rooms button small{display:block;font-weight:400;color:var(--ink3);font-size:11px}
+.malla .m-card .rooms button:hover{border-color:var(--accent);background:var(--accent-soft)}
+.malla .m-card .cprof{display:flex;gap:6px}
+.malla .m-card .cprof select{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;background:var(--panel);color:var(--ink)}
+.malla .m-card .cprof .btn{flex:none}
 .malla .m-card .note{color:var(--ink3);font-size:12px;margin-top:6px}
 .malla .m-card .lockn{background:var(--line2);border-radius:8px;padding:7px 9px;color:var(--ink2)}
 .malla .m-tip{position:fixed;z-index:100;pointer-events:none;background:#1d2330;color:#fff;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.4;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:none}

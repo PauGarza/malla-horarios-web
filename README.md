@@ -126,9 +126,10 @@ Estadística (materias y co-oferta); cada profesor crea su propia cuenta. Lo que
   datos de hoy (las mismas reglas con que se valida la subida), lo que falta por asignar, quién más
   puede dar cada grupo a esa hora, y la semana de cada plan y semestre. El admin elige uno o los tres
   departamentos; cuando se abra a jefatura, cada jefe verá el suyo. Es el mockup que ya vieron los jefes, conectado a la base
-  (`api/malla.php`, `frontend/src/lib/mallaVista.js`).
+  (`api/malla.php`, `frontend/src/lib/mallaVista.js`). Desde la tarjeta de un grupo se le cambia el
+  profesor (2026-10-23), con la revisión de choques antes de guardar.
 
-Pendiente: editar y publicar desde la vista de malla, cargar los salones del semestre, y probar optV1 de punta a punta con una descarga real. También las cartas de asignación, y
+Pendiente: mover horario y salón y publicar desde la vista de malla, cargar los salones del semestre, y probar optV1 de punta a punta con una descarga real. También las cartas de asignación, y
 cargar Actuaría. `backend/` es el backend anterior (Supabase), ya reemplazado por `api/`.
 
 ## Cómo contribuir
