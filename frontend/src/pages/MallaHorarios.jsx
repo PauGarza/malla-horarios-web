@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { leerMalla } from '../lib/api';
+import { cambiarProfesorMalla, leerMalla } from '../lib/api';
 import { montarMalla } from '../lib/mallaVista';
 import { veTodosLosDepartamentos } from '../lib/roles';
 import { etiquetaSemestre } from '../lib/semestre';
@@ -11,9 +11,14 @@ import { etiquetaSemestre } from '../lib/semestre';
 // hoy. Lo que trae api/malla.php; el dibujo y la revisión viven en
 // lib/mallaVista.js, que pinta en un contenedor que React no toca.
 //
-// Solo lectura por ahora: mover grupos y publicar llegan después.
+// Desde la tarjeta de un grupo se le cambia el profesor (2026-10-23); mover
+// grupos y publicar llegan después.
 
 const TODOS = 'todos';
+
+/** Los departamentos que se piden a api/malla.php; null = el de la cuenta. */
+const deptosDe = (veTodos, alcance, departamentos) =>
+  !veTodos ? null : alcance === TODOS ? departamentos.map((d) => d.id) : [Number(alcance)];
 
 export default function MallaHorarios({ onVolver }) {
   const { token, profesor, departamentos, semestre } = useAuth();
@@ -28,6 +33,7 @@ export default function MallaHorarios({ onVolver }) {
   // (otra función onVolver) no tiene que volver a montarla.
   const opciones = useRef(null);
   useEffect(() => {
+    const deptos = deptosDe(veTodos, alcance, departamentos);
     opciones.current = {
       onVolver: () => onVolver(),
       alcances: veTodos
@@ -35,16 +41,16 @@ export default function MallaHorarios({ onVolver }) {
         : null,
       alcance,
       onAlcance: setAlcance,
+      onProfesor: (grupoId, profesorId) => cambiarProfesorMalla(token, semestre.id, deptos, grupoId, profesorId),
     };
-  }, [onVolver, veTodos, departamentos, alcance]);
+  }, [onVolver, veTodos, departamentos, alcance, token, semestre]);
 
   useEffect(() => {
     if (!semestre) return undefined;
     let cancelado = false;
     setDatos(null);
     setError('');
-    const deptos = !veTodos ? null : alcance === TODOS ? departamentos.map((d) => d.id) : [Number(alcance)];
-    leerMalla(token, semestre.id, deptos)
+    leerMalla(token, semestre.id, deptosDe(veTodos, alcance, departamentos))
       .then((d) => {
         if (!cancelado) setDatos(d);
       })

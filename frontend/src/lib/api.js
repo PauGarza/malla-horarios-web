@@ -291,3 +291,11 @@ export const leerMalla = (token, semestreId, departamentos) =>
     `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
     token,
   );
+
+/** profesorId null deja la clase sin profesor. Responde { grupo_id, profesores }. */
+export const cambiarProfesorMalla = (token, semestreId, departamentos, grupoId, profesorId) =>
+  post(
+    `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
+    token,
+    { grupo_id: grupoId, profesor_id: profesorId },
+  );
