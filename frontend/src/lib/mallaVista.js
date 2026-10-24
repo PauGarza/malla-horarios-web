@@ -43,9 +43,11 @@ const TIPOS = {
   fija_sin: 'Asignación directa sin grupo',
   cohorte: 'Choque de semestre (misma cohorte)', asig_rojo: 'Asignación directa en horas no disponibles', amarillo: 'Horas en amarillo',
   mat: 'Materia que el profesor no prefiere', borrador: 'Formulario en borrador', cursos: 'Más cursos de los pedidos', creditos: 'Bloques distintos a los créditos',
-  cupo: 'Menos lugares que la demanda estimada', demanda: 'Más clases que las que pide la demanda', media: 'Media hora suelta', sinprof: 'Sin profesor', sinsalon: 'Sin salón',
+  cupo: 'Menos lugares que la demanda estimada', chico: 'Menos de 15 alumnos esperados', demanda: 'Más clases que las que pide la demanda', media: 'Media hora suelta', sinprof: 'Sin profesor', sinsalon: 'Sin salón',
 };
 const ORDEN = Object.keys(TIPOS);
+// D49 (2026-10-23): ningún grupo con menos alumnos esperados (Suma de Escolares, claves equivalentes sumadas)
+const MIN_ALUMNOS = 15;
 
 const ESQUELETO = `
 <header class="m-head">
@@ -193,6 +195,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
       else if (!ms.some(sug)) e.n = 0;
       else if (ms.every((x) => aj(x) == null)) e.n = Math.max(...ms.map(sug));
       else e.n = Math.max(1, Math.floor(Math.round(ms.reduce((t, x) => t + (aj(x) || 0), 0) * 1e6) / 1e6 / (dem(+p).capacidad_planeacion || 30) + 0.5));
+      // D49: nunca tantas clases que alguna quede con menos de MIN_ALUMNOS esperados
+      if (ms.some((x) => aj(x) != null)) e.n = Math.min(e.n, Math.floor(Math.round(ms.reduce((t, x) => t + (aj(x) || 0), 0) * 1e6) / 1e6 / MIN_ALUMNOS));
       ms.sort(cmp);
     }
     return { principalDe, estrellas };
@@ -308,16 +312,18 @@ export function montarMalla(raiz, datos, opciones = {}) {
     for (const g of gs) if (g.profs.includes(pid)) { bl += bloquesDe(g); if (p && cuentaComoCurso(g, p)) cursos++; }
     return { cursos, bl, max: p && p.pref ? p.pref.num_cursos_max ?? null : null };
   }
-  // Lugares que se esperan en la clase (como optv1/validar.py)
-  function estimado(g) {
-    let e = 0;
-    for (const it of g.items) {
-      const d = (M.mats[it.mid] || {}).demanda || {};
-      const n = (M.estrellas[M.principalDe[it.mid]] || {}).n;
-      e += d.demanda_ajustada && n ? Math.ceil(d.demanda_ajustada / n) : d.capacidad_planeacion || 30;
-    }
-    return e;
+  // Alumnos que se esperan en la clase (2026-10-23): la Suma de Escolares (demanda_ajustada) de todas las
+  // claves equivalentes de su estrella, repartida entre los grupos que la malla tiene de esa estrella
+  // (fijos incluidos). Sin redondear; null si la estrella no trae demanda.
+  function esperados(g, gs) {
+    const p = M.principalDe[g.items[0].mid], e = p != null ? M.estrellas[p] : null;
+    if (!e) return null;
+    const suma = e.mids.reduce((t, x) => t + (((M.mats[x] || {}).demanda || {}).demanda_ajustada || 0), 0);
+    const n = gs.filter((h) => M.principalDe[h.items[0].mid] === p).length;
+    return suma && n ? suma / n : null;
   }
+  // Lugares que pide la clase: los esperados hacia arriba; sin demanda, capacidad_planeacion (o 30)
+  const estimado = (g, x) => (x != null ? Math.ceil(x - 1e-9) : (((M.mats[g.items[0].mid] || {}).demanda || {}).capacidad_planeacion || 30));
 
   // ---------- Revisión en vivo (convención §5) ----------
   function analyze(gs) {
@@ -402,10 +408,12 @@ export function montarMalla(raiz, datos, opciones = {}) {
         if (g.cupo != null && R[rid].cap < g.cupo) add('salon_cap', 'hard', [g.id], [], { r: rid });
       }
       if (g.sessions.length) {
-        const est = estimado(g);
+        const x = esperados(g, gs), est = estimado(g, x);
         let ofr = g.cupo != null ? g.cupo : est;
         if (rids.size) ofr = Math.min(ofr, ...[...rids].map((r) => R[r].cap));
         if (est > ofr) add('cupo', 'soft', [g.id], [], { est, ofr });
+        // D49: menos de 15 esperados. Las asignaciones directas las decide la jefatura: no se avisan
+        if (x != null && x < MIN_ALUMNOS && g.fijaId == null) add('chico', 'soft', [g.id], [], { est: Math.round(x * 10) / 10 });
         const bl = bloquesDe(g);
         for (const it of g.items) { const m = M.mats[it.mid]; if (m && m.cr * bpc !== bl) add('creditos', 'soft', [g.id], [], { clave: it.clave, cr: m.cr, bl }); }
       }
@@ -507,6 +515,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
       case 'cursos': return { t: `${pn} tiene ${c.n} cursos y ${P[c.p].pref && P[c.p].pref.num_cursos_origen === 'jefatura' ? 'la jefatura le fijó' : 'pidió'} ${c.max}`, s: 'Más cursos que los que pidió' };
       case 'creditos': return { t: `${esc(c.clave)}: ${c.cr} créditos en ${c.bl} bloques`, s: `${esc(gLabel(A))} · ${horas(c.bl)} h por semana` };
       case 'cupo': return { t: `${esc(gLabel(A))}: menos lugares que la demanda`, s: `Se esperan ${c.est}, caben ${c.ofr}` };
+      case 'chico': return { t: `${esc(gLabel(A))}: menos de ${MIN_ALUMNOS} alumnos esperados`, s: `Se esperan ${c.est} por grupo de esa materia; el mínimo es ${MIN_ALUMNOS}` };
       case 'demanda': return { t: `${esc(c.clave)}: ${c.n} clases y la demanda pide ${c.sug}`, s: 'Con co-oferta: demanda ajustada sumada / 30 lugares; sin ella, los grupos sugeridos' };
       case 'media': return { t: `${pn}: media hora suelta el ${DN(c.d).toLowerCase()}`, s: cellsTxt(c.cells) };
       case 'sinprof': return { t: `${esc(gLabel(A))} no tiene profesor`, s: `${esc(gName(A))} · ${sesTxt(A)}` };

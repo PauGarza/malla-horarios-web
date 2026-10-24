@@ -32,6 +32,8 @@ const MOTOR_ENTRADA = 'autoplanear-entrada/2';
 const MOTOR_SALIDA  = 'autoplanear-salida/2';
 const MOTOR_DIAS    = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
 const MOTOR_ZONA    = 'America/Mexico_City';
+// D49 (2026-10-23): ningún grupo con menos alumnos esperados (Suma de Escolares, claves equivalentes sumadas)
+const MOTOR_ALUMNOS_MINIMOS = 15;
 
 // §3.2. Hoy los decide la jefatura y no tienen tabla: van aquí para que el
 // motor no los tenga escritos en su código.
@@ -1043,7 +1045,8 @@ function motor_agrupar(array $porTipo): array
  * ninguna co-oferta suya es principal, ella lo es. Una estrella de varias claves pide
  * demanda ajustada sumada / capacidad_planeacion de la principal clases, al entero más cercano y al
  * menos 1, como redondea Escolares cada clave (salvo que ninguna de sus claves tenga grupos
- * sugeridos: 0), y cada clase lleva todas sus claves. Una clave sola pide sus grupos_sugeridos.
+ * sugeridos: 0), y cada clase lleva todas sus claves. Una clave sola pide sus grupos_sugeridos. Con
+ * demanda ajustada, nunca más de suma / MOTOR_ALUMNOS_MINIMOS clases (D49, 2026-10-23).
  *
  * @param array $materias  las de la entrada (§3.4)
  * @param array $conGrupos ids de las materias que abren grupos
@@ -1089,10 +1092,6 @@ function motor_estrellas_co_oferta(array $materias, array $conGrupos): array
     }
     $clases = [];
     foreach ($miembros as $p => $ms) {
-        if (count($ms) === 1) {
-            $clases[$p] = $sug[$p];
-            continue;
-        }
         $algunSug = false;
         $conAj = false;
         $suma = 0.0;
@@ -1103,14 +1102,21 @@ function motor_estrellas_co_oferta(array $materias, array $conGrupos): array
             $suma += $aj[$x] ?? 0.0;
             $maxSug = max($maxSug, $sug[$x]);
         }
-        if (!$algunSug) {
-            $clases[$p] = 0;
+        if (count($ms) === 1) {
+            $n = $sug[$p];
+        } elseif (!$algunSug) {
+            $n = 0;
         } elseif (!$conAj) {
-            $clases[$p] = $maxSug;
+            $n = $maxSug;
         } else {
             $cap = (int) ($mat[$p]['demanda']['capacidad_planeacion'] ?? 0);
-            $clases[$p] = max(1, (int) floor(round($suma, 6) / ($cap > 0 ? $cap : 30) + 0.5));
+            $n = max(1, (int) floor(round($suma, 6) / ($cap > 0 ? $cap : 30) + 0.5));
         }
+        // D49: nunca tantas clases que alguna quede con menos de MOTOR_ALUMNOS_MINIMOS esperados
+        if ($conAj) {
+            $n = min($n, (int) floor(round($suma, 6) / MOTOR_ALUMNOS_MINIMOS));
+        }
+        $clases[$p] = $n;
     }
     return [$principal, $clases];
 }
