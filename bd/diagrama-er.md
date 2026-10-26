@@ -2,7 +2,7 @@
 
 > Ver [`diseno-bd.md`](diseno-bd.md) para el detalle de columnas/constraints de cada tabla. Este
 > diagrama es la versión visual, agrupada por dominio, y refleja el esquema que corre hoy
-> ([`mysql/schema-mysql.sql`](mysql/schema-mysql.sql), al 2026-10-06). Los tipos se escriben de forma
+> ([`mysql/schema-mysql.sql`](mysql/schema-mysql.sql), al 2026-10-23). Los tipos se escriben de forma
 > genérica (`text`, `boolean`…); los reales de MySQL están en el `.sql`. Para quien construya el motor
 > de asignación: [`motor-asignacion.md`](motor-asignacion.md) resume qué leer/escribir en cada tabla.
 
@@ -71,6 +71,8 @@ erDiagram
     DEPARTAMENTO ||--o{ ASIGNACION_FIJA : ""
     ASIGNACION_FIJA ||--o{ ASIGNACION_FIJA_HORARIO : ""
     FRANJA_HORARIA ||--o{ ASIGNACION_FIJA_HORARIO : ""
+    PROFESOR ||--o{ VERDE_PROFESOR_MATERIA : "verde de jefatura"
+    MATERIA ||--o{ VERDE_PROFESOR_MATERIA : ""
 ```
 
 `INTENTO_LOGIN` no aparece en el diagrama: no tiene llaves foráneas (es el contador del límite de
@@ -87,6 +89,7 @@ erDiagram
     }
     PLAN_ESTUDIO {
         int id PK
+        varchar clave UK "carrera-versión de Oracle, nullable (§19)"
         text nombre
         boolean activo
     }
@@ -233,6 +236,8 @@ eliminaron `PROFESOR_MATERIA_ELEGIBLE` y `profesor.modo_materias_elegibles`. Lo 
 persona va después, como `BLOQUEO_PROFESOR_MATERIA`. Ver `diseno-bd.md` §12. Igual que el bloqueo, desde
 2026-10-12/13 la jefatura tiene dos capas más encima de lo que contestó el profesor:
 `AJUSTE_NUM_CURSOS` y las asignaciones directas (`ASIGNACION_FIJA`, con su horario opcional). Ver §16.
+Desde 2026-10-21, el inverso del bloqueo: `VERDE_PROFESOR_MATERIA`, un par que la jefatura pone en
+verde para el motor.
 
 ```mermaid
 erDiagram
@@ -305,6 +310,12 @@ erDiagram
         int semestre_id FK
         int bloqueado_por FK
     }
+    VERDE_PROFESOR_MATERIA {
+        int profesor_id FK
+        int materia_id FK
+        int semestre_id FK
+        int marcado_por FK
+    }
     FRANJA_HORARIA {
         int id PK
         set dias
@@ -327,6 +338,8 @@ erDiagram
     FRANJA_HORARIA ||--o{ DISPONIBILIDAD : ""
     PROFESOR ||--o{ BLOQUEO_PROFESOR_MATERIA : "(hard, jefatura)"
     MATERIA ||--o{ BLOQUEO_PROFESOR_MATERIA : ""
+    PROFESOR ||--o{ VERDE_PROFESOR_MATERIA : "(soft, jefatura)"
+    MATERIA ||--o{ VERDE_PROFESOR_MATERIA : ""
 
     AJUSTE_NUM_CURSOS {
         int profesor_id FK
@@ -397,13 +410,14 @@ erDiagram
     }
     PROFESOR {
         int id PK
-        varchar cu UK
+        varchar cu UK "NULL = profesor sin cuenta (§18)"
         varchar correo UK "nullable en la base, obligatorio en el API"
         text rol
         int departamento_id FK "nullable si admin/servicios_escolares/nomina"
         text tipo_contrato
         boolean password_predeterminada
         boolean activo
+        boolean por_asignar "Profesor por asignar (§20)"
     }
     RECUPERACION_PASSWORD {
         int id PK
