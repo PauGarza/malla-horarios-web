@@ -14,8 +14,10 @@
 > `boolean`, `timestamptz`…) porque el razonamiento sigue siendo el mismo; el DDL que corre de verdad
 > es [`mysql/schema-mysql.sql`](mysql/schema-mysql.sql). Lo que cambió con la migración está en §14,
 > y los cambios posteriores (correo y recuperación de contraseña, franjas por día y por
-> departamento, número de cursos opcional) en §15, y el mínimo de horas en verde calculado por
-> cursos (2026-10-13) en §17.
+> departamento, número de cursos opcional) en §15. Después: las decisiones de la jefatura antes del
+> motor en §16, el mínimo de horas en verde calculado por cursos en §17, los profesores sin cuenta y
+> la programación de Actuaría en §18, el semestre de cada materia en §19 y el "Profesor por asignar"
+> en §20.
 
 ## 1. Contexto y fuentes
 
@@ -290,8 +292,8 @@ clases — ver §4.1. Un admin/Servicios Escolares/Nómina que no dé clases tam
 | Columna | Tipo | Notas |
 |---|---|---|
 | id | serial PK | |
-| cu | varchar(10) UNIQUE NOT NULL | Clave Única — login para cualquier rol; evita duplicados por fuzzy-match de nombre (bug detectado en Mat·Scheduler, `generate_data.py`). También es la contraseña inicial (decisión 2026-09-21, cambiarla es opcional) |
-| password_hash | text NOT NULL | hash (bcrypt), nunca texto plano; se inicializa como `hash(cu)` |
+| cu | varchar(10) UNIQUE NULL | Clave Única — login para cualquier rol; evita duplicados por fuzzy-match de nombre (bug detectado en Mat·Scheduler, `generate_data.py`). También es la contraseña inicial (decisión 2026-09-21, cambiarla es opcional). **NULL desde 2026-10-19 = profesor sin cuenta** (§18, D45): solo existe para decir quién da un grupo publicado de un departamento que no usa el sistema, o es el "Profesor por asignar" (§20); no puede entrar. Varios NULL caben en el UNIQUE |
+| password_hash | text NULL | hash (bcrypt), nunca texto plano; se inicializa como `hash(cu)`. NULL solo en un profesor sin cuenta (§18) |
 | nombre | text NOT NULL | |
 | correo | varchar(191) NULL UNIQUE | **Agregada 2026-10-02.** Lo captura la persona en "Mi perfil" o al darse de alta. Se guarda en minúsculas y se valida como correo. Para que la jefatura pueda contactar a cada profesor (cartas de asignación) y para **recuperar la contraseña** (§15): por eso es único — un correo señala a una sola cuenta. La base admite NULL (el roster cargado no trae correos), pero el API lo exige: a quien no lo tiene, la app se lo pide al entrar. 191 y no 255 por el tope de índice de InnoDB con utf8mb4 |
 | rol | rol_enum NOT NULL DEFAULT 'profesor' | `profesor` \| `jefe_departamento` \| `jefe_division` \| `servicios_escolares` \| `nomina` \| `admin` — se firma directo como claim en el JWT de login, no se consulta en cada política RLS (más barato). **`jefe_division` se agregó 2026-09-25**: la División Académica (DACE) está arriba de los departamentos, así que su alcance son los 3 (Matemáticas, Actuaría, Estadística). Tiene el mismo alcance que `admin` pero no es lo mismo: admin administra el sistema, jefe_division dirige la división y sigue dando clases. En el código la pregunta se hace por comportamiento (`ve_todos_los_departamentos()` en `api/lib/auth.php`), nunca comparando contra un rol concreto. **Desde 2026-10-02, temporalmente, `jefe_division` ve solo su propio departamento** (Matemáticas) y conserva el manejo de semestres (`DIVISION_SOLO_SU_DEPARTAMENTO` y `administra_semestres()` en `api/lib/auth.php`) |
@@ -301,7 +303,8 @@ clases — ver §4.1. Un admin/Servicios Escolares/Nómina que no dé clases tam
 | password_predeterminada | boolean NOT NULL DEFAULT true | true = sigue usando `cu` como contraseña, no la ha cambiado — informativo para admin/Jefe, no bloquea nada |
 | estado_especial | text NULL | sabático/licencia/jubilación. Distinto de `activo`, que dice si la cuenta sirve para entrar |
 | activo | boolean NOT NULL DEFAULT true | |
-| CHECK | | `rol IN ('admin','servicios_escolares','nomina') OR (departamento_id IS NOT NULL AND tipo_contrato IS NOT NULL)` |
+| por_asignar | boolean NOT NULL DEFAULT false | **Agregada 2026-10-23** (§20). true = el "Profesor por asignar" de su departamento: no es una persona, marca un grupo sin profesor todavía. Sin cuenta (`cu` NULL, `activo` false). Se reconoce por esta columna, nunca por el nombre |
+| CHECK | | `rol IN ('admin','servicios_escolares','nomina') OR (departamento_id IS NOT NULL AND (tipo_contrato IS NOT NULL OR cu IS NULL))` — el profesor sin cuenta (§18) no tiene contrato |
 
 ### `profesor_materia_elegible` — ELIMINADA 2026-09-28 (ver §12)
 Solo relevante cuando `modo_materias_elegibles = 'personalizada'`; configurado por el Jefe de
@@ -1000,18 +1003,19 @@ qué, aplicable también a esta pantalla de carga de catálogo.
 - [`diagrama-er.md`](diagrama-er.md) — diagrama entidad-relación en Mermaid.
 - [`motor-asignacion.md`](motor-asignacion.md) — qué lee y qué escribe el motor de asignación.
 - **[`mysql/`](mysql/) — el esquema que corre hoy** (MariaDB 5.5, §14):
-  - [`schema-mysql.sql`](mysql/schema-mysql.sql) — DDL, ya en su estado final (incluye todo lo de §15).
+  - [`schema-mysql.sql`](mysql/schema-mysql.sql) — DDL, ya en su estado final (incluye todo lo de §15 a §20).
   - [`checks-como-triggers.sql`](mysql/checks-como-triggers.sql) — **obligatorio**: MariaDB 5.5
     ignora los `CHECK`, estos triggers hacen su trabajo.
   - [`triggers-mysql.sql`](mysql/triggers-mysql.sql) — las restricciones duras que no caben en un
     CHECK simple (traslapes de profesor/salón, salón autorizado, tipo de salón).
   - [`seed-mysql.sql`](mysql/seed-mysql.sql) — catálogo base: departamentos, las 27 franjas,
-    semestres, salones de ejemplo y su disponibilidad.
+    semestres y el "Profesor por asignar" de cada departamento (§20). Sin salones desde el
+    2026-10-13.
   - Las migraciones fechadas (`migracion-*.sql`) y los datos reales traducidos (`datos-*.sql`,
     `cargar-profesores.php`): ver [`mysql/README.md`](mysql/README.md) para el orden de cada uno.
 - **Postgres, histórico** (el diseño original, antes de la migración):
   [`schema.sql`](schema.sql), [`triggers.sql`](triggers.sql), [`rls-policies.sql`](rls-policies.sql),
-  [`seed.sql`](seed.sql). No incluyen los cambios de §15.
+  [`seed.sql`](seed.sql). No incluyen los cambios de §15 en adelante.
 
 La copia de `malla-horarios/bd/` trae solo el esquema y el catálogo base: no lleva las migraciones
 ni los datos reales.
