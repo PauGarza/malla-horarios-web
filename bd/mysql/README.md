@@ -121,6 +121,17 @@ migracion-2026-10-23-profesor-por-asignar.sql  profesor.por_asignar y un "Profes
                                                desplegar el API nuevo (sin la columna,
                                                Asignaciones directas, el motor y la malla dan
                                                500). Una sola vez (ADD COLUMN).
+migracion-2026-10-27-avisos-descartados.sql    tabla malla_aviso_descartado: los avisos de la
+                                               malla que la jefatura descartó. ADITIVA: correr
+                                               ANTES de desplegar el API nuevo (la malla la lee;
+                                               sin ella da 500). Se puede repetir.
+migracion-2026-10-27b-grupo-conservado.sql     grupo.conservado_por / conservado_at: lo que la
+                                               jefatura editó en la malla (o le descartó un
+                                               aviso) va al motor como grupo fijo y la subida
+                                               no lo borra. ADITIVA: correr ANTES de desplegar
+                                               el API nuevo (la malla, la descarga y la subida
+                                               del motor la leen; sin ella dan 500). Una sola
+                                               vez (ADD COLUMN).
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por

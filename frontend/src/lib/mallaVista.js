@@ -9,16 +9,18 @@
 // Los datos son los de api/malla.php:
 //   entrada  el paquete autoplanear-entrada/2 del alcance (catálogos, rejilla,
 //            profesores, salones, grupos_fijos = publicados, asignaciones_fijas)
-//   grupos   los grupos sin publicar, en el formato de un grupo de la salida
+//   grupos   los grupos sin publicar, en el formato de un grupo de la salida, con
+//            conservado ({por, at} o null: si la siguiente subida del motor lo rehace)
 //   corrida  la última corrida del motor que toca el alcance, o null
 // Las reglas que se revisan en vivo son las de §5 de
 // malla-horarios/docs/convencion-datos-motor.md, igual que optv1/validar.py:
 // rojo = la subida lo rechazaría; ámbar = aviso.
 //
-// Lo único que se guarda hoy es el profesor de un grupo, desde su tarjeta
-// (opciones.onProfesor, el POST de api/malla.php). El arrastre ya está escrito
-// y queda apagado (opciones.editable = false) hasta que existan los endpoints
-// para guardar horario y salón.
+// Se guardan el profesor de un grupo, desde su tarjeta (opciones.onProfesor), y
+// su horario y salón, arrastrándolo (opciones.onMover, 2026-10-27): los dos son
+// POST de api/malla.php. Editar un grupo o descartar un aviso suyo lo conserva
+// (2026-10-27): la siguiente subida del motor ya no lo rehace. La tarjeta lo dice
+// y deja soltarlo (opciones.onSoltar).
 
 const DIA_TXT = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado' };
 const DIA_CORTO = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb' };
@@ -28,10 +30,16 @@ const natural = (a, b) => String(a).localeCompare(String(b), 'es', { numeric: tr
 const hm = (t) => t.replace(/^0(\d)/, '$1');
 const plural = (n, s, p) => n + ' ' + (n === 1 ? s : p || s + 's');
 const horas = (bl) => (bl / 2).toLocaleString('es-MX');
-// "Apellido Apellido Nombre(s)" → "Apellido Nombre"
+// "Nombre(s) Paterno Materno" → "Nombre Paterno"; el paterno es la penúltima
+// palabra, junto con sus partículas ("de la Garza").
+const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
 const nombreCorto = (n) => {
-  const w = titleCase(n).split(/\s+/);
-  return w.length <= 2 ? w.join(' ') : w[0] + ' ' + w[w.length - 1];
+  const w = titleCase(n).split(/\s+/).filter(Boolean);
+  if (w.length <= 2) return w.join(' ');
+  let i = w.length - 2;
+  while (i > 1 && PARTICULAS.has(w[i - 1].toLowerCase())) i--;
+  const paterno = w.slice(i, w.length - 1).map((p) => (PARTICULAS.has(p.toLowerCase()) ? p.toLowerCase() : p));
+  return w[0] + ' ' + paterno.join(' ');
 };
 const NIVEL_TXT = { verde: 'verde', amarillo: 'amarillo', rojo: 'rojo', sin: 'sin respuesta', maestria: 'su materia de maestría', ocupado: 'ocupado en otro departamento' };
 
@@ -39,10 +47,11 @@ const NIVEL_TXT = { verde: 'verde', amarillo: 'amarillo', rojo: 'rojo', sin: 'si
 const TIPOS = {
   prof: 'Profesor en dos grupos a la vez', ocupado: 'Choque con su clase en otro departamento', salon: 'Salón ocupado dos veces',
   maestria: 'Encima de una materia de maestría', rojo: 'Fuera de la disponibilidad', bloqueo: 'Profesor bloqueado para la materia',
-  franja: 'Franja que no vale ese día o para el departamento', salon_auth: 'Salón no autorizado para el departamento', salon_tipo: 'Salón de otro tipo',
+  franja: 'Franja que no vale ese día o para el departamento', salon_auth: 'Salón no disponible para el departamento', salon_tipo: 'Salón de otro tipo',
   salon_cap: 'Salón con menos lugares que el cupo', tope: 'Asignatura arriba del tope de horas', fija: 'Asignación directa sin cumplir',
   fija_sin: 'Asignación directa sin grupo',
   cohorte: 'Choque de semestre (misma cohorte)', asig_rojo: 'Asignación directa en horas no disponibles', amarillo: 'Horas en amarillo',
+  escolares: 'Regla de Servicios Escolares',
   mat: 'Materia que el profesor no prefiere', borrador: 'Formulario en borrador', cursos: 'Más cursos de los pedidos', creditos: 'Bloques distintos a los créditos',
   cupo: 'Menos lugares que la demanda estimada', chico: 'Menos de 15 alumnos esperados', demanda: 'Más clases que las que pide la demanda', media: 'Media hora suelta', sinprof: 'Sin profesor', sinsalon: 'Sin salón',
 };
@@ -76,6 +85,7 @@ const ESQUELETO = `
       </div>
     </div>
     <div data-m="banners"></div>
+    <div data-m="msg"></div>
     <div class="hint" data-m="hint"></div>
     <div class="gridwrap" data-m="gridwrap">
       <div class="colhead" data-m="colhead"></div>
@@ -90,17 +100,24 @@ const ESQUELETO = `
  * Pinta la malla dentro de `raiz` y devuelve { destruir }.
  *
  * opciones:
- *   editable   false por ahora: el arrastre no guarda
- *   onProfesor (grupoId, profesorId | null) => Promise<{ profesores }>: cambiar
- *              el profesor desde la tarjeta; sin ella, la tarjeta solo informa
+ *   onMover    (grupoId, { salon_id, sesiones }) => Promise: mover un grupo de
+ *              horario o salón arrastrándolo (2026-10-27); sin ella, no se arrastra
+ *   onDescartar ({ accion: 'descartar' | 'restaurar', llave, ... }) => Promise: descartar un aviso
+ *              (deja de contar y de pintarse) o restaurarlo; sin ella, no hay botón
+ *   onProfesor (grupoId, profesorId | null) => Promise<{ profesores, conservado }>: cambiar
+ *              el profesor desde la tarjeta (o arrastrando en la vista por
+ *              profesor); sin ella, la tarjeta solo informa
+ *   onSoltar   (grupoId) => Promise: quitarle la marca de conservado a un grupo, para que la
+ *              siguiente subida del motor lo rehaga; sin ella, no hay botón
  *   onVolver   el botón "← Inicio"
  *   alcances   [{ valor, etiqueta }] para el selector de departamento (admin), o null
  *   alcance    el valor elegido
  *   onAlcance  (valor) => void
  */
 export function montarMalla(raiz, datos, opciones = {}) {
-  const ED = Boolean(opciones.editable);
+  const ED = typeof opciones.onMover === 'function';
   const EDP = typeof opciones.onProfesor === 'function';
+  const EDS = typeof opciones.onSoltar === 'function';
   raiz.innerHTML = ESQUELETO;
   const $m = (k) => raiz.querySelector(`[data-m="${k}"]`);
   const limpiezas = [];
@@ -114,6 +131,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
   // ---------- Modelo: entrada + grupos → lo que pinta la vista ----------
   let M = null, P = {}, R = {}, ROOMS = [];
   let groups = [], byId = {};
+  let DESC = new Map(); // llave -> { descripcion, descartado_por, descartado_at }: avisos descartados
+  const EDD = typeof opciones.onDescartar === 'function';
   const reindex = () => { byId = Object.fromEntries(groups.map((g) => [g.id, g])); };
   const ui = { side: true, view: 'semana', day: 0, sel: null, deps: new Set(), profs: new Set(), rooms: new Set(), mats: new Set(), cohs: new Set(), showAll: {} };
 
@@ -170,7 +189,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
       motivos: Object.fromEntries(((corrida && corrida.sin_asignar) || []).map((x) => [x.materia_id, x.motivo])), avisosCarga };
     const mk = (g, locked) => ({ id: locked ? 'fijo-' + (g.grupo_id ?? g.ref) : String(g.ref), grupoId: g.grupo_id ?? null, fijaId: g.asignacion_fija_id ?? null, locked,
       items: g.materias.map((x) => ({ mid: x.materia_id, clave: x.clave || (mats[x.materia_id] || {}).clave || String(x.materia_id), numero: x.numero || '', pct: x.porcentaje ?? null })),
-      profs: [...(g.profesores || [])], roomId: g.salon_id ?? null, sessions: (g.sesiones || []).map(toSes).filter(Boolean), cupo: g.cupo_maximo ?? null });
+      profs: [...(g.profesores || [])], roomId: g.salon_id ?? null, sessions: (g.sesiones || []).map(toSes).filter(Boolean), cupo: g.cupo_maximo ?? null,
+      conservado: g.conservado ?? null });
     groups = [...(ent.grupos_fijos || []).map((g) => mk(g, true)), ...gsal.map((g) => mk(g, false))];
     reindex();
     ui.view = ROOMS.length ? 'salon' : 'prof';
@@ -328,10 +348,55 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const n = gs.filter((h) => M.principalDe[h.items[0].mid] === p).length;
     return suma && n ? suma / n : null;
   }
+  // El semestre de la clase, sin el plan (2026-10-27): el rango de semestre_plan de sus claves en los
+  // planes vigentes ("3", "2–3"); si ninguna está en un plan vigente (Simulación solo sigue en planes
+  // anteriores), en los anteriores; '' para una optativa sin plan
+  const semDe = (g) => {
+    const planes = g.items.flatMap((i) => (M.mats[i.mid] || {}).planes || []).filter((p) => p.semestre_plan);
+    const vig = planes.filter((p) => p.vigente ?? true);
+    const ss = new Set((vig.length ? vig : planes).map((p) => p.semestre_plan));
+    if (!ss.size) return '';
+    const a = Math.min(...ss), b = Math.max(...ss);
+    return a === b ? String(a) : `${a}–${b}`;
+  };
+  // Reglas de Servicios Escolares (D55, 2026-10-27), las de optv1/escolares.py: materias de los primeros
+  // 3 semestres (algún plan vigente) sin sesiones de 3 h, sin pasar de las 19:00 ni en viernes; 9 créditos
+  // en lunes, miércoles y viernes de 1.5 h. Es aviso: una asignación directa de la jefatura puede romperlas.
+  const escolares = (g) => {
+    const mpb = M.reglas.minutos_por_bloque || 30, out = [];
+    const ms = g.items.map((i) => M.mats[i.mid]).filter(Boolean);
+    const prim = ms.filter((m) => m.planes.some((p) => (p.vigente ?? true) && p.semestre_plan <= 3)).map((m) => m.clave);
+    const nueve = ms.filter((m) => m.cr === 9).map((m) => m.clave);
+    const dias = [...g.sessions].sort((a, b) => a.d - b.d).map((se) => M.dias[se.d]).join();
+    if (nueve.length && (dias !== 'lunes,miercoles,viernes' || g.sessions.some((se) => se.len * mpb !== 90)))
+      out.push(`${nueve.join(', ')}: 9 créditos van lunes, miércoles y viernes, 1.5 h cada día`);
+    if (prim.length) {
+      const q = `${prim.join(', ')} (primeros 3 semestres)`;
+      if (g.sessions.some((se) => se.len * mpb >= 180)) out.push(`${q}: sin clases de 3 horas`);
+      if (g.sessions.some((se) => M.F[se.s + se.len - 1].fin > '19:00')) out.push(`${q}: sin clases después de las 19:00`);
+      if (!nueve.length && g.sessions.some((se) => M.dias[se.d] === 'viernes')) out.push(`${q}: sin clases en viernes`);
+    }
+    return out;
+  };
   // Lugares que pide la clase: los esperados hacia arriba; sin demanda, capacidad_planeacion (o 30)
   const estimado = (g, x) => (x != null ? Math.ceil(x - 1e-9) : (((M.mats[g.items[0].mid] || {}).demanda || {}).capacidad_planeacion || 30));
 
   // ---------- Revisión en vivo (convención §5) ----------
+  // La llave de un aviso, para descartarlo (malla_aviso_descartado.llave): su tipo, sus grupos (g-<grupo_id>
+  // o fijo-<grupo_id>), sus franjas como "dia hora" y sus datos. No usa índices de la vista (las franjas
+  // cambian según el alcance): la misma llave sale para un jefe y para la jefatura de división. Si el grupo
+  // se mueve o cambia de profesor, la llave cambia y el aviso vuelve a salir.
+  function llaveAviso(c) {
+    const { type, sev, ids, cells, desc, ...datos } = c;
+    const franjas = cells.map((x) => M.dias[Math.floor(x / 100)] + ' ' + M.F[x % 100].inicio).sort();
+    return JSON.stringify([type, [...ids].sort(), franjas, Object.keys(datos).sort().map((k) => [k, datos[k]])]);
+  }
+  // El departamento de un aviso: el de su primer grupo o, si no tiene, el de su profesor
+  const deptoAviso = (c) => {
+    const g = c.ids.map((id) => byId[id]).find(Boolean);
+    if (g) return gDep(g);
+    return c.p != null && P[c.p] ? P[c.p].depto : M.alcance[0];
+  };
   function analyze(gs) {
     const list = [];
     const add = (type, sev, ids, cells, extra) => list.push({ type, sev, ids, cells: cells || [], ...extra });
@@ -422,6 +487,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
         if (x != null && x < MIN_ALUMNOS && g.fijaId == null) add('chico', 'soft', [g.id], [], { est: Math.round(x * 10) / 10 });
         const bl = bloquesDe(g);
         for (const it of g.items) { const m = M.mats[it.mid]; if (m && m.cr * bpc !== bl) add('creditos', 'soft', [g.id], [], { clave: it.clave, cr: m.cr, bl }); }
+        if (!g.locked) for (const v of escolares(g)) add('escolares', 'soft', [g.id], [], { v });
       }
       // 9. asignación directa: su materia, su profesor y, si los fijó, sus horarios
       if (a) {
@@ -480,8 +546,10 @@ export function montarMalla(raiz, datos, opciones = {}) {
       else if (n < e.n) faltan.push({ mid: +p, mids: e.mids, pide: e.n, n: e.n - n, motivo: e.mids.map((x) => M.motivos[x]).find(Boolean) || null });
     }
     faltan.sort((x, y) => natural(M.mats[x.mid].clave, M.mats[y.mid].clave));
+    // Avisos descartados por la jefatura (2026-10-27): siguen en la lista, marcados, pero no pintan ni cuentan
+    for (const c of list) if (c.sev === 'soft' && DESC.size) { const d = DESC.get(llaveAviso(c)); if (d) c.desc = d; }
     const per = new Map();
-    for (const c of list) for (const id of c.ids) {
+    for (const c of list) if (!c.desc) for (const id of c.ids) {
       if (!per.has(id)) per.set(id, { hard: [], soft: [] });
       per.get(id)[c.sev].push(c);
     }
@@ -503,23 +571,26 @@ export function montarMalla(raiz, datos, opciones = {}) {
       case 'rojo': return { t: `Fuera de la disponibilidad de ${pn}`, s: `${esc(gLabel(A))}${where} · ${c.sin === c.cells.length ? 'no marcó esas horas' : c.sin ? 'rojo o sin marcar' : 'marcadas en rojo'}` };
       case 'bloqueo': return { t: `${pn} está bloqueado para ${esc(c.clave)}`, s: `${esc(gLabel(A))} · bloqueo de la jefatura` };
       case 'franja': return { t: `${esc(gLabel(A))} cae en una franja que no vale`, s: `${where.slice(3)} · revisa los días de la franja o si es solo de otro departamento` };
-      case 'salon_auth': return { t: `Salón ${esc(rName(c.r))} no autorizado para ${esc((M.deptos[gDep(A)] || {}).nombre || 'el departamento')}`, s: `${esc(gLabel(A))}${where}` };
+      // r.disp ya viene sin las horas que ocupan clases de otros departamentos (lib/motor.php): "no
+      // disponible" cubre las dos cosas, no autorizado y ocupado por una clase que esta vista no pinta
+      case 'salon_auth': return { t: `Salón ${esc(rName(c.r))} no disponible para ${esc((M.deptos[gDep(A)] || {}).nombre || 'el departamento')}`, s: `${esc(gLabel(A))}${where} · no está autorizado o lo ocupa una clase de otro departamento` };
       case 'salon_tipo': return { t: `Salón ${esc(rName(c.r))} no es del tipo que pide la materia`, s: `${esc(gLabel(A))} pide ${esc(c.tipos)}` };
       case 'salon_cap': return { t: `Salón ${esc(rName(c.r))} tiene menos lugares que el cupo`, s: `${esc(gLabel(A))}: cupo ${A.cupo}, salón de ${R[c.r].cap}` };
       case 'tope': return { t: `${pn} pasa de ${c.max} h por semana`, s: `Asignatura: ${horas(c.h * 2)} h, contando otros departamentos` };
       case 'fija': return { t: `${esc(gLabel(A))} ya no cumple la asignación directa`, s: `Asignación ${c.fija}: ${esc(c.por.join('; '))}. Si la jefatura la cambió, hay que cambiarla también en Asignaciones directas.` };
-      case 'fija_sin': return { t: `Ningún grupo cumple la asignación directa de ${pn}`, s: `${esc((M.mats[c.mid] || {}).clave || c.mid)}${where ? where : ', sin horario fijado'} · revisa Asignaciones directas o vuelve a correr el motor` };
+      case 'fija_sin': return { t: `Ningún grupo cumple la asignación directa de ${pn}`, s: `${esc((M.mats[c.mid] || {}).clave || c.mid)}${where ? where : ', sin horario fijado'} · revisa Asignaciones directas` };
       case 'cohorte': {
         const ca = M.mats[c.a].clave, cb = M.mats[c.b].clave;
         return { t: `${esc(ca)} y ${esc(cb)} chocan para ${esc(c.ks[0])}${c.ks.length > 1 ? ' y ' + (c.ks.length - 1) + ' más' : ''}`,
           s: (c.na * c.nb === 1 ? 'Un grupo cada una, a la misma hora' : `Sus ${c.na}×${c.nb} combinaciones de grupos chocan`) + `: ningún alumno de esa cohorte puede llevar las dos${where}` };
       }
-      case 'asig_rojo': return { t: `Asignación directa en horas que ${pn} no marcó`, s: `${esc(gLabel(A))}${where} · la jefatura manda (D48)` };
+      case 'asig_rojo': return { t: `Asignación directa en horas que ${pn} no marcó`, s: `${esc(gLabel(A))}${where} · se respeta porque es asignación directa` };
       case 'amarillo': return { t: `${pn} marcó amarillo esas horas`, s: `${esc(gLabel(A))}${where}` };
       case 'mat': return { t: c.nivel ? `${pn} marcó ${esc(c.clave)} en ${c.nivel}` : `${pn} no marcó ${esc(c.clave)}`, s: `${esc(gLabel(A))} · ${esc(gName(A))}` };
       case 'borrador': return { t: `${pn} no envió su formulario`, s: `Se usó lo que guardó en borrador · ${esc(gLabel(A))}` };
       case 'cursos': return { t: `${pn} tiene ${c.n} cursos y ${P[c.p].pref && P[c.p].pref.num_cursos_origen === 'jefatura' ? 'la jefatura le fijó' : 'pidió'} ${c.max}`, s: 'Más cursos que los que pidió' };
       case 'creditos': return { t: `${esc(c.clave)}: ${c.cr} créditos en ${c.bl} bloques`, s: `${esc(gLabel(A))} · ${horas(c.bl)} h por semana` };
+      case 'escolares': return { t: esc(c.v), s: `${esc(gLabel(A))} · ${sesTxt(A)}${A.fijaId != null ? ' · asignación directa: la jefatura manda' : ''}` };
       case 'cupo': return { t: `${esc(gLabel(A))}: menos lugares que la demanda`, s: `Se esperan ${c.est}, caben ${c.ofr}` };
       case 'chico': return { t: `${esc(gLabel(A))}: menos de ${MIN_ALUMNOS} alumnos esperados`, s: `Se esperan ${c.est} por grupo de esa materia; el mínimo es ${MIN_ALUMNOS}` };
       case 'demanda': return { t: `${esc(c.clave)}: ${c.n} clases y la demanda pide ${c.sug}`, s: 'Con co-oferta: demanda ajustada sumada / 30 lugares; sin ella, los grupos sugeridos' };
@@ -540,6 +611,26 @@ export function montarMalla(raiz, datos, opciones = {}) {
   // Un publicado sin profesores es la programación de otro departamento, no uno por asignar.
   const SIN = '-';
   const sinProf = (g) => !g.locked && !g.profs.length;
+  // "Por asignar" (2026-10-27): grupos sin horario o sin profesor ("Profesor por asignar"), para que
+  // la jefatura los encuentre desde el contador de arriba. Más la demanda sin grupo (AN.faltan).
+  const porAsignar = (g) => !g.locked && (!g.sessions.length || !g.profs.length);
+  // Lo "por asignar", cada uno con su llave para descartarlo (2026-10-27) — un grupo, o demanda sin
+  // grupo. La llave cambia si cambia lo que le falta (le ponen profesor, se abre otra clase): entonces
+  // deja de estar descartado. n = cuánto suma al contador.
+  function pendientes() {
+    const out = groups.filter(porAsignar).map((g) => {
+      const falta = !g.sessions.length && !g.profs.length ? 'Sin horario ni profesor' : !g.sessions.length ? 'Sin horario' : 'Sin profesor';
+      return { g, falta, n: 1, depto: gDep(g), llave: JSON.stringify(['por_asignar', g.id, !g.sessions.length, !g.profs.length]),
+        texto: `${gLabel(g)} · ${falta} — ${gName(g)}` };
+    });
+    for (const f of AN.faltan) {
+      const claves = f.mids.map((x) => M.mats[x].clave).join(' + ');
+      out.push({ f, n: f.n, depto: (M.mats[f.mid] || {}).depto, llave: JSON.stringify(['falta', [...f.mids].sort(), f.pide, f.n]),
+        texto: `${claves} · ${M.mats[f.mid].nombre} — faltan ${f.n} de ${f.pide} clases que pide la demanda` });
+    }
+    for (const p of out) p.desc = DESC.get(p.llave) || null;
+    return out;
+  }
   const oneProf = () => { const v = ui.profs.size === 1 ? [...ui.profs][0] : null; return v == null || v === SIN ? null : +v; };
   const yOf = (s) => TOP + s * geo.row + geo.gb[s] * geo.gap;
   const yEnd = (s, len) => yOf(s + len - 1) + geo.row;
@@ -689,16 +780,37 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const deps = M.alcance.map((id) => M.deptos[id]).filter(Boolean);
     $m('ttl').textContent = 'Malla horaria · ' + (deps.length === 1 ? 'Departamento de ' + deps[0].nombre : 'DACE (' + deps.map((d) => d.nombre).join(', ') + ')');
     const sched = groups.filter((g) => g.sessions.length);
-    const hard = AN.list.filter((c) => c.sev === 'hard').length, soft = AN.list.length - hard;
-    const pend = groups.filter((g) => !g.sessions.length).length + AN.faltan.reduce((n, f) => n + f.n, 0);
+    const hard = AN.list.filter((c) => c.sev === 'hard').length, soft = AN.list.filter((c) => c.sev === 'soft' && !c.desc).length;
+    const pend = pendientes().filter((p) => !p.desc).reduce((n, p) => n + p.n, 0);
     const items = sched.reduce((n, g) => n + g.items.length, 0), fijos = groups.filter((g) => g.locked).length;
     $m('semLbl').textContent = `${M.ent.semestre.etiqueta} · ${items} grupos (${sched.length} clases en la malla, con los grupos espejo juntos)`;
+    // Cada contador abre el panel en la lista de lo que cuenta (2026-10-27), para ir a cada caso con un clic
     $m('stats').innerHTML =
-      `<div class="stat"><b>${sched.length}</b> en la malla</div>` +
-      `<div class="stat ${hard ? 'bad' : 'ok'}"><b>${hard}</b> choques</div>` +
-      `<div class="stat ${soft ? 'warn' : 'ok'}"><b>${soft}</b> avisos</div>` +
-      `<div class="stat ${pend ? 'warn' : 'ok'}"><b>${pend}</b> por asignar</div>` +
-      (fijos ? `<div class="stat" title="Grupos publicados: no se mueven"><b>${fijos}</b> publicados</div>` : '');
+      `<button class="stat" data-sec="malla" title="Ver las clases en la malla"><b>${sched.length}</b> en la malla</button>` +
+      `<button class="stat ${hard ? 'bad' : 'ok'}" data-sec="hard" title="Ver los choques"><b>${hard}</b> choques</button>` +
+      `<button class="stat ${soft ? 'warn' : 'ok'}" data-sec="soft" title="Ver los avisos"><b>${soft}</b> avisos</button>` +
+      `<button class="stat ${pend ? 'warn' : 'ok'}" data-sec="pend" title="Ver lo que falta por asignar"><b>${pend}</b> por asignar</button>` +
+      (fijos ? `<button class="stat" data-sec="fijos" title="Grupos publicados: no se mueven"><b>${fijos}</b> publicados</button>` : '');
+    $m('stats').querySelectorAll('[data-sec]').forEach((b) => (b.onclick = () => abrirSeccion(b.dataset.sec)));
+  }
+
+  // Abre el panel lateral en una sección y despliega sus listas: la de choques o avisos con todos sus
+  // tipos abiertos, y las de "en la malla" y "publicados", que normalmente van cerradas.
+  function abrirSeccion(sec) {
+    ui.side = true;
+    ui.sel = null;
+    closeCard();
+    const sev = { hard: 'hard', soft: 'soft' }[sec];
+    if (sev) for (const c of AN.list) if (c.sev === sev) ui.showAll[sev + c.type] = true;
+    if (sec === 'malla' || sec === 'fijos') ui.showAll['lista-' + sec] = true;
+    renderSide();
+    const h = $m('side').querySelector(`[data-sec="${sec}"]`);
+    if (h) {
+      h.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      h.classList.remove('sec-flash');
+      void h.offsetWidth;
+      h.classList.add('sec-flash');
+    }
   }
 
   function renderAcciones() {
@@ -803,7 +915,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
       const flag = st.hard.length || st.soft.length ? `<div class="flag">!</div>` : '';
       const short = pref(g.items[0].clave, '----');
       const code = (g.fijaId != null ? '<span class="af" title="Asignación directa de la jefatura">◆</span>' : '') + (g.locked ? '🔒 ' : '') +
-        esc(w < 64 ? short.slice(4) || short : g.items.map((i) => i.clave.slice(4)).join('+') + (g.items[0].numero ? ' · ' + g.items[0].numero : ''));
+        esc(w < 64 ? short.slice(4) || short : g.items.map((i) => i.clave.slice(4)).join('+') + (g.items[0].numero ? ' · ' + g.items[0].numero : ''))
+        + (w >= 64 && semDe(g) ? `<span class="sem" title="Semestre en los planes vigentes"> · sem ${semDe(g)}</span>` : '');
       const third = ui.view === 'salon' ? gProf(g) : ui.view === 'prof' ? (ROOMS.length ? rName(roomOf(g, g.sessions[v.si])) : (M.deptos[gDep(g)] || {}).clave_prefijo || '') : gProf(g) + (ROOMS.length ? ' · ' + rName(roomOf(g, g.sessions[v.si])) : '');
       h += `<div class="${cls.join(' ')}" data-g="${esc(g.id)}" data-si="${v.si}" style="left:${x}px;top:${y}px;width:${w - 2}px;height:${hh}px;--z:${5 + v.lane};--in:${strip ? Math.max(0, strip - 12) + 'px' : 'auto'};--bg-c:hsl(${hu} 70% 95%);--bgt-c:hsl(${hu} 70% 92% / .62);--bd-c:hsl(${hu} 45% 82%);--st-c:hsl(${hu} 55% 48%)">
         ${flag}<div class="vc">${esc(g.items[0].clave.slice(4))}</div><div class="in"><div class="c">${code}</div><div class="n">${esc(gName(g))}</div><div class="p ${g.profs.length || g.locked ? '' : 'none'}">${esc(third)}</div></div></div>`;
@@ -816,10 +929,12 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const side = $m('side');
     side.classList.toggle('collapsed', !ui.side);
     const tgl = `<button class="side-toggle" data-m="sideTgl" title="${ui.side ? 'Ocultar panel' : 'Mostrar panel'}">${ui.side ? '«' : '»'}</button>`;
-    const hard = AN.list.filter((c) => c.sev === 'hard'), soft = AN.list.filter((c) => c.sev === 'soft');
-    const pend = groups.filter((g) => !g.sessions.length), nf = AN.faltan.reduce((n, f) => n + f.n, 0);
+    const hard = AN.list.filter((c) => c.sev === 'hard'), soft = AN.list.filter((c) => c.sev === 'soft' && !c.desc);
+    const desc = AN.list.filter((c) => c.desc);
+    const PEND = pendientes(), pend = PEND.filter((p) => !p.desc), pendDesc = PEND.filter((p) => p.desc);
+    const nPend = pend.reduce((n, p) => n + p.n, 0);
     if (!ui.side) {
-      side.innerHTML = tgl + `<div class="vside" data-m="vside"><span class="r">${hard.length} choques</span><span class="a">${soft.length} avisos</span><span>${pend.length + nf} por asignar</span></div>`;
+      side.innerHTML = tgl + `<div class="vside" data-m="vside"><span class="r">${hard.length} choques</span><span class="a">${soft.length} avisos</span><span>${nPend} por asignar</span></div>`;
       $m('sideTgl').onclick = $m('vside').onclick = () => toggleSide(true);
       return;
     }
@@ -827,16 +942,25 @@ export function montarMalla(raiz, datos, opciones = {}) {
     let h = '';
     if (oneProf() != null && P[oneProf()]) h += profCard(oneProf());
     else h += runCard();
-    h += `<h3>Choques <span class="n">${hard.length}</span></h3>`;
-    h += hard.length ? groupedHTML(hard, 'hard') : `<div class="empty">✓ Nada que la subida rechazaría</div>`;
-    h += `<h3>Avisos <span class="n">${soft.length}</span></h3>`;
+    h += `<h3 data-sec="hard">Choques <span class="n">${hard.length}</span></h3>`;
+    h += hard.length ? groupedHTML(hard, 'hard') : `<div class="empty">✓ Sin choques</div>`;
+    h += `<h3 data-sec="soft">Avisos <span class="n">${soft.length}</span></h3>`;
     h += soft.length ? groupedHTML(soft, 'soft') : `<div class="empty">✓ Sin avisos</div>`;
-    h += `<h3>Por asignar <span class="n">${pend.length + nf}</span></h3>`;
-    if (pend.length) h += `<div class="tray">${pend.map((g) => `<div class="tcard" data-g="${esc(g.id)}"><b>${esc(gLabel(g))}</b>${g.fijaId != null ? ' <span class="af">◆</span>' : ''}<div>${esc(gName(g))}</div><div class="s">${esc(gProf(g))}${ROOMS.length ? ' · ' + esc(rName(g.roomId)) : ''}</div></div>`).join('')}</div>`;
-    if (AN.faltan.length) h += `<div class="tray" style="margin-top:6px">${AN.faltan.map((f) => { const m = M.mats[f.mid]; return `<div class="dem"><b>${esc(f.mids.map((x) => M.mats[x].clave).join(' + '))}</b> · ${esc(m.nombre)}<div class="s">Falta${f.n > 1 ? 'n' : ''} ${plural(f.n, 'clase')} de ${f.pide} que pide la demanda${f.motivo ? '. El motor: «' + esc(f.motivo) + '»' : ''}</div></div>`; }).join('')}</div>`;
-    if (!pend.length && !AN.faltan.length) h += `<div class="empty">✓ Toda la demanda tiene grupo y horario</div>`;
+    if (desc.length || pendDesc.length) {
+      const open = ui.showAll['lista-desc'] ?? false, n = desc.length + pendDesc.length;
+      h += `<h3 data-sec="desc">Descartados <span class="n">${n}</span></h3>`
+        + `<details class="grp lista" data-k="lista-desc" ${open ? 'open' : ''}><summary>Lo que la jefatura ya vio y dejó así<span class="n">${n}</span></summary><div>${desc.map(cfItem).join('')}${pendDesc.map(pendItem).join('')}</div></details>`;
+    }
+    h += `<h3 data-sec="pend">Por asignar <span class="n">${nPend}</span></h3>`;
+    if (pend.length) h += `<div class="tray">${pend.map(pendItem).join('')}</div>`;
+    else h += `<div class="empty">✓ Toda la demanda tiene grupo, horario y profesor</div>`;
+    // Las clases que cuentan los contadores "en la malla" y "publicados", para ir a cualquiera con un clic
+    const enMalla = groups.filter((g) => g.sessions.length).sort((a, b) => natural(gLabel(a), gLabel(b)));
+    const publicados = enMalla.filter((g) => g.locked);
+    h += `<h3 data-sec="malla">En la malla <span class="n">${enMalla.length}</span></h3>` + listaGrupos(enMalla, 'malla', 'Ver las clases');
+    if (publicados.length) h += `<h3 data-sec="fijos">Publicados <span class="n">${publicados.length}</span></h3>` + listaGrupos(publicados, 'fijos', 'Ver los publicados (no se mueven)');
     h += `<h3>Leyenda</h3><div class="legend">
-      <div><i style="background:#fff;border:2px solid var(--red)"></i>Choque: la subida del motor lo rechazaría (mismo profesor o salón a la vez, rojo, bloqueo, tope…)</div>
+      <div><i style="background:#fff;border:2px solid var(--red)"></i>Choque: hay que resolverlo (mismo profesor o salón a la vez, horas en rojo, bloqueo, tope…)</div>
       <div><i style="background:#fff;border:2px solid var(--amber)"></i>Aviso: se acepta, pero conviene revisarlo</div>
       <div><i style="background:hsl(210 70% 95%);border-left:4px solid hsl(210 55% 48%)"></i>Grupo (el color identifica la materia)</div>
       <div><i style="color:var(--violet)">◆</i>Asignación directa de la jefatura</div>
@@ -849,9 +973,72 @@ export function montarMalla(raiz, datos, opciones = {}) {
     side.innerHTML = tgl + h;
     bindTgl();
     side.querySelectorAll('.cf').forEach((el) => (el.onclick = () => goTo(AN.list[+el.dataset.i])));
-    side.querySelectorAll('.tg, .tcard').forEach((el) => (el.onclick = () => { ui.sel = el.dataset.g; render(); }));
+    side.querySelectorAll('.cf-desc').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); descartar(AN.list[+b.dataset.desc], b.dataset.accion, b); }));
+    side.querySelectorAll('.pend-desc').forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      const p = PEND.find((x) => x.llave === b.dataset.llave);
+      if (p) descartarLlave(p.llave, p.depto, p.texto, b.dataset.accion, b, 'el pendiente');
+    }));
+    // ir al grupo como a un choque: su detalle, su día y el destello en la malla
+    side.querySelectorAll('.tg, .tcard').forEach((el) => (el.onclick = () => goTo({ ids: [el.dataset.g], cells: [] })));
     side.querySelectorAll('details.grp').forEach((d) => (d.ontoggle = () => { ui.showAll[d.dataset.k] = d.open; }));
     const cp = $m('clearProf'); if (cp) cp.onclick = () => { ui.profs.clear(); render(); };
+  }
+  // Descartar o restaurar un aviso (opciones.onDescartar). Se ve de inmediato; si el servidor no lo
+  // guarda, vuelve a como estaba con un aviso del motivo.
+  function descartar(c, accion, btn) {
+    if (!c) return;
+    const t = cfText(c);
+    const texto = (t.t + ' — ' + t.s).replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+    descartarLlave(llaveAviso(c), deptoAviso(c), texto, accion, btn, 'el aviso');
+  }
+  // Un renglón de "por asignar": un grupo (clic = ir a él) o demanda sin grupo, con Descartar/Restaurar
+  function pendItem(p) {
+    const btn = !EDD ? '' : `<button class="cf-desc pend-desc" data-llave="${esc(p.llave)}" data-accion="${p.desc ? 'restaurar' : 'descartar'}" title="${p.desc ? 'Volver a contarlo como por asignar' : 'Ya se vio y se deja así: deja de contar como por asignar'}">${p.desc ? 'Restaurar' : 'Descartar'}</button>`;
+    const quien = p.desc ? `<div class="s">Descartado por ${esc(titleCase(p.desc.descartado_por || ''))}${p.desc.descartado_at ? ' · ' + esc(new Date(p.desc.descartado_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })) : ''}</div>` : '';
+    if (p.g) {
+      const g = p.g;
+      const datos = g.sessions.length ? sesTxt(g) + (ROOMS.length ? ' · ' + esc(rName(g.roomId)) : '') : esc(gProf(g));
+      return `<div class="tcard pend${p.desc ? ' descartado' : ''}" data-g="${esc(g.id)}"><div class="cf-txt"><b>${esc(gLabel(g))}</b>${g.fijaId != null ? ' <span class="af">◆</span>' : ''} · <span class="falta">${p.falta}</span><div>${esc(gName(g))}</div><div class="s">${datos}</div>${quien}</div>${btn}</div>`;
+    }
+    const f = p.f, m = M.mats[f.mid];
+    return `<div class="dem pend${p.desc ? ' descartado' : ''}"><div class="cf-txt"><b>${esc(f.mids.map((x) => M.mats[x].clave).join(' + '))}</b> · ${esc(m.nombre)}<div class="s">Falta${f.n > 1 ? 'n' : ''} ${plural(f.n, 'clase')} de ${f.pide} que pide la demanda${f.motivo ? '. El motor: «' + esc(f.motivo) + '»' : ''}</div>${quien}</div>${btn}</div>`;
+  }
+  // Lo común a un aviso y a un "por asignar" (2026-10-27): se guarda por su llave en
+  // malla_aviso_descartado, con el departamento al que pertenece y un texto para leerlo después.
+  function descartarLlave(llave, depto, texto, accion, btn, que) {
+    const antes = DESC.get(llave);
+    btn.disabled = true;
+    if (accion === 'descartar') DESC.set(llave, { llave, descripcion: texto, descartado_por: '', descartado_at: null });
+    else DESC.delete(llave);
+    render();
+    opciones.onDescartar(accion === 'descartar'
+      ? { accion, llave, departamento_id: depto, descripcion: texto }
+      : { accion, llave })
+      .then((r) => {
+        if (!vivo) return;
+        if (accion === 'descartar' && r) DESC.set(llave, { llave, descripcion: texto, descartado_por: r.descartado_por, descartado_at: r.descartado_at });
+        for (const x of (r && r.conservados) || []) {
+          const cg = groups.find((y) => !y.locked && y.grupoId === x.grupo_id);
+          if (cg) cg.conservado = x.conservado;
+        }
+        render();
+      })
+      .catch((err) => {
+        if (!vivo) return;
+        if (antes) DESC.set(llave, antes); else DESC.delete(llave);
+        render();
+        avisar(`No se ${accion === 'descartar' ? 'descartó' : 'restauró'} ${que}: ${err.message}`);
+      });
+  }
+  // Una lista plegable de grupos (los renglones de la tarjeta de profesor): clic = abrir el grupo
+  function listaGrupos(gs, k, resumen) {
+    const open = ui.showAll['lista-' + k] ?? false;
+    const filas = gs.map((g) => {
+      const hu = hue(g), st = stOf(g.id);
+      return `<div class="tg ${st.hard.length ? 'hard' : ''}" data-g="${esc(g.id)}" style="--bg-c:hsl(${hu} 70% 95%);--st-c:hsl(${hu} 55% 48%)"><div><b>${g.fijaId != null ? '◆ ' : ''}${g.locked ? '🔒 ' : ''}${esc(gLabel(g))}</b><div style="color:var(--ink2);font-size:11.5px">${esc(gName(g))} · ${esc(gProf(g))}${ROOMS.length ? ' · ' + esc(rName(g.roomId)) : ''}</div></div><div class="s">${sesTxt(g).replace(' · ', '<br>')}</div></div>`;
+    }).join('');
+    return `<details class="grp lista" data-k="lista-${k}" ${open ? 'open' : ''}><summary>${esc(resumen)}<span class="n">${gs.length}</span></summary><div>${filas}</div></details>`;
   }
   // Una lista por tipo; los tipos con pocos elementos van abiertos
   function groupedHTML(list, sev) {
@@ -895,7 +1082,13 @@ export function montarMalla(raiz, datos, opciones = {}) {
   }
   function cfItem(c) {
     const t = cfText(c);
-    return `<div class="cf ${c.sev}" data-i="${AN.list.indexOf(c)}"><span class="dot"></span><div><div class="t">${t.t}</div><div class="s">${t.s}</div></div></div>`;
+    const i = AN.list.indexOf(c);
+    // Un aviso se descarta y un descartado se restaura; los choques no (2026-10-27)
+    const btn = !EDD || c.sev !== 'soft' ? ''
+      : c.desc ? `<button class="cf-desc" data-desc="${i}" data-accion="restaurar" title="Volver a contarlo como aviso">Restaurar</button>`
+      : `<button class="cf-desc" data-desc="${i}" data-accion="descartar" title="Ya se vio y se deja así: deja de contar como aviso">Descartar</button>`;
+    const quien = c.desc ? `<div class="s">Descartado por ${esc(titleCase(c.desc.descartado_por || ''))}${c.desc.descartado_at ? ' · ' + esc(new Date(c.desc.descartado_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })) : ''}</div>` : '';
+    return `<div class="cf ${c.sev}${c.desc ? ' descartado' : ''}" data-i="${i}"><span class="dot"></span><div class="cf-txt"><div class="t">${t.t}</div><div class="s">${t.s}</div>${quien}</div>${btn}</div>`;
   }
   const blocksOf = (id) => gb.querySelectorAll(`.blk[data-g="${CSS.escape(id)}"]`);
   function flash(ids) {
@@ -1016,7 +1209,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
 
   // ---------- Arrastrar y soltar ----------
   // Un clic sin moverse abre la tarjeta del grupo. Moverlo solo se puede con
-  // editable (todavía no: falta guardar en la base).
+  // opciones.onMover, y nunca un grupo publicado.
   let drag = null;
   function startDrag(e, gid, si) {
     e.preventDefault();
@@ -1134,9 +1327,50 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const d = drag; drag = null; hideTip();
     if (!d) return;
     if (!d.active) { ui.sel = d.gid; render(); openCard(d.gid); return; }
-    // Con editable, aquí se guardará el cambio (d.prop) en la base.
-    render();
+    if (!d.prop || d.fijo) { render(); return; }
+    guardarArrastre(byId[d.gid], d.prop);
   }
+
+  // Lo que dejó el arrastre se pinta de inmediato y se guarda (opciones.onMover y,
+  // si cambió de columna en la vista por profesor, opciones.onProfesor). Si el
+  // servidor lo rechaza (traslape, salón no autorizado...), vuelve a como estaba.
+  const sesKey = (g) => JSON.stringify([g.roomId ?? null, g.sessions.map((se) => [se.d, se.s, se.len, roomOf(g, se) ?? null])]);
+  function guardarArrastre(g, p) {
+    const mueve = sesKey(g) !== sesKey(p);
+    const cambiaProf = EDP && p.profs.join() !== g.profs.join();
+    if ((!mueve && !cambiaProf) || g.grupoId == null) { render(); return; }
+    const antes = { roomId: g.roomId, sessions: g.sessions, profs: g.profs };
+    if (mueve) { g.roomId = p.roomId; g.sessions = p.sessions; }
+    if (cambiaProf) g.profs = p.profs;
+    render();
+    const sesiones = p.sessions.map((se) => ({ dia: M.dias[se.d], inicio: M.F[se.s].inicio, bloques: se.len, ...(se.roomId !== undefined ? { salon_id: se.roomId } : {}) }));
+    const conservar = (r) => { if (r && r.conservado) g.conservado = r.conservado; return r; };
+    let paso = mueve ? opciones.onMover(g.grupoId, { salon_id: p.roomId ?? null, sesiones }).then(conservar) : Promise.resolve();
+    let movido = false;
+    paso = paso.then(() => { movido = true; return cambiaProf ? opciones.onProfesor(g.grupoId, p.profs[0] ?? null).then(conservar) : null; });
+    paso
+      .then((r) => {
+        if (!vivo) return;
+        if (r && r.profesores) g.profs = r.profesores;
+        render();
+        flash([g.id]);
+      })
+      .catch((err) => {
+        if (!vivo) return;
+        if (!movido) { g.roomId = antes.roomId; g.sessions = antes.sessions; }
+        g.profs = antes.profs;
+        render();
+        avisar(`No se guardó ${gLabel(g)}: ${err.message}`);
+      });
+  }
+  let avisoT = null;
+  function avisar(txt) {
+    const el = $m('msg');
+    el.innerHTML = `<div class="banner bad">${esc(txt)}</div>`;
+    clearTimeout(avisoT);
+    avisoT = setTimeout(() => { if (vivo) el.innerHTML = ''; }, 10000);
+  }
+  limpiezas.push(() => clearTimeout(avisoT));
   limpiezas.push(() => { removeEventListener('pointermove', onDragMove); removeEventListener('pointerup', onDragEnd); document.body.style.cursor = ''; });
 
   // ---------- Tarjeta del grupo ----------
@@ -1151,10 +1385,11 @@ export function montarMalla(raiz, datos, opciones = {}) {
     let h = `<button class="x" data-m="cardX" title="Cerrar">×</button>
       <div class="cd">${g.items.map((i) => esc(i.clave) + (i.numero ? ' · ' + esc(i.numero) : '')).join('  +  ')}</div>
       <h4>${esc(gNames(g))}</h4>
-      <div class="meta"><span>Profesor</span><b>${esc(gProfFull(g))}</b><span>Horario</span><b>${sesTxt(g)}</b>${ROOMS.length ? `<span>Salón</span><b>${esc(rName(g.roomId))}${g.roomId != null && R[g.roomId] && R[g.roomId].cap ? ' (cap. ' + R[g.roomId].cap + ')' : ''}</b>` : ''}</div>`;
+      <div class="meta"><span>Profesor</span><b>${esc(gProfFull(g))}</b>${semDe(g) ? `<span>Semestre</span><b>${semDe(g)}</b>` : ''}<span>Horario</span><b>${sesTxt(g)}</b>${ROOMS.length ? `<span>Salón</span><b>${esc(rName(g.roomId))}${g.roomId != null && R[g.roomId] && R[g.roomId].cap ? ' (cap. ' + R[g.roomId].cap + ')' : ''}</b>` : ''}</div>`;
     const editaProf = EDP && !g.locked && g.grupoId != null;
     if (editaProf) h += profEditorHTML(g);
     if (g.locked) h += `<div class="lockn">🔒 Publicado.</div>`;
+    else if (g.grupoId != null) h += conservadoHTML(g);
     if (st.hard.length || st.soft.length) {
       h += `<div class="sec">Choques y avisos</div>`;
       h += st.hard.map((c) => { const o = other(c, g.id) && byId[other(c, g.id)]; return `<div class="ch1"><div class="t">${cfText(c).t}</div>${o ? `Choca con ${gFull(o)} de ${esc(gProf(o))}` : cfText(c).s}</div>`; }).join('');
@@ -1178,7 +1413,33 @@ export function montarMalla(raiz, datos, opciones = {}) {
     card.style.display = 'block';
     $m('cardX').onclick = closeCard;
     if (editaProf) bindProfEditor(g);
+    const sb = $m('cardSoltar');
+    if (sb) sb.onclick = () => soltar(g, sb);
     placeCard();
+  }
+
+  // ---------- Conservado (2026-10-27) ----------
+  // Un grupo que la jefatura editó (o al que le descartó un aviso) no lo rehace la siguiente subida
+  // del motor. Soltarlo devuelve el grupo al motor.
+  function conservadoHTML(g) {
+    if (!g.conservado) return `<div class="note">La siguiente corrida del motor lo rehace. Al editarlo o descartar un aviso suyo se conserva.</div>`;
+    const c = g.conservado;
+    return `<div class="lockn">📌 Conservado${c.por ? ' por ' + esc(titleCase(c.por)) : ''}${c.at ? ' · ' + esc(new Date(c.at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })) : ''}: la siguiente corrida del motor no lo toca.</div>`
+      + (EDS ? `<button type="button" class="btn" data-m="cardSoltar" style="margin-top:6px">Que el motor lo rehaga</button>` : '');
+  }
+  function soltar(g, btn) {
+    btn.disabled = true; btn.textContent = 'Soltando…';
+    opciones.onSoltar(g.grupoId)
+      .then(() => {
+        if (!vivo) return;
+        g.conservado = null;
+        render();
+      })
+      .catch((err) => {
+        if (!vivo) return;
+        render();
+        avisar(`No se soltó ${gLabel(g)}: ${err.message}`);
+      });
   }
 
   // ---------- Cambiar el profesor desde la tarjeta ----------
@@ -1230,6 +1491,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
         .then((r) => {
           if (!vivo) return;
           g.profs = (r && r.profesores) || (v == null ? [] : [v]);
+          if (r && r.conservado) g.conservado = r.conservado;
           render();
           flash([g.id]);
         })
@@ -1331,6 +1593,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
   limpiezas.push(() => ro.disconnect());
 
   cargar(datos.entrada, datos.grupos || [], datos.corrida || null);
+  DESC = new Map((datos.descartados || []).map((d) => [d.llave, d]));
   renderAcciones();
   render();
 

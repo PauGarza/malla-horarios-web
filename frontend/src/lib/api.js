@@ -292,10 +292,37 @@ export const leerMalla = (token, semestreId, departamentos) =>
     token,
   );
 
-/** profesorId null deja la clase sin profesor. Responde { grupo_id, profesores }. */
+/** profesorId null deja la clase sin profesor. Responde { grupo_id, profesores, conservado }. */
 export const cambiarProfesorMalla = (token, semestreId, departamentos, grupoId, profesorId) =>
   post(
     `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
     token,
     { grupo_id: grupoId, profesor_id: profesorId },
+  );
+
+/**
+ * Descarta o restaura un aviso de la malla:
+ * { accion: 'descartar', llave, departamento_id, descripcion } | { accion: 'restaurar', llave }.
+ */
+export const descartarAvisoMalla = (token, semestreId, departamentos, cuerpo) =>
+  post(
+    `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
+    token,
+    cuerpo,
+  );
+
+/** Quita la marca de conservado de una clase: la siguiente subida del motor la rehace. Responde { grupo_id, conservado: null }. */
+export const soltarClaseMalla = (token, semestreId, departamentos, grupoId) =>
+  post(
+    `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
+    token,
+    { accion: 'soltar', grupo_id: grupoId },
+  );
+
+/** Mueve una clase de horario y/o salón: { salon_id, sesiones: [{dia, inicio, bloques, salon_id?}] }. */
+export const moverClaseMalla = (token, semestreId, departamentos, grupoId, { salon_id, sesiones }) =>
+  post(
+    `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
+    token,
+    { grupo_id: grupoId, salon_id, sesiones },
   );

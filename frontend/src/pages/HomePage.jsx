@@ -3,6 +3,7 @@ import {
   administraSemestres,
   etiquetaRol,
   gestionaDepartamento as esGestion,
+  veMallaDeTodaLaDivision,
   veTodosLosDepartamentos,
 } from '../lib/roles';
 import { etiquetaSemestre } from '../lib/semestre';
@@ -155,25 +156,28 @@ export default function HomePage({
           </section>
         )}
 
-        {/* Solo admin por ahora: los datos para el motor (D43) y la malla, que los
-            jefes todavía no ven (2026-10-21). Para abrirla a jefatura, cambiar
-            también exigir_rol en api/malla.php; para el motor, en motor-*.php. */}
-        {profesor.rol === 'admin' && (
+        {/* La malla la ve la jefatura (2026-10-27): cada jefe la de su
+            departamento, y la jefatura de división las tres (api/malla.php).
+            Los datos para el motor siguen siendo solo de admin (D43; motor-*.php). */}
+        {gestionaDepartamento && (
           <section className="home-seccion">
             <h2>Malla</h2>
             <div className="opciones-grid">
-              <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
-                <strong>Datos para el motor</strong>
-                <span>
-                  Descargar los datos del semestre para correr el motor de asignación, y subir su
-                  resultado para crear los grupos.
-                </span>
-              </button>
+              {profesor.rol === 'admin' && (
+                <button className="opcion-card opcion-activa" onClick={onAbrirMotor}>
+                  <strong>Datos para el motor</strong>
+                  <span>
+                    Descargar los datos del semestre para correr el motor de asignación, y subir su
+                    resultado para crear los grupos.
+                  </span>
+                </button>
+              )}
 
               <button className="opcion-card opcion-activa" onClick={onAbrirMalla}>
                 <strong>Malla horaria</strong>
                 <span>
-                  Los grupos de {etiquetaSemestre(semestre)} {veTodos ? 'de cada departamento' : 'de tu departamento'} por
+                  Los grupos de {etiquetaSemestre(semestre)}{' '}
+                  {veMallaDeTodaLaDivision(profesor.rol) ? 'de cada departamento' : 'de tu departamento'} por
                   día, hora, profesor y salón, con los choques y avisos que hay que resolver.
                 </span>
               </button>
