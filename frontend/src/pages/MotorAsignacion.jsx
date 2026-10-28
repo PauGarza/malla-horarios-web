@@ -312,7 +312,8 @@ export default function MotorAsignacion({ onVolver }) {
         <h2>1. Descargar los datos para el motor</h2>
         <p className="formulario-nota">
           Materias con demanda, profesores con lo que contestaron (con los ajustes de cursos, bloqueos y
-          materias de maestría de la jefatura), asignaciones directas y los grupos ya publicados.
+          materias de maestría de la jefatura), asignaciones directas y los grupos fijos: los publicados y los que la
+          jefatura conservó al editar la malla, que el motor no mueve.
         </p>
         <div className="motor-controles">
           <label>
@@ -366,7 +367,7 @@ export default function MotorAsignacion({ onVolver }) {
               <Cifra valor={descargado.resumen.borradores} texto="en borrador" alerta={descargado.resumen.borradores > 0} />
               <Cifra valor={descargado.resumen.sinContestar} texto="sin contestar" alerta={descargado.resumen.sinContestar > 0} />
               <Cifra valor={descargado.resumen.asignaciones} texto="asignaciones directas" />
-              <Cifra valor={descargado.resumen.fijos} texto="grupos publicados" />
+              <Cifra valor={descargado.resumen.fijos} texto="clases fijas (publicadas o conservadas)" />
               <Cifra valor={descargado.resumen.salones} texto="salones" alerta={descargado.conSalones && descargado.resumen.salones === 0} />
             </div>
             {descargado.resumen.materias === 0 && (
@@ -443,7 +444,8 @@ export default function MotorAsignacion({ onVolver }) {
                 <Cifra valor={res.sin_asignar} texto="grupos sin asignar" alerta={res.sin_asignar > 0} />
                 <Cifra valor={res.bloques.verde} texto="bloques en verde" />
                 <Cifra valor={res.bloques.amarillo} texto="bloques en amarillo" />
-                <Cifra valor={res.grupos_fijos} texto="publicados que no se tocan" />
+                <Cifra valor={res.grupos_fijos} texto="clases fijas que no se tocan (publicadas o conservadas)" />
+                {res.conserva > 0 && <Cifra valor={res.conserva} texto="grupos que conservó la jefatura" />}
               </div>
             )}
 
@@ -480,7 +482,10 @@ export default function MotorAsignacion({ onVolver }) {
                     <input type="checkbox" checked={confirmado} onChange={(e) => setConfirmado(e.target.checked)} />
                     {[
                       res.reemplaza > 0 &&
-                        `Se borran los ${res.reemplaza} grupos sin publicar que dejó la corrida anterior de este alcance.`,
+                        `Se borran los ${res.reemplaza} grupos sin publicar que dejó la corrida anterior de este alcance` +
+                          (res.conserva > 0
+                            ? ` y que nadie tocó; los ${res.conserva} que la jefatura conservó en la malla se quedan.`
+                            : '.'),
                       desfase?.desfasada && 'Lo aplico aunque los datos hayan cambiado desde la descarga.',
                     ]
                       .filter(Boolean)

@@ -2178,6 +2178,17 @@ select.editor-mini {
 .malla .stat.warn b{color:var(--amber)}
 .malla .stat.ok{background:var(--green-soft);color:var(--green)}
 .malla .stat.ok b{color:var(--green)}
+.malla button.stat{border:0;font:inherit;font-size:13px;cursor:pointer;transition:filter .12s,box-shadow .12s}
+.malla button.stat:hover{filter:brightness(.95);box-shadow:0 0 0 2px rgba(0,0,0,.06)}
+.malla button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.malla .m-side h3.sec-flash{animation:sec-flash 1.2s ease-out}
+.malla .cf .cf-txt{flex:1;min-width:0}
+.malla .cf-desc{flex:none;align-self:center;border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:7px;padding:3px 8px;font:inherit;font-size:11.5px;cursor:pointer}
+.malla .cf-desc:hover{border-color:var(--accent);color:var(--accent)}
+.malla .cf-desc:disabled{opacity:.5;cursor:default}
+.malla .cf.descartado{opacity:.7}
+.malla .cf.descartado .dot{background:var(--ink3)}
+@keyframes sec-flash{0%{background:var(--accent-soft);color:var(--accent)}100%{background:transparent}}
 .malla .hdr-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .malla .btn{border:1px solid var(--line);background:var(--panel);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:500}
 .malla .btn:hover{border-color:#c9ced8;background:#fafbfc}
@@ -2271,6 +2282,11 @@ select.editor-mini {
   font-size:11.5px;line-height:1.25;user-select:none;transition:opacity .12s, box-shadow .12s}
 .malla .blk:hover{box-shadow:0 3px 10px rgba(20,30,60,.18);z-index:60}
 .malla .blk .vc{display:none}
+.malla .blk .sem{font-weight:500;opacity:.75}
+.malla .tcard .falta{color:var(--amber);font-weight:600}
+.malla .tcard.pend,.malla .dem.pend{display:flex;gap:8px;align-items:flex-start}
+.malla .tcard.pend .cf-txt,.malla .dem.pend .cf-txt{flex:1;min-width:0}
+.malla .tcard.descartado,.malla .dem.descartado{opacity:.7}
 .malla .blk.stack{background:var(--bgt-c);box-shadow:-2px 0 6px rgba(20,30,60,.10)}
 .malla .blk.mute .vc{visibility:hidden}
 .malla .blk.mute:hover .vc{visibility:visible}

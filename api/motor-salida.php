@@ -23,10 +23,12 @@
 // huella de ese paquete con la que se guardó al descargar (motor_descarga).
 //
 // Al aplicar (§5 "Qué se escribe" y "Al volver a subir"), en una transacción:
-// se borran los grupos no publicados del alcance (y sus espejos de otros
-// departamentos), se crean los de la salida sin publicar, y se guarda la
-// corrida (sin_asignar, avisos, métricas) en motor_corrida para la vista de
-// malla. Nunca se toca un grupo publicado.
+// se borran los grupos no publicados y no conservados del alcance (y sus
+// espejos de otros departamentos), se crean los de la salida sin publicar, y
+// se guarda la corrida (sin_asignar, avisos, métricas) en motor_corrida para la
+// vista de malla. Nunca se toca un grupo publicado ni uno conservado (los que
+// la jefatura tocó en la malla, 2026-10-27): para el motor los dos son fijos.
+// resumen.reemplaza y resumen.conserva dicen cuántos grupos hay de cada uno.
 //
 // Autorización: solo admin por ahora (D43), igual que motor-entrada.php.
 // =============================================================================
@@ -206,6 +208,10 @@ $reemplaza = 0;
 foreach ($clases['reemplazo'] as $c) {
     $reemplaza += count($c['grupos']);
 }
+$conserva = 0;
+foreach ($clases['conservados'] as $c) {
+    $conserva += count($c['grupos']);
+}
 $desfase = [
     'reconocida'    => $descarga !== null,
     'desfasada'     => $descarga === null || $descarga['huella'] !== $huella,
@@ -217,7 +223,7 @@ $respuesta = [
     'avisos'       => $v['avisos'],
     'avisos_motor' => $v['avisos_motor'],
     'sin_asignar'  => $v['sin_asignar'],
-    'resumen'      => $v['resumen'] + ['reemplaza' => $reemplaza],
+    'resumen'      => $v['resumen'] + ['reemplaza' => $reemplaza, 'conserva' => $conserva],
     'desfase'      => $desfase,
     'motor'        => is_array($salida['motor'] ?? null) ? $salida['motor'] : null,
 ];

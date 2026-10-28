@@ -16,8 +16,9 @@
 //   motor_aplicar()         escribe la salida en grupo / imparte / ...
 //
 // Tres decisiones que la convención no fijaba (D43, D44):
-//   - grupos_fijos son los grupos del alcance ya publicados. Los no publicados
-//     del alcance no se mandan: la siguiente subida los reemplaza.
+//   - grupos_fijos son los grupos del alcance ya publicados y los conservados
+//     (2026-10-27: los que la jefatura tocó en la malla). Los demás no
+//     publicados del alcance no se mandan: la siguiente subida los reemplaza.
 //   - Los salones ocupados por grupos de fuera del alcance se RESTAN de
 //     salones[].disponible, igual que las horas del profesor van en ocupado.
 //   - Modo sin salones: la descarga puede ir con salones: [] y la salida con
@@ -294,11 +295,13 @@ function motor_clases(PDO $pdo, int $semestreId): array
 {
     $st = $pdo->prepare(
         'SELECT g.id, g.materia_id, g.numero, g.cupo_maximo, g.estado, g.publicado,
+                g.conservado_at, pc.nombre AS conservado_por,
                 m.clave, m.departamento_id, d.nombre AS departamento, i.id AS imparte_id
            FROM grupo g
            JOIN materia m      ON m.id = g.materia_id
            JOIN departamento d ON d.id = m.departamento_id
            LEFT JOIN imparte i ON i.grupo_id = g.id
+           LEFT JOIN profesor pc ON pc.id = g.conservado_por
           WHERE g.semestre_id = ?
           ORDER BY m.clave, g.numero, g.id'
     );
@@ -315,6 +318,10 @@ function motor_clases(PDO $pdo, int $semestreId): array
             'cupo_maximo'     => $g['cupo_maximo'] === null ? null : (int) $g['cupo_maximo'],
             'estado'          => $g['estado'],
             'publicado'       => (int) $g['publicado'] === 1,
+            'conservado'      => $g['conservado_at'] === null ? null : [
+                'por' => $g['conservado_por'],
+                'at'  => motor_hora_local($g['conservado_at']),
+            ],
             'departamento_id' => (int) $g['departamento_id'],
             'departamento'    => $g['departamento'],
             'imparte_id'      => $g['imparte_id'] === null ? null : (int) $g['imparte_id'],
@@ -418,25 +425,33 @@ function motor_clases(PDO $pdo, int $semestreId): array
 
 /**
  * Reparte las clases del semestre según el alcance:
- *   fijos      tienen una clave del alcance y ya se publicaron: no se mueven.
- *   reemplazo  tienen una clave del alcance y no se publicaron: la siguiente
- *              subida las borra (con sus espejos de otros departamentos).
- *   externas   ninguna clave del alcance: ocupan profesor y salón (§3.6 ocupado).
+ *   fijos       tienen una clave del alcance y ya se publicaron: no se mueven.
+ *   conservados tienen una clave del alcance, no se publicaron y la jefatura
+ *               las tocó en la malla (2026-10-27): para el motor son fijas y
+ *               la subida no las borra, pero la malla las sigue editando.
+ *   reemplazo   tienen una clave del alcance, no se publicaron y nadie las
+ *               tocó: la siguiente subida las borra (con sus espejos de otros
+ *               departamentos).
+ *   externas    ninguna clave del alcance: ocupan profesor y salón (§3.6 ocupado).
  * Las clases canceladas no ocupan nada.
  */
 function motor_clasificar(array $clases, array $deptos): array
 {
-    $r = ['fijos' => [], 'reemplazo' => [], 'externas' => []];
+    $r = ['fijos' => [], 'conservados' => [], 'reemplazo' => [], 'externas' => []];
     foreach ($clases as $c) {
         $enAlcance = false;
         $publicada = false;
+        $conservada = false;
         $cancelada = true;
         foreach ($c['grupos'] as $g) {
             $enAlcance = $enAlcance || in_array($g['departamento_id'], $deptos, true);
             $publicada = $publicada || $g['publicado'];
+            $conservada = $conservada || $g['conservado'] !== null;
             $cancelada = $cancelada && $g['estado'] === 'cancelado';
         }
-        if ($enAlcance && !$publicada) {
+        if ($enAlcance && !$publicada && $conservada) {
+            $r['conservados'][] = $c;
+        } elseif ($enAlcance && !$publicada) {
             $r['reemplazo'][] = $c;
         } elseif ($cancelada) {
             continue;
@@ -475,6 +490,58 @@ function motor_grupo_de_clase(array $rej, array $clase): array
     ];
 }
 
+/**
+ * Qué grupo cumple cada asignación directa: motor_aplicar() no escribe
+ * asignacion_fija_id, así que se deduce. $grupos van en el formato de un grupo
+ * de la salida (§4.2); devuelve [índice en $grupos => id de la asignación].
+ *
+ * Primero los que están en el horario fijado; después cualquiera con la
+ * materia y el profesor. Un grupo cumple a lo más una asignación. Una con
+ * "Profesor por asignar" (profesor_id null) busca primero un grupo sin
+ * profesor y, al final, uno al que la jefatura ya le puso profesor.
+ */
+function motor_emparejar_asignaciones(array $asignaciones, array $grupos): array
+{
+    $cumple = [];
+    $usada = [];
+    foreach ([[true, true], [false, true], [true, false], [false, false]] as list($exigirHorario, $sinProfesor)) {
+        foreach ($asignaciones as $a) {
+            if (isset($usada[$a['id']])) {
+                continue;
+            }
+            foreach ($grupos as $i => $g) {
+                $conSuProfesor = $a['profesor_id'] === null
+                    ? (!$sinProfesor || $g['profesores'] === [])
+                    : in_array($a['profesor_id'], $g['profesores'], true);
+                if (isset($cumple[$i])
+                    || !$conSuProfesor
+                    || !in_array($a['materia_id'], array_column($g['materias'], 'materia_id'), true)) {
+                    continue;
+                }
+                if ($exigirHorario && ($a['sesiones'] === []
+                        || motor_firma_sesiones($a['sesiones']) !== motor_firma_sesiones($g['sesiones']))) {
+                    continue;
+                }
+                $cumple[$i] = $a['id'];
+                $usada[$a['id']] = true;
+                break;
+            }
+        }
+    }
+    return $cumple;
+}
+
+/** "lunes 07:00 3, miercoles 07:00 3": para comparar dos horarios sin importar el salón. */
+function motor_firma_sesiones(array $sesiones): string
+{
+    $partes = [];
+    foreach ($sesiones as $s) {
+        $partes[] = "{$s['dia']} {$s['inicio']} {$s['bloques']}";
+    }
+    sort($partes);
+    return implode(', ', $partes);
+}
+
 // -----------------------------------------------------------------------------
 // §3 — El paquete de entrada
 // -----------------------------------------------------------------------------
@@ -486,6 +553,11 @@ function motor_grupo_de_clase(array $rej, array $clase): array
  *
  * Todo va con ORDER BY: la huella (motor_huella) depende de que dos
  * descargas con los mismos datos salgan idénticas.
+ *
+ * $conservadosComoFijos (2026-10-27): para el motor, las clases conservadas
+ * van en grupos_fijos y las asignaciones directas que ya cumple un grupo fijo
+ * no se mandan. La malla pasa false: las conservadas las sigue editando, así
+ * que no van en grupos_fijos, y ella misma empareja las asignaciones.
  */
 function motor_armar_entrada(
     PDO $pdo,
@@ -494,7 +566,8 @@ function motor_armar_entrada(
     array $deptos,
     bool $conSalones,
     string $generadoAt,
-    array $generadoPor
+    array $generadoPor,
+    bool $conservadosComoFijos = true
 ): array {
     $semestreId = (int) $semestre['id'];
     $enDeptos = motor_marcas($deptos);
@@ -511,6 +584,7 @@ function motor_armar_entrada(
 
     // --- lo que ya existe en grupo/imparte ---
     $clases = motor_clasificar(motor_clases($pdo, $semestreId), $deptos);
+    $fijas = $conservadosComoFijos ? array_merge($clases['fijos'], $clases['conservados']) : $clases['fijos'];
 
     // --- materias (§3.4) ---
     // Las activas del alcance con demanda cargada, las de las asignaciones
@@ -543,7 +617,7 @@ function motor_armar_entrada(
     foreach ($st->fetchAll() as $f) {
         $forzadas[(int) $f['materia_id']] = true;
     }
-    foreach ($clases['fijos'] as $c) {
+    foreach (array_merge($clases['fijos'], $clases['conservados']) as $c) {
         foreach ($c['grupos'] as $g) {
             $forzadas[$g['materia_id']] = true;
         }
@@ -882,7 +956,7 @@ function motor_armar_entrada(
     // sin cuenta (Actuaría, D45) o un co-titular de un departamento de fuera
     // del alcance no está en el paquete y el motor no puede asignarle nada.
     $gruposFijos = [];
-    foreach ($clases['fijos'] as $c) {
+    foreach ($fijas as $c) {
         $g = motor_grupo_de_clase($rej, $c);
         $g['profesores'] = array_values(array_filter($g['profesores'], function ($pid) use ($profesores) {
             return isset($profesores[$pid]);
@@ -924,6 +998,16 @@ function motor_armar_entrada(
             'profesor_id' => $a['profesor_id'],
             'sesiones'    => motor_sesiones($rej, $a['bloques']),
         ];
+    }
+    // Una asignación que ya cumple un grupo fijo no se manda (§3.9.3): el motor
+    // le abriría otro grupo, y la subida exige que cada una esté en exactamente
+    // un grupo de la salida. Pasa sobre todo con las conservadas: la jefatura
+    // decide un profesor como asignación directa y luego lo acomoda en la malla.
+    if ($conservadosComoFijos) {
+        $cumplidas = array_flip(motor_emparejar_asignaciones($asignaciones, $gruposFijos));
+        $asignaciones = array_values(array_filter($asignaciones, function ($a) use ($cumplidas) {
+            return !isset($cumplidas[$a['id']]);
+        }));
     }
 
     // --- historial (§3.8): semestres cerrados. Hoy vacío: nadie ha escrito imparte todavía. ---
@@ -1283,7 +1367,7 @@ function motor_validar_salida(array $rej, array $ent, $sal): array
     foreach ($todos as $t) {
         list($origen, $g) = $t;
         $esSalida = $origen === 'salida';
-        $ref = $esSalida ? $g['ref'] : 'grupo publicado ' . $g['grupo_id'];
+        $ref = $esSalida ? $g['ref'] : 'grupo fijo ' . $g['grupo_id'];
 
         // 2. materias
         $mIds = [];
@@ -1747,7 +1831,8 @@ function motor_aplicar(PDO $pdo, array $rej, array $ent, array $plan, array $ree
         $mats[$m['id']] = $m;
     }
 
-    // 1. Lo que la subida anterior dejó sin publicar (§5 "Al volver a subir").
+    // 1. Lo que la subida anterior dejó sin publicar y la jefatura no conservó
+    //    (§5 "Al volver a subir"). Las conservadas no vienen en $reemplazo.
     $grupoIds = [];
     $imparteIds = [];
     foreach ($reemplazo as $c) {

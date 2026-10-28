@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { cambiarProfesorMalla, leerMalla } from '../lib/api';
+import { cambiarProfesorMalla, descartarAvisoMalla, leerMalla, moverClaseMalla, soltarClaseMalla } from '../lib/api';
 import { montarMalla } from '../lib/mallaVista';
-import { veTodosLosDepartamentos } from '../lib/roles';
+import { veMallaDeTodaLaDivision } from '../lib/roles';
 import { etiquetaSemestre } from '../lib/semestre';
 
 // La malla del semestre para la jefatura (paso 13 de
@@ -11,8 +11,11 @@ import { etiquetaSemestre } from '../lib/semestre';
 // hoy. Lo que trae api/malla.php; el dibujo y la revisión viven en
 // lib/mallaVista.js, que pinta en un contenedor que React no toca.
 //
-// Desde la tarjeta de un grupo se le cambia el profesor (2026-10-23); mover
-// grupos y publicar llegan después.
+// La jefatura hace aquí la edición final (2026-10-27): cambia el profesor desde
+// la tarjeta de un grupo y lo mueve de horario o salón arrastrándolo. Cada jefe
+// en su departamento; la jefatura de división y admin, en los tres. Publicar
+// llega después. Lo que se edita queda conservado (2026-10-27): la siguiente
+// subida del motor no lo rehace, salvo que se suelte desde el detalle del grupo.
 
 const TODOS = 'todos';
 
@@ -22,7 +25,7 @@ const deptosDe = (veTodos, alcance, departamentos) =>
 
 export default function MallaHorarios({ onVolver }) {
   const { token, profesor, departamentos, semestre } = useAuth();
-  const veTodos = veTodosLosDepartamentos(profesor.rol);
+  const veTodos = veMallaDeTodaLaDivision(profesor.rol);
   const [alcance, setAlcance] = useState(TODOS);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState('');
@@ -42,6 +45,9 @@ export default function MallaHorarios({ onVolver }) {
       alcance,
       onAlcance: setAlcance,
       onProfesor: (grupoId, profesorId) => cambiarProfesorMalla(token, semestre.id, deptos, grupoId, profesorId),
+      onMover: (grupoId, cambio) => moverClaseMalla(token, semestre.id, deptos, grupoId, cambio),
+      onDescartar: (cuerpo) => descartarAvisoMalla(token, semestre.id, deptos, cuerpo),
+      onSoltar: (grupoId) => soltarClaseMalla(token, semestre.id, deptos, grupoId),
     };
   }, [onVolver, veTodos, departamentos, alcance, token, semestre]);
 

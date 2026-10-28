@@ -16,8 +16,8 @@
 > y los cambios posteriores (correo y recuperación de contraseña, franjas por día y por
 > departamento, número de cursos opcional) en §15. Después: las decisiones de la jefatura antes del
 > motor en §16, el mínimo de horas en verde calculado por cursos en §17, los profesores sin cuenta y
-> la programación de Actuaría en §18, el semestre de cada materia en §19 y el "Profesor por asignar"
-> en §20.
+> la programación de Actuaría en §18, el semestre de cada materia en §19, el "Profesor por asignar"
+> en §20 y los grupos conservados en §21.
 
 ## 1. Contexto y fuentes
 
@@ -487,6 +487,8 @@ de salones/horarios, sin restricción entre sí.
 | estado | estado_grupo_enum NOT NULL DEFAULT 'demanda' | `demanda` \| `en_asignacion` \| `asignado` \| `cancelado` |
 | publicado | boolean NOT NULL DEFAULT false | RN09: una vez publicado, no debería cambiar de salón salvo que lo pida Dirección Escolar |
 | continua_de_id | int NULL FK → grupo | solo para `materia.anual = true`: enlaza este grupo con el del semestre anterior del que es continuación. **Son dos grupos independientes** (cada uno con su propio `semestre_id`, `imparte`, etc.), unidos solo para reportarlos/mostrarlos juntos — no un grupo que abarca dos semestres (decisión confirmada 2026-09-09, para no romper que `grupo` pertenezca a un solo semestre) |
+| conservado_por | int NULL FK → profesor | quién lo conservó (2026-10-27, §21) |
+| conservado_at | timestamp NULL | NULL = la siguiente subida del motor lo reemplaza; con fecha, va al motor como grupo fijo (§21) |
 | UNIQUE(materia_id, semestre_id, numero) | | |
 | UNIQUE(semestre_id, crn) | | el CRN es folio único por periodo |
 
@@ -1285,3 +1287,22 @@ base que corre se aplica con `migracion-2026-10-23-profesor-por-asignar.sql`.
   `profesores: []` se escribe con el "Profesor por asignar" de su departamento y queda
   `en_asignacion`. Al leer `imparte_profesor` para el motor o la malla (`motor_clases`,
   `historial`) se descarta, así que un grupo por asignar se ve sin profesor en todos lados.
+
+## 21. Cambio del 2026-10-27: grupos conservados
+
+Ya está en `mysql/schema-mysql.sql`; en la base que corre se aplica con
+`migracion-2026-10-27b-grupo-conservado.sql`.
+
+- **El problema.** Una subida del motor borra los grupos sin publicar del alcance y crea los de la
+  salida. Desde que la jefatura edita la malla, eso borraría sus cambios de profesor y de horario, y
+  sus avisos descartados dejarían de aplicar (van por `grupo_id`).
+- **Qué es un grupo conservado.** Uno sin publicar que la jefatura ya tocó: le cambió el profesor, lo
+  movió de horario o de salón, o descartó un aviso suyo. La malla (`api/malla.php`) lo marca sola, en todas las
+  claves de un grupo espejo. `grupo.conservado_at` NULL = la siguiente subida lo reemplaza.
+- **Para el motor es un grupo fijo** (convención, §3.7): ocupa profesor, salón y horario, cuenta para
+  los grupos de su materia, y la subida no lo borra. Una asignación directa que ya cumple un grupo
+  fijo no se manda al motor (§3.9.3): si no, abriría otro grupo para ella.
+- **Sigue editable.** A diferencia de un publicado, la jefatura lo puede seguir moviendo. "Que el
+  motor lo rehaga" quita la marca.
+- **Publicado y conservado son cosas distintas.** Publicar es darlo por bueno hacia fuera (RN09);
+  conservar solo es "la siguiente corrida no lo toca".

@@ -132,7 +132,10 @@ Cómo escribe la subida (2026-10-13, `api/lib/motor.php`):
 - **Modo sin salones** (D44): `imparte_horario.salon_id` puede ser NULL y el grupo queda
   `en_asignacion`. Con profesor + horario + salón queda `asignado`.
 - **Al volver a subir** se borran los grupos sin publicar del alcance (y sus espejos de otros
-  departamentos); los publicados nunca se tocan y van al motor como `grupos_fijos`.
+  departamentos); los publicados nunca se tocan y van al motor como `grupos_fijos`. Desde el
+  2026-10-27 tampoco los **conservados**: los que la jefatura editó en la malla o a los que les
+  descartó un aviso (`grupo.conservado_at`). Van al motor como `grupos_fijos` igual que los
+  publicados, pero se siguen editando y se pueden soltar para que la siguiente corrida los rehaga.
 
 ## 5. Qué NO existe todavía (para no asumir que sí)
 

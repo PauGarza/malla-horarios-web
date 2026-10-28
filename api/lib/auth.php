@@ -319,6 +319,17 @@ function ve_todos_los_departamentos(): bool
 }
 
 /**
+ * ¿Quien llama ve la malla de los 3 departamentos? (2026-10-27, decisión de la
+ * usuaria.) Como ve_todos_los_departamentos(), pero sin la acotación temporal:
+ * la jefatura de división revisa y edita la malla de toda la división aunque
+ * para lo demás siga en su departamento.
+ */
+function ve_malla_de_toda_la_division(): bool
+{
+    return in_array(mi_rol(), ['admin', 'jefe_division'], true);
+}
+
+/**
  * ¿Quien llama abre y cierra semestres? El semestre es uno solo para los 3
  * departamentos, así que esto es de la división y no se acota con
  * DIVISION_SOLO_SU_DEPARTAMENTO.

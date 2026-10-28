@@ -33,6 +33,11 @@ const DIVISION_SOLO_SU_DEPARTAMENTO = true;
 export const veTodosLosDepartamentos = (rol) =>
   rol === 'admin' || (rol === 'jefe_division' && !DIVISION_SOLO_SU_DEPARTAMENTO);
 
+// Espejo de ve_malla_de_toda_la_division() (2026-10-27): la malla de los 3
+// departamentos la ven y editan admin y la jefatura de división, sin la
+// acotación temporal.
+export const veMallaDeTodaLaDivision = (rol) => rol === 'admin' || rol === 'jefe_division';
+
 // Espejo de administra_semestres(): el semestre es de toda la división, así
 // que la jefatura de división lo conserva aunque vea un solo departamento.
 export const administraSemestres = (rol) => rol === 'admin' || rol === 'jefe_division';

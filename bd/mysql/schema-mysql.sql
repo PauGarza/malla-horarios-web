@@ -380,12 +380,15 @@ CREATE TABLE grupo (
     estado         ENUM('demanda','en_asignacion','asignado','cancelado') NOT NULL DEFAULT 'demanda',
     publicado      TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'RN09: publicado no deberia cambiar de salon.',
     continua_de_id INT NULL COMMENT 'Solo para materia.anual: enlaza con el grupo del semestre anterior.',
+    conservado_por INT NULL COMMENT 'Quien lo conservo (2026-10-27).',
+    conservado_at  DATETIME NULL COMMENT 'UTC. NULL = la siguiente subida del motor lo reemplaza; con fecha, va al motor como grupo fijo (2026-10-27).',
     UNIQUE KEY uq_grupo_numero (materia_id, semestre_id, numero),
     UNIQUE KEY uq_grupo_crn (semestre_id, crn),
     KEY idx_grupo_continua (continua_de_id),
     CONSTRAINT fk_grupo_materia  FOREIGN KEY (materia_id)     REFERENCES materia(id),
     CONSTRAINT fk_grupo_semestre FOREIGN KEY (semestre_id)    REFERENCES semestre(id),
-    CONSTRAINT fk_grupo_continua FOREIGN KEY (continua_de_id) REFERENCES grupo(id)
+    CONSTRAINT fk_grupo_continua FOREIGN KEY (continua_de_id) REFERENCES grupo(id),
+    CONSTRAINT fk_grupo_conservado_por FOREIGN KEY (conservado_por) REFERENCES profesor(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Estado borrador de la malla: se crea desde estimacion_demanda, antes de asignar profesor/salon/horario.';
 
@@ -658,6 +661,22 @@ CREATE TABLE motor_corrida (
     CONSTRAINT fk_mco_por      FOREIGN KEY (subido_por)  REFERENCES profesor(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Cada resultado del motor aplicado (api/motor-salida.php). La vista de malla lee aqui sin_asignar y avisos.';
+
+CREATE TABLE malla_aviso_descartado (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id     INT NOT NULL,
+    departamento_id INT NOT NULL COMMENT 'Departamento del grupo del aviso: quién puede descartarlo y restaurarlo.',
+    llave           TEXT NOT NULL COMMENT 'El aviso tal cual (tipo, grupos, franjas, datos); ver mallaVista.js llaveAviso.',
+    llave_sha1      CHAR(40) NOT NULL,
+    descripcion     VARCHAR(500) NOT NULL COMMENT 'El texto del aviso al descartarlo, para leerlo después.',
+    descartado_por  INT NOT NULL,
+    descartado_at   DATETIME NOT NULL COMMENT 'UTC.',
+    UNIQUE KEY uq_mad_aviso (semestre_id, llave_sha1),
+    CONSTRAINT fk_mad_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
+    CONSTRAINT fk_mad_depto    FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_mad_por      FOREIGN KEY (descartado_por)  REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Avisos de la malla que la jefatura descarto (api/malla.php, 2026-10-27).';
 
 -- -----------------------------------------------------------------------------
 -- Infraestructura del API (no existe en el esquema de Postgres)
