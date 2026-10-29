@@ -2444,3 +2444,182 @@ select.editor-mini {
 .malla-pagina{position:relative}
 /* Encima del contenedor de la malla, que existe desde el principio para medir su alto. */
 .malla-cargando{position:absolute;left:0;right:0;top:0;z-index:5;padding:40px;text-align:center;color:var(--gray-text)}
+
+/* --- Horarios del departamento (PDF) ------------------------------------ */
+
+.horarios-acciones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.horarios-depto {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.horarios-titulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-bottom: 12px;
+}
+.horarios-titulo h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--itam);
+}
+.horarios-titulo p {
+  margin: 2px 0 0;
+  color: var(--gray-text);
+  font-size: 13px;
+}
+.horarios-generado {
+  text-align: right;
+}
+.horarios-tabla th,
+.horarios-tabla td {
+  padding: 6px 8px;
+  font-size: 13px;
+  vertical-align: top;
+}
+.horarios-tabla .col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.horarios-tabla .col-centro {
+  text-align: center;
+}
+.horarios-grupo,
+.horarios-horas {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.horarios-materia {
+  font-weight: 600;
+}
+.horarios-profesor {
+  color: var(--gray-text);
+}
+.horarios-profesor b {
+  font-weight: 600;
+}
+.horarios-nota {
+  font-size: 12px;
+  color: var(--gray-text);
+  font-style: italic;
+}
+.horarios-tabla .horarios-falta {
+  color: var(--rojo);
+}
+.horarios-pendientes {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.horarios-pendientes h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.horarios-pendientes ul {
+  margin: 0;
+  padding-left: 20px;
+}
+@media (max-width: 700px) {
+  .horarios-generado {
+    text-align: left;
+  }
+  .horarios-depto {
+    overflow-x: auto;
+  }
+}
+
+/* La hoja que sale al imprimir: carta horizontal, sin la barra ni los
+   botones, un departamento por página, el encabezado de la tabla en cada
+   página y ningún grupo partido entre dos. */
+@media print {
+  @page {
+    size: letter landscape;
+    margin: 12mm;
+  }
+  body {
+    background: white;
+  }
+  .barra-superior,
+  .no-imprimir {
+    display: none !important;
+  }
+  .horarios-reporte {
+    max-width: none;
+    padding: 0;
+    gap: 0;
+  }
+  .horarios-depto {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    overflow: visible;
+  }
+  .horarios-depto + .horarios-depto {
+    break-before: page;
+  }
+  .horarios-tabla thead {
+    display: table-header-group;
+  }
+  .horarios-tabla tbody {
+    break-inside: avoid;
+  }
+  .horarios-tabla th,
+  .horarios-tabla td {
+    font-size: 10.5px;
+    padding: 4px 6px;
+  }
+  .horarios-titulo h2 {
+    color: black;
+  }
+  .horarios-tabla .horarios-falta,
+  .horarios-profesor,
+  .horarios-nota,
+  .horarios-titulo p {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* --- Satisfacción de los profesores ------------------------------------- */
+
+.satisf-tabla th,
+.satisf-tabla td {
+  padding: 6px 8px;
+  font-size: 13px;
+  vertical-align: top;
+}
+.satisf-tabla .col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.satisf-tabla th {
+  text-transform: none;
+}
+.satisf-conteo {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.satisf-conteo .num-verde { color: var(--verde); font-weight: 600; }
+.satisf-conteo .num-amarillo { color: var(--amarillo); font-weight: 600; }
+.satisf-conteo .num-rojo { color: var(--rojo); font-weight: 600; }
+.satisf-s {
+  font-weight: 700;
+}
+.satisf-tabla td.satisf-alta { color: var(--verde); }
+.satisf-tabla td.satisf-media { color: var(--amarillo); background: var(--amarillo-bg); }
+.satisf-tabla td.satisf-baja { color: var(--rojo); background: var(--rojo-bg); }
+.satisf-tabla td.satisf-nada { color: var(--gray-text); }
+.satisf-tabla td.satisf-faltan { color: var(--rojo); font-weight: 600; }
+.satisf-notas {
+  color: var(--gray-text);
+  font-size: 12px;
+}

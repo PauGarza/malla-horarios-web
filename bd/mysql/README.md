@@ -184,6 +184,19 @@ datos-planes-estudio-mysql.sql   el semestre de cada materia en cada plan de est
                                  la migración del 2026-10-21 y de todos los datos-* de materias.
                                  No da de alta materias. Idempotente: repetido corrige
                                  semestres y vigencia sin duplicar.
+datos-salones-primavera-2027-mysql.sql
+                                 los salones que Servicios Escolares asignó a cada departamento
+                                 para Primavera 2027 (reportes SZRMEET del 23 y 26 de octubre):
+                                 los 41 renglones juntados en 25 salones provisionales (MAT
+                                 01–16, EST 01–06, ACT 01–03; edificio 'Por confirmar', porque
+                                 el reporte trae el nombre tachado), cada uno autorizado solo
+                                 para su departamento en sus días y franjas. No toca los salones
+                                 dummy. Idempotente; no depende del deploy.
+limpieza-2026-10-29-salones-dummy.sql
+                                 quita los 12 salones dummy de optV1 (9001–9012, edificio
+                                 'Dummy (minimo de salones)'): deja sin salón las sesiones que
+                                 los usaban y borra su disponibilidad. ANTES del alta de salones
+                                 reales. Idempotente.
 generar-planes-estudio.py        genera el archivo anterior. No se sube al servidor.
 ```
 

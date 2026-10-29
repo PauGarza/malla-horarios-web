@@ -886,7 +886,8 @@ function motor_armar_entrada(
     // y si la jefatura muestra solo una en el cuestionario (EST-13102 visible,
     // EST-13101 oculta) la demanda puede estar en la que nadie pudo marcar.
     // La clave OCULTA hereda de su co-oferta la marca (si sus co-ofertas traen
-    // colores distintos, la más restrictiva) y los bloqueos. Las visibles no se
+    // colores distintos, la mejor: verde si hay un verde, si no amarillo, como
+    // la marca de una clase compartida, 2026-10-29) y los bloqueos. Las visibles no se
     // tocan: en Matemáticas la co-oferta es una red de pares, no grupos
     // cerrados, y la jefatura bloquea clave por clave a propósito. Solo en el
     // paquete: la base no se toca.
@@ -906,7 +907,7 @@ function motor_armar_entrada(
                     continue;
                 }
                 $actual = $p['materias'][$par] ?? null;
-                if ($actual === null || $rango[$nivel] > $rango[$actual]) {
+                if ($actual === null || $rango[$nivel] < $rango[$actual]) {
                     $p['materias'][$par] = $nivel;
                 }
                 if (isset($cobertura[$mid]) && !in_array($par, $p['cobertura_departamental'], true)) {

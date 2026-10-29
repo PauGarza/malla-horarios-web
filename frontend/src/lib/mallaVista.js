@@ -23,24 +23,22 @@
 // y deja soltarlo (opciones.onSoltar).
 
 const DIA_TXT = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado' };
-const DIA_CORTO = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb' };
+export const DIA_CORTO = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb' };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const titleCase = (s) => (s || '').toLowerCase().replace(/(^|[\s.-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
-const natural = (a, b) => String(a).localeCompare(String(b), 'es', { numeric: true });
-const hm = (t) => t.replace(/^0(\d)/, '$1');
+export const titleCase = (s) => (s || '').toLowerCase().replace(/(^|[\s.-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+export const natural = (a, b) => String(a).localeCompare(String(b), 'es', { numeric: true });
+export const hm = (t) => t.replace(/^0(\d)/, '$1');
 const plural = (n, s, p) => n + ' ' + (n === 1 ? s : p || s + 's');
 const horas = (bl) => (bl / 2).toLocaleString('es-MX');
-// "Nombre(s) Paterno Materno" → "Nombre Paterno"; el paterno es la penúltima
-// palabra, junto con sus partículas ("de la Garza").
+// El nombre completo, con las partículas en minúscula salvo al principio
+// ("Liliana de la Torre Desentis"). Antes la malla lo acortaba a nombre y
+// paterno, pero con algunos profesores salía mal y confundía.
 const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
-const nombreCorto = (n) => {
-  const w = titleCase(n).split(/\s+/).filter(Boolean);
-  if (w.length <= 2) return w.join(' ');
-  let i = w.length - 2;
-  while (i > 1 && PARTICULAS.has(w[i - 1].toLowerCase())) i--;
-  const paterno = w.slice(i, w.length - 1).map((p) => (PARTICULAS.has(p.toLowerCase()) ? p.toLowerCase() : p));
-  return w[0] + ' ' + paterno.join(' ');
-};
+export const nombreCompleto = (n) =>
+  titleCase(n)
+    .split(/\s+/)
+    .map((w, i) => (i && PARTICULAS.has(w.toLowerCase()) ? w.toLowerCase() : w))
+    .join(' ');
 const NIVEL_TXT = { verde: 'verde', amarillo: 'amarillo', rojo: 'rojo', sin: 'sin respuesta', maestria: 'su materia de maestría', ocupado: 'ocupado en otro departamento' };
 
 // Rojo = la subida del motor lo rechazaría (§5, duras); ámbar = aviso.
@@ -166,7 +164,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
     for (const p of ent.profesores) {
       const maes = new Set();
       for (const [dia, hs] of Object.entries(p.maestria || {})) for (const h of hs) if (dIdx[dia] != null && idx[h] != null) maes.add(dIdx[dia] * 100 + idx[h]);
-      P[p.id] = { id: p.id, cu: p.cu, nombre: p.nombre, short: nombreCorto(p.nombre), depto: p.departamento_id, contrato: p.tipo_contrato, pref: p.preferencia,
+      P[p.id] = { id: p.id, cu: p.cu, nombre: p.nombre, nom: nombreCompleto(p.nombre), depto: p.departamento_id, contrato: p.tipo_contrato, pref: p.preferencia,
         disp: dias.map((dia) => F.map((f) => (p.disponibilidad && p.disponibilidad[dia] && p.disponibilidad[dia][f.inicio]) || null)),
         respondio: !!(p.disponibilidad && Object.keys(p.disponibilidad).length), maes,
         ocup: (p.ocupado || []).map((o) => { const x = toSes(o); return x && { ...x, motivo: o.motivo || 'otro departamento' }; }).filter(Boolean),
@@ -314,10 +312,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
   const gFull = (g) => `<b>${esc(gNames(g))}</b> (${esc(gLabel(g))})`;
   const roomOf = (g, se) => (se.roomId !== undefined ? se.roomId : g.roomId);
   const rName = (id) => (id != null && R[id] ? R[id].name : 'Sin salón');
-  const pName = (id) => (id != null && P[id] ? P[id].short : 'Sin profesor');
-  const pFull = (id) => (id != null && P[id] ? titleCase(P[id].nombre) : 'Sin profesor');
+  const pName = (id) => (id != null && P[id] ? P[id].nom : 'Sin profesor');
   const gProf = (g) => (g.profs.length ? g.profs.map(pName).join(' / ') : g.locked ? 'Programación de ' + ((M.deptos[gDep(g)] || {}).nombre || 'otro departamento') : 'Sin profesor');
-  const gProfFull = (g) => (g.profs.length ? g.profs.map(pFull).join(' / ') : gProf(g));
   const hue = (g) => { let h = 0; for (const ch of g.items[0].clave) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
   const sesTxt = (g) => {
     const m = {};
@@ -359,23 +355,24 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const a = Math.min(...ss), b = Math.max(...ss);
     return a === b ? String(a) : `${a}–${b}`;
   };
-  // Reglas de Servicios Escolares (D55, 2026-10-27), las de optv1/escolares.py: materias de los primeros
-  // 3 semestres (algún plan vigente) sin sesiones de 3 h, sin pasar de las 19:00 ni en viernes; 9 créditos
-  // en lunes, miércoles y viernes de 1.5 h. Es aviso: una asignación directa de la jefatura puede romperlas.
+  // Reglas de Servicios Escolares (D55, 2026-10-27; ajustada el 2026-10-28), las de optv1/escolares.py:
+  // materias de los primeros 3 semestres (algún plan vigente) sin sesiones de 3 h; del 4 en adelante, una
+  // sesión de 3 h solo de 19:00 a 22:00 o en viernes; 9 créditos en lunes, miércoles y viernes de 1.5 h.
+  // Es aviso: una asignación directa de la jefatura puede romperlas.
   const escolares = (g) => {
     const mpb = M.reglas.minutos_por_bloque || 30, out = [];
     const ms = g.items.map((i) => M.mats[i.mid]).filter(Boolean);
     const prim = ms.filter((m) => m.planes.some((p) => (p.vigente ?? true) && p.semestre_plan <= 3)).map((m) => m.clave);
+    const resto = ms.map((m) => m.clave).filter((c) => !prim.includes(c));
     const nueve = ms.filter((m) => m.cr === 9).map((m) => m.clave);
+    const largas = g.sessions.filter((se) => se.len * mpb >= 180);
     const dias = [...g.sessions].sort((a, b) => a.d - b.d).map((se) => M.dias[se.d]).join();
     if (nueve.length && (dias !== 'lunes,miercoles,viernes' || g.sessions.some((se) => se.len * mpb !== 90)))
       out.push(`${nueve.join(', ')}: 9 créditos van lunes, miércoles y viernes, 1.5 h cada día`);
-    if (prim.length) {
-      const q = `${prim.join(', ')} (primeros 3 semestres)`;
-      if (g.sessions.some((se) => se.len * mpb >= 180)) out.push(`${q}: sin clases de 3 horas`);
-      if (g.sessions.some((se) => M.F[se.s + se.len - 1].fin > '19:00')) out.push(`${q}: sin clases después de las 19:00`);
-      if (!nueve.length && g.sessions.some((se) => M.dias[se.d] === 'viernes')) out.push(`${q}: sin clases en viernes`);
-    }
+    // Con una clave de primeros semestres el grupo no lleva sesiones de 3 h; si no, solo de noche o en viernes
+    if (largas.length && prim.length) out.push(`${prim.join(', ')} (primeros 3 semestres): sin clases de 3 horas`);
+    else if (largas.some((se) => M.dias[se.d] !== 'viernes' && (M.F[se.s].inicio < '19:00' || M.F[se.s + se.len - 1].fin > '22:00')))
+      out.push(`${resto.join(', ')} (del semestre 4 en adelante): clases de 3 horas solo de 19:00 a 22:00 o en viernes`);
     return out;
   };
   // Lugares que pide la clase: los esperados hacia arriba; sin demanda, capacidad_planeacion (o 30)
@@ -457,10 +454,15 @@ export function montarMalla(raiz, datos, opciones = {}) {
           else if (!a.conHorario) add('asig_rojo', 'soft', [g.id], rojas, { p: pid });
         }
         if (amar.length) add('amarillo', 'soft', [g.id], amar, { p: pid });
-        for (const it of g.items) {
-          if (p.bloq.has(it.mid)) add('bloqueo', 'hard', [g.id], [], { p: pid, clave: it.clave });
-          const nm = p.mats[String(it.mid)];
-          if (nm !== 'verde' && !p.bloq.has(it.mid)) add('mat', 'soft', [g.id], [], { p: pid, clave: it.clave, nivel: nm || null });
+        for (const it of g.items) if (p.bloq.has(it.mid)) add('bloqueo', 'hard', [g.id], [], { p: pid, clave: it.clave });
+        // La marca de una clase compartida es la mejor de sus claves: un verde en una cubre a las demás;
+        // sin verde, un amarillo hace amarilla la clase. Un solo aviso por clase.
+        const libres = g.items.filter((it) => !p.bloq.has(it.mid));
+        const niv = libres.map((it) => p.mats[String(it.mid)]);
+        const nm = niv.includes('verde') ? 'verde' : niv.includes('amarillo') ? 'amarillo' : niv.includes('rojo') ? 'rojo' : null;
+        if (libres.length && nm !== 'verde') {
+          const clave = nm ? libres[niv.indexOf(nm)].clave : libres.map((it) => it.clave).join(' / ');
+          add('mat', 'soft', [g.id], [], { p: pid, clave, nivel: nm });
         }
         if (p.pref && p.pref.estado === 'borrador') add('borrador', 'soft', [g.id], [], { p: pid });
       }
@@ -590,7 +592,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
       case 'borrador': return { t: `${pn} no envió su formulario`, s: `Se usó lo que guardó en borrador · ${esc(gLabel(A))}` };
       case 'cursos': return { t: `${pn} tiene ${c.n} cursos y ${P[c.p].pref && P[c.p].pref.num_cursos_origen === 'jefatura' ? 'la jefatura le fijó' : 'pidió'} ${c.max}`, s: 'Más cursos que los que pidió' };
       case 'creditos': return { t: `${esc(c.clave)}: ${c.cr} créditos en ${c.bl} bloques`, s: `${esc(gLabel(A))} · ${horas(c.bl)} h por semana` };
-      case 'escolares': return { t: esc(c.v), s: `${esc(gLabel(A))} · ${sesTxt(A)}${A.fijaId != null ? ' · asignación directa: la jefatura manda' : ''}` };
+      case 'escolares': return { t: esc(c.v), s: `${esc(gLabel(A))} · ${sesTxt(A)}${A.fijaId != null ? ' · se respeta porque es asignación directa' : ''}` };
       case 'cupo': return { t: `${esc(gLabel(A))}: menos lugares que la demanda`, s: `Se esperan ${c.est}, caben ${c.ofr}` };
       case 'chico': return { t: `${esc(gLabel(A))}: menos de ${MIN_ALUMNOS} alumnos esperados`, s: `Se esperan ${c.est} por grupo de esa materia; el mínimo es ${MIN_ALUMNOS}` };
       case 'demanda': return { t: `${esc(c.clave)}: ${c.n} clases y la demanda pide ${c.sug}`, s: 'Con co-oferta: demanda ajustada sumada / 30 lugares; sin ella, los grupos sugeridos' };
@@ -651,10 +653,10 @@ export function montarMalla(raiz, datos, opciones = {}) {
         const pendiente = c.max != null && c.max > c.cursos && (!ui.deps.size || ui.deps.has(String(p.depto)));
         return da || pendiente;
       }).map((p) => p.id);
-      ids.sort((a, b) => natural(P[a].short, P[b].short));
+      ids.sort((a, b) => natural(P[a].nom, P[b].nom));
       const cols = ids.map((id) => {
         const c = carga(id), over = c.max != null && c.cursos > c.max;
-        return { key: 'p' + id, profId: id, title: P[id].short, full: titleCase(P[id].nombre), over,
+        return { key: 'p' + id, profId: id, title: P[id].nom, over,
           sub: `${c.cursos}${c.max != null ? '/' + c.max : ''} curso${c.cursos === 1 && c.max == null ? '' : 's'} · ${horas(c.bl)} h` };
       });
       if ((!ui.profs.size || ui.profs.has(SIN)) && groups.some((g) => sinProf(g) && g.sessions.some((se) => se.d === ui.day))) cols.push({ key: 'p-', profId: null, title: 'Sin profesor', sub: 'por asignar', nosalon: true });
@@ -732,7 +734,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
       out.push({ p, nm, amar, c, cur: g.profs.includes(p.id) });
     }
     const rk = (x) => (x.nm === 'verde' ? 0 : x.nm === 'amarillo' ? 1 : 2) * 1000 + (x.c.max != null && x.c.cursos >= x.c.max ? 500 : 0) + x.amar;
-    return out.sort((a, b) => rk(a) - rk(b) || natural(a.p.short, b.p.short));
+    return out.sort((a, b) => rk(a) - rk(b) || natural(a.p.nom, b.p.nom));
   }
 
   // ---------- Filtros ----------
@@ -852,7 +854,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
   function renderGrid() {
     measure();
     const cols = geo.cols, W = GUT + cols.length * geo.colW, H = totalH();
-    ch.innerHTML = `<div class="sp"></div>` + cols.map((c) => `<div class="ch ${c.nosalon ? 'nosalon' : ''} ${c.over ? 'over' : ''}" style="width:${geo.colW}px" title="${esc(c.full || c.title)}"><b>${esc(c.title)}</b><small>${esc(c.sub) || '&nbsp;'}</small></div>`).join('');
+    ch.innerHTML = `<div class="sp"></div>` + cols.map((c) => `<div class="ch ${c.nosalon ? 'nosalon' : ''} ${c.over ? 'over' : ''}" style="width:${geo.colW}px" title="${esc(c.title)}"><b>${esc(c.title)}</b><small>${esc(c.sub) || '&nbsp;'}</small></div>`).join('');
     ch.style.width = W + 'px';
     gb.style.width = W + 'px';
     gb.style.height = H + 'px';
@@ -1070,7 +1072,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
     const pr = p.pref, est = !pr ? 'no abrió el formulario' : pr.estado === 'enviado' ? 'envió su formulario' : pr.estado === 'borrador' ? 'lo dejó en borrador' : 'no lo inició';
     const over = c.max != null && c.cursos > c.max, falta = c.max != null && c.cursos < c.max;
     const max = M.reglas.max_horas_asignatura ?? 10, topeMal = p.contrato === 'asignatura' && c.bl / 2 > max;
-    return `<div class="tcardp"><h2>${esc(p.short)}</h2><div class="sub">${esc(titleCase(p.nombre))} · ${esc((M.deptos[p.depto] || {}).nombre || '')} · ${esc((p.contrato || 'sin contrato').replace('_', ' '))} · ${est}</div>
+    return `<div class="tcardp"><h2>${esc(p.nom)}</h2><div class="sub">${esc((M.deptos[p.depto] || {}).nombre || '')} · ${esc((p.contrato || 'sin contrato').replace('_', ' '))} · ${est}</div>
       <div class="sb"><div class="${over ? 'warn' : ''}"><b>${c.cursos}${c.max != null ? ' de ' + c.max : ''}</b>cursos${c.max != null ? (pr && pr.num_cursos_origen === 'jefatura' ? ' (lo fijó la jefatura)' : ' pedidos') : ''}${falta ? ' · le faltan ' + (c.max - c.cursos) : ''}</div>
       <div class="${topeMal ? 'bad' : ''}"><b>${horas(c.bl)} h</b>de clase por semana${p.contrato === 'asignatura' ? ' (tope ' + max + ')' : ''}</div>
       <div><b>${p.respondio ? horas(verdes) + ' h' : '—'}</b>${p.respondio ? 'en verde por semana' : 'sin disponibilidad capturada'}</div><div><b>${pend.length}</b>sin horario</div></div>
@@ -1114,7 +1116,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
       ${g.locked ? `<div class="tag lock">🔒 Publicado: ya no lo mueve el motor ni esta vista</div>` : ''}
       ${a ? `<div class="tag af">◆ Asignación directa de la jefatura: ${a.pid == null ? 'Profesor por asignar' : esc(pName(a.pid))}${a.conHorario ? ', con horario fijado' : ', el horario lo eligió el motor'}</div>` : ''}`;
     const sched = `<div class="field"><label>Horario</label><div class="sched">${g.sessions.length ? g.sessions.map((s) => `<div><span>${DN(s.d)}</span><b>${range(s.s, s.len)}</b></div>`).join('') : '<div><span>Sin horario</span></div>'}</div></div>`;
-    if (g.locked) return `<div class="det">${head}<div class="field"><label>Profesor</label><div>${esc(gProfFull(g))}</div></div>${ROOMS.length ? `<div class="field"><label>Salón</label><div>${esc(rName(g.roomId))}</div></div>` : ''}${sched}</div>`;
+    if (g.locked) return `<div class="det">${head}<div class="field"><label>Profesor</label><div>${esc(gProf(g))}</div></div>${ROOMS.length ? `<div class="field"><label>Salón</label><div>${esc(rName(g.roomId))}</div></div>` : ''}${sched}</div>`;
     const pid = g.profs[0];
     const t = pid != null && P[pid];
     const load = t ? carga(pid) : null;
@@ -1139,13 +1141,13 @@ export function montarMalla(raiz, datos, opciones = {}) {
     // con «Profesor por asignar»: ahí falta justo eso.
     const cl = (a && a.pid != null) || !g.sessions.length ? [] : candidatos(g).filter((x) => !x.cur).slice(0, 8);
     return `<div class="det">${head}
-      <div class="field"><label>Profesor</label><div>${esc(gProfFull(g))}${t ? ` · ${load.cursos}${load.max != null ? ' de ' + load.max : ''} cursos` : ''}</div></div>
-      ${cl.length ? `<div class="field"><label>Pueden darlo a esta hora</label><div class="cands">${cl.map((x) => `<div class="cand"><span>${esc(x.p.short)}</span><small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos${x.amar ? ' · ' + x.amar + ' amarillas' : ''}</small></div>`).join('')}</div><div class="hint" style="margin-top:4px">Sin bloqueo, sin rojo a esa hora, libres y sin pasar su tope.</div></div>` : ''}
+      <div class="field"><label>Profesor</label><div>${esc(gProf(g))}${t ? ` · ${load.cursos}${load.max != null ? ' de ' + load.max : ''} cursos` : ''}</div></div>
+      ${cl.length ? `<div class="field"><label>Pueden darlo a esta hora</label><div class="cands">${cl.map((x) => `<div class="cand"><span>${esc(x.p.nom)}</span><small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos${x.amar ? ' · ' + x.amar + ' amarillas' : ''}</small></div>`).join('')}</div><div class="hint" style="margin-top:4px">Sin bloqueo, sin rojo a esa hora, libres y sin pasar su tope.</div></div>` : ''}
       ${ROOMS.length ? `<div class="field"><label>Salón</label><div>${esc(rName(g.roomId))}</div></div>` : ''}
-      ${t && oneProf() !== pid ? `<button class="btn wide" data-m="seeProf" style="margin-bottom:12px">Ver la semana de ${esc(t.short)}</button>` : ''}
+      ${t && oneProf() !== pid ? `<button class="btn wide" data-m="seeProf" style="margin-bottom:12px">Ver la semana de ${esc(t.nom)}</button>` : ''}
       ${sched}
       ${st.hard.length || st.soft.length ? `<h3 style="margin-top:14px">Problemas de este grupo</h3>${[...st.hard, ...st.soft].map(cfItem).join('')}` : `<div class="empty" style="margin:10px 0">✓ Este grupo no choca con nada</div>`}
-      ${t ? `<h3 style="margin-top:16px">${esc(t.short)} <span class="n">${load.cursos}${load.max != null ? '/' + load.max : ''} cursos · ${horas(load.bl)} h/sem</span></h3>
+      ${t ? `<h3 style="margin-top:16px">${esc(t.nom)} <span class="n">${load.cursos}${load.max != null ? '/' + load.max : ''} cursos · ${horas(load.bl)} h/sem</span></h3>
         <div class="hint">Disponibilidad${t.respondio ? '' : ' (no la capturó: todo cuenta como ' + esc(sinComo()) + ')'} · contorno negro = este grupo, gris = sus otros grupos</div>${mini}` : ''}
     </div>`;
   }
@@ -1176,7 +1178,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
   function hoverHTML(g) {
     const st = stOf(g.id);
     let h = `<div class="h">${g.locked ? '🔒 ' : ''}${esc(gLabel(g))}</div><div>${esc(gNames(g))}</div>
-      <div class="mut">${esc(gProfFull(g))}${ROOMS.length ? ' · Salón ' + esc(rName(g.roomId)) : ''}</div><div class="mut">${sesTxt(g)}</div>`;
+      <div class="mut">${esc(gProf(g))}${ROOMS.length ? ' · Salón ' + esc(rName(g.roomId)) : ''}</div><div class="mut">${sesTxt(g)}</div>`;
     if (g.fijaId != null) h += `<div class="mut">◆ Asignación directa de la jefatura</div>`;
     h += issuesHTML(g, st);
     if (!st.hard.length && !st.soft.length) h += `<div class="ok">✓ Sin choques</div>`;
@@ -1311,7 +1313,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
     if (pt) {
       const v = p.sessions.flatMap(cellsOfSes).map((c) => nivel(pt, Math.floor(c / 100), c % 100));
       const peor = v.includes('maestria') ? 'maestria' : v.some(esRojo) ? (v.includes('rojo') ? 'rojo' : 'sin') : v.some(esAmarillo) ? 'amarillo' : 'verde';
-      tt += `<div class="mut">Disponibilidad de ${esc(pt.short)}: ${{ verde: 'todo en verde', amarillo: 'con horas en amarillo', rojo: 'con horas en rojo', sin: 'con horas que no marcó', maestria: 'encima de su maestría' }[peor]}</div>`;
+      tt += `<div class="mut">Disponibilidad de ${esc(pt.nom)}: ${{ verde: 'todo en verde', amarillo: 'con horas en amarillo', rojo: 'con horas en rojo', sin: 'con horas que no marcó', maestria: 'encima de su maestría' }[peor]}</div>`;
     }
     if (ROOMS.length) {
       const fr = freeRoomsFor(p);
@@ -1385,7 +1387,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
     let h = `<button class="x" data-m="cardX" title="Cerrar">×</button>
       <div class="cd">${g.items.map((i) => esc(i.clave) + (i.numero ? ' · ' + esc(i.numero) : '')).join('  +  ')}</div>
       <h4>${esc(gNames(g))}</h4>
-      <div class="meta"><span>Profesor</span><b>${esc(gProfFull(g))}</b>${semDe(g) ? `<span>Semestre</span><b>${semDe(g)}</b>` : ''}<span>Horario</span><b>${sesTxt(g)}</b>${ROOMS.length ? `<span>Salón</span><b>${esc(rName(g.roomId))}${g.roomId != null && R[g.roomId] && R[g.roomId].cap ? ' (cap. ' + R[g.roomId].cap + ')' : ''}</b>` : ''}</div>`;
+      <div class="meta"><span>Profesor</span><b>${esc(gProf(g))}</b>${semDe(g) ? `<span>Semestre</span><b>${semDe(g)}</b>` : ''}<span>Horario</span><b>${sesTxt(g)}</b>${ROOMS.length ? `<span>Salón</span><b>${esc(rName(g.roomId))}${g.roomId != null && R[g.roomId] && R[g.roomId].cap ? ' (cap. ' + R[g.roomId].cap + ')' : ''}</b>` : ''}</div>`;
     const editaProf = EDP && !g.locked && g.grupoId != null;
     if (editaProf) h += profEditorHTML(g);
     if (g.locked) h += `<div class="lockn">🔒 Publicado.</div>`;
@@ -1405,8 +1407,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
       const cl = candidatos(g).filter((x) => !x.cur).slice(0, 6);
       h += `<div class="sec">Otros profesores que pueden darlo a esta hora (${cl.length}${cl.length === 6 ? '+' : ''})</div>`;
       h += cl.length ? `<div class="rooms">${cl.map((x) => editaProf
-        ? `<button type="button" data-p="${x.p.id}">${esc(x.p.short)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></button>`
-        : `<span>${esc(x.p.short)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></span>`).join('')}</div>
+        ? `<button type="button" data-p="${x.p.id}">${esc(x.p.nom)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></button>`
+        : `<span>${esc(x.p.nom)}<small>${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos</small></span>`).join('')}</div>
         <div class="note">Sin bloqueo, sin rojo a esa hora, libres y sin pasar su tope.${editaProf ? ' Clic en uno para elegirlo arriba.' : ''}</div>` : `<div class="note">Nadie más cumple: sin bloqueo, sin rojo a esa hora y libre.</div>`;
     }
     card.innerHTML = h;
@@ -1449,13 +1451,13 @@ export function montarMalla(raiz, datos, opciones = {}) {
   function profEditorHTML(g) {
     const cur = g.profs.length ? g.profs[0] : null;
     const cands = candidatos(g), ok = new Set(cands.map((x) => x.p.id));
-    const resto = Object.values(P).filter((p) => !ok.has(p.id)).sort((a, b) => natural(a.short, b.short));
+    const resto = Object.values(P).filter((p) => !ok.has(p.id)).sort((a, b) => natural(a.nom, b.nom));
     const opt = (id, txt) => `<option value="${id}" ${id === cur ? 'selected' : ''}>${esc(txt)}</option>`;
     return `<div class="sec">Cambiar profesor</div>
       <div class="cprof"><select data-m="cardProf">
         <option value="" ${cur == null ? 'selected' : ''}>Sin profesor</option>
-        ${cands.length ? `<optgroup label="Pueden darlo a esta hora">${cands.map((x) => opt(x.p.id, `${x.p.short} · ${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos`)).join('')}</optgroup>` : ''}
-        ${resto.length ? `<optgroup label="Los demás: chocan, no la marcaron o la evitan">${resto.map((p) => opt(p.id, p.short)).join('')}</optgroup>` : ''}
+        ${cands.length ? `<optgroup label="Pueden darlo a esta hora">${cands.map((x) => opt(x.p.id, `${x.p.nom} · ${x.nm || 'no la marcó'} · ${x.c.cursos}${x.c.max != null ? '/' + x.c.max : ''} cursos`)).join('')}</optgroup>` : ''}
+        ${resto.length ? `<optgroup label="Los demás: chocan, no la marcaron o la evitan">${resto.map((p) => opt(p.id, p.nom)).join('')}</optgroup>` : ''}
       </select><button type="button" class="btn" data-m="cardProfOk" disabled>Guardar</button></div>
       ${g.profs.length > 1 ? `<div class="note">Hoy lo dan ${esc(g.profs.map(pName).join(' y '))}: al guardar queda solo el que elijas.</div>` : ''}
       <div data-m="cardProfPrev"></div>`;
@@ -1562,8 +1564,8 @@ export function montarMalla(raiz, datos, opciones = {}) {
   multiSelect('msProf', 'Profesores', () => [{ id: SIN, label: 'Sin profesor', sub: 'Por asignar · ' + gr(nGroups(sinProf)) },
     ...Object.values(P)
       .filter((p) => groups.some((g) => g.profs.includes(p.id)) || (p.pref && p.pref.num_cursos_max))
-      .sort((a, b) => natural(a.short, b.short))
-      .map((p) => { const c = carga(p.id); return { id: p.id, label: p.short, sub: titleCase(p.nombre) + ' · ' + c.cursos + (c.max != null ? ' de ' + c.max : '') + ' cursos' }; })], ui.profs);
+      .sort((a, b) => natural(a.nom, b.nom))
+      .map((p) => { const c = carga(p.id); return { id: p.id, label: p.nom, sub: c.cursos + (c.max != null ? ' de ' + c.max : '') + ' cursos' }; })], ui.profs);
   multiSelect('msRoom', 'Salones', () => ROOMS.map((r) => ({ id: r.id, label: 'Salón ' + r.name, sub: (r.cap ? 'cap. ' + r.cap + ' · ' : '') + gr(nGroups((g) => g.sessions.some((se) => roomOf(g, se) === r.id))) })), ui.rooms, () => ROOMS.length > 0);
   multiSelect('msMat', 'Materias', () => {
     const n = new Map();
