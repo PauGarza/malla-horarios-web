@@ -76,6 +76,7 @@ const ESQUELETO = `
       <div class="filters">
         <div class="ms" data-m="msDep"></div>
         <div class="ms" data-m="msProf"></div>
+        <div class="ms" data-m="msCon"></div>
         <div class="ms" data-m="msRoom"></div>
         <div class="ms" data-m="msMat"></div>
         <div class="ms" data-m="msCoh"></div>
@@ -141,7 +142,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
   let DESC = new Map(); // llave -> { descripcion, descartado_por, descartado_at }: avisos descartados
   const EDD = typeof opciones.onDescartar === 'function';
   const reindex = () => { byId = Object.fromEntries(groups.map((g) => [g.id, g])); };
-  const ui = { side: true, view: 'semana', day: 0, sel: null, deps: new Set(), profs: new Set(), rooms: new Set(), mats: new Set(), cohs: new Set(), showAll: {} };
+  const ui = { side: true, view: 'semana', day: 0, sel: null, deps: new Set(), profs: new Set(), contratos: new Set(), rooms: new Set(), mats: new Set(), cohs: new Set(), showAll: {} };
 
   function cargar(ent, gsal, corrida) {
     const dias = ent.rejilla.dias;
@@ -655,8 +656,9 @@ export function montarMalla(raiz, datos, opciones = {}) {
     }
     if (ui.view === 'prof') {
       let ids;
-      if (ui.profs.size) ids = [...ui.profs].map(Number).filter((id) => P[id]);
+      if (ui.profs.size) ids = [...ui.profs].map(Number).filter((id) => P[id] && contratoOk(id));
       else ids = Object.values(P).filter((p) => {
+        if (!contratoOk(p.id)) return false;
         const c = carga(p.id);
         const da = groups.some((g) => g.profs.includes(p.id) && depOk(g)) || p.ocup.length;
         const pendiente = c.max != null && c.max > c.cursos && (!ui.deps.size || ui.deps.has(String(p.depto)));
@@ -668,7 +670,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
         return { key: 'p' + id, profId: id, title: P[id].nom, over,
           sub: `${c.cursos}${c.max != null ? '/' + c.max : ''} curso${c.cursos === 1 && c.max == null ? '' : 's'} · ${horas(c.bl)} h` };
       });
-      if ((!ui.profs.size || ui.profs.has(SIN)) && groups.some((g) => sinProf(g) && g.sessions.some((se) => se.d === ui.day))) cols.push({ key: 'p-', profId: null, title: 'Sin profesor', sub: 'por asignar', nosalon: true });
+      if ((!ui.profs.size || ui.profs.has(SIN)) && !ui.contratos.size && groups.some((g) => sinProf(g) && g.sessions.some((se) => se.d === ui.day))) cols.push({ key: 'p-', profId: null, title: 'Sin profesor', sub: 'por asignar', nosalon: true });
       return cols;
     }
     return M.dias.map((d, i) => ({ key: 'd' + i, day: i, title: DN(i), sub: '' }));
@@ -748,16 +750,20 @@ export function montarMalla(raiz, datos, opciones = {}) {
 
   // ---------- Filtros ----------
   const depOk = (g) => !ui.deps.size || g.items.some((i) => ui.deps.has(String((M.mats[i.mid] || {}).depto)));
+  // Contrato (2026-10-29): solo los grupos con algún profesor de los contratos marcados; un grupo
+  // sin profesor no tiene contrato, así que sale del filtro.
+  const contratoOk = (id) => !ui.contratos.size || ui.contratos.has(String(P[id] && P[id].contrato));
   const cohMats = () => { const s = new Set(); for (const k of ui.cohs) { const c = M.cohortes.find((x) => x.key === k); if (c) c.mids.forEach((m) => s.add(m)); } return s; };
   const matches = (g) => {
     if (!depOk(g)) return false;
     if (ui.profs.size && !g.profs.some((p) => ui.profs.has(String(p))) && !(ui.profs.has(SIN) && sinProf(g))) return false;
+    if (ui.contratos.size && !g.profs.some(contratoOk)) return false;
     if (ui.rooms.size && !g.sessions.some((se) => ui.rooms.has(String(roomOf(g, se))))) return false;
     if (ui.mats.size && !g.items.some((i) => ui.mats.has(String(i.mid)))) return false;
     if (ui.cohs.size) { const cm = cohMats(); if (!g.items.some((i) => cm.has(i.mid))) return false; }
     return true;
   };
-  const filtering = () => !!(ui.deps.size || ui.profs.size || ui.rooms.size || ui.mats.size || ui.cohs.size);
+  const filtering = () => !!(ui.deps.size || ui.profs.size || ui.contratos.size || ui.rooms.size || ui.mats.size || ui.cohs.size);
 
   // ---------- Layout de carriles ----------
   function lanes(items) {
@@ -1614,11 +1620,17 @@ export function montarMalla(raiz, datos, opciones = {}) {
   const nGroups = (f) => groups.filter((g) => g.sessions.length && f(g)).length;
   const gr = (n) => plural(n, 'grupo');
   multiSelect('msDep', 'Departamentos', () => M.alcance.map((id) => ({ id, label: (M.deptos[id] || {}).nombre || id, sub: gr(nGroups((g) => gDep(g) === id)) })), ui.deps, () => M.alcance.length > 1);
-  multiSelect('msProf', 'Profesores', () => [{ id: SIN, label: 'Sin profesor', sub: 'Por asignar · ' + gr(nGroups(sinProf)) },
+  const enMalla = (p) => groups.some((g) => g.profs.includes(p.id)) || (p.pref && p.pref.num_cursos_max);
+  multiSelect('msProf', 'Profesores', () => [...(ui.contratos.size ? [] : [{ id: SIN, label: 'Sin profesor', sub: 'Por asignar · ' + gr(nGroups(sinProf)) }]),
     ...Object.values(P)
-      .filter((p) => groups.some((g) => g.profs.includes(p.id)) || (p.pref && p.pref.num_cursos_max))
+      .filter((p) => enMalla(p) && contratoOk(p.id))
       .sort((a, b) => natural(a.nom, b.nom))
       .map((p) => { const c = carga(p.id); return { id: p.id, label: p.nom, sub: c.cursos + (c.max != null ? ' de ' + c.max : '') + ' cursos' }; })], ui.profs);
+  const CONTRATOS = [['tiempo_completo', 'Tiempo completo'], ['medio_tiempo', 'Medio tiempo'], ['asignatura', 'Asignatura']];
+  multiSelect('msCon', 'Contrato', () => CONTRATOS.map(([id, label]) => {
+    const n = Object.values(P).filter((p) => p.contrato === id && enMalla(p)).length;
+    return { id, label, n, sub: plural(n, 'profesor', 'profesores') + ' · ' + gr(nGroups((g) => g.profs.some((x) => P[x] && P[x].contrato === id))) };
+  }).filter((it) => it.n), ui.contratos);
   multiSelect('msRoom', 'Salones', () => ROOMS.map((r) => ({ id: r.id, label: 'Salón ' + r.name, sub: (r.cap ? 'cap. ' + r.cap + ' · ' : '') + gr(nGroups((g) => g.sessions.some((se) => roomOf(g, se) === r.id))) })), ui.rooms, () => ROOMS.length > 0);
   multiSelect('msMat', 'Materias', () => {
     const n = new Map();
@@ -1632,7 +1644,7 @@ export function montarMalla(raiz, datos, opciones = {}) {
       .map(({ c, m }) => ({ id: c.key, label: c.key, sub: m.map((x) => M.mats[x].clave).join(', ') }));
   }, ui.cohs, () => M.cohortes.length > 0);
   escuchar(document, 'pointerdown', (e) => { if (!(e.target.closest && e.target.closest('.ms'))) msAll.forEach((m) => m.close()); });
-  $m('clearF').onclick = () => { [ui.deps, ui.profs, ui.rooms, ui.mats, ui.cohs].forEach((s) => s.clear()); render(); };
+  $m('clearF').onclick = () => { [ui.deps, ui.profs, ui.contratos, ui.rooms, ui.mats, ui.cohs].forEach((s) => s.clear()); render(); };
   function syncFilters() { msAll.forEach((m) => m.sync()); $m('clearF').hidden = !filtering(); }
   escuchar(window, 'keydown', (e) => {
     if (e.key !== 'Escape') return;
