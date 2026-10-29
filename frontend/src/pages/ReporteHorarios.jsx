@@ -12,6 +12,13 @@ import { etiquetaSemestre } from '../lib/semestre';
 // Diseño en DACE/DISENO-REPORTES.md §1.
 
 const TODOS = 'todos';
+// Filtro por contrato (2026-10-29), como el de la malla: solo los grupos con algún
+// profesor de ese contrato. Un grupo sin profesor no tiene contrato y sale del filtro.
+const CONTRATOS = [
+  ['tiempo_completo', 'Tiempo completo'],
+  ['medio_tiempo', 'Medio tiempo'],
+  ['asignatura', 'Asignatura'],
+];
 
 /** Los departamentos que se piden a api/malla.php; null = el de la cuenta. */
 const deptosDe = (veTodos, alcance, departamentos) =>
@@ -21,6 +28,8 @@ export default function ReporteHorarios({ onVolver }) {
   const { token, profesor, departamentos, semestre } = useAuth();
   const veTodos = veMallaDeTodaLaDivision(profesor.rol);
   const [alcance, setAlcance] = useState(TODOS);
+  const [contrato, setContrato] = useState(TODOS);
+  const [materia, setMateria] = useState(TODOS);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState('');
   const [generado, setGenerado] = useState(null);
@@ -44,7 +53,38 @@ export default function ReporteHorarios({ onVolver }) {
     };
   }, [token, semestre, veTodos, alcance, departamentos]);
 
-  const secciones = useMemo(() => (datos ? armarReporte(datos) : []), [datos]);
+  const completo = useMemo(() => (datos ? armarReporte(datos) : []), [datos]);
+  // Los contratos que tienen grupos en el reporte, para no ofrecer uno vacío
+  const hayContrato = useMemo(
+    () => new Set(completo.flatMap((s) => s.renglones.flatMap((r) => r.contratos))),
+    [completo],
+  );
+  // Las materias del reporte por departamento, para el selector: [{ departamento, materias: [{ clave, nombre }] }]
+  const materias = useMemo(
+    () =>
+      completo.map((s) => {
+        const vistas = new Map();
+        for (const r of s.renglones) if (!vistas.has(r.clave)) vistas.set(r.clave, r.materia);
+        return { departamento: s.departamento, materias: [...vistas].map(([clave, nombre]) => ({ clave, nombre })) };
+      }),
+    [completo],
+  );
+  const secciones = useMemo(() => {
+    if (contrato === TODOS && materia === TODOS) return completo;
+    return completo
+      .map((s) => {
+        const renglones = s.renglones.filter(
+          (r) => (contrato === TODOS || r.contratos.includes(contrato)) && (materia === TODOS || r.clave === materia),
+        );
+        return { ...s, renglones, pendientes: renglones.filter((r) => r.faltan.length) };
+      })
+      .filter((s) => s.renglones.length);
+  }, [completo, contrato, materia]);
+  const etiquetaContrato = (CONTRATOS.find(([v]) => v === contrato) || [])[1];
+  const filtroTxt = [
+    materia !== TODOS && 'solo ' + materia,
+    etiquetaContrato && 'solo profesores de ' + etiquetaContrato.toLowerCase(),
+  ].filter(Boolean);
   const enRevision = Boolean(datos && datos.grupos.length);
   const fecha = generado
     ? generado.toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' })
@@ -67,7 +107,11 @@ export default function ReporteHorarios({ onVolver }) {
             {veTodos && (
               <label className="selector-depto">
                 Departamento
-                <select value={alcance} disabled={!datos && !error} onChange={(e) => setAlcance(e.target.value)}>
+                <select value={alcance} disabled={!datos && !error} onChange={(e) => {
+                    setAlcance(e.target.value);
+                    setMateria(TODOS);
+                  }}
+                >
                   {departamentos.map((d) => (
                     <option key={d.id} value={String(d.id)}>
                       {d.nombre}
@@ -77,6 +121,37 @@ export default function ReporteHorarios({ onVolver }) {
                 </select>
               </label>
             )}
+            <label className="selector-depto">
+              Contrato
+              <select value={contrato} disabled={!datos} onChange={(e) => setContrato(e.target.value)}>
+                <option value={TODOS}>Todos los profesores</option>
+                {CONTRATOS.filter(([v]) => hayContrato.has(v) || v === contrato).map(([v, t]) => (
+                  <option key={v} value={v}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="selector-depto">
+              Materia
+              <select value={materia} disabled={!datos} onChange={(e) => setMateria(e.target.value)}>
+                <option value={TODOS}>Todas las materias</option>
+                {materias.map(({ departamento, materias: ms }) => {
+                  const opciones = ms.map((m) => (
+                    <option key={m.clave} value={m.clave}>
+                      {m.clave} · {m.nombre}
+                    </option>
+                  ));
+                  return materias.length > 1 ? (
+                    <optgroup key={departamento.id} label={departamento.nombre}>
+                      {opciones}
+                    </optgroup>
+                  ) : (
+                    opciones
+                  );
+                })}
+              </select>
+            </label>
             <button type="button" className="btn-primary" disabled={!secciones.length} onClick={() => window.print()}>
               Descargar PDF
             </button>
@@ -90,7 +165,13 @@ export default function ReporteHorarios({ onVolver }) {
       {!semestre && <p className="formulario-error">No hay ningún semestre activo.</p>}
       {error && <p className="formulario-error">{error}</p>}
       {semestre && !datos && !error && <div className="formulario-cargando">Cargando…</div>}
-      {datos && !secciones.length && <p className="formulario-nota">Todavía no hay grupos en la malla.</p>}
+      {datos && !secciones.length && (
+        <p className="formulario-nota">
+          {completo.length
+            ? 'Ningún grupo cumple con los filtros.'
+            : 'Todavía no hay grupos en la malla.'}
+        </p>
+      )}
 
       {secciones.map(({ departamento, renglones, pendientes }) => (
         <section className="horarios-depto" key={departamento.id}>
@@ -99,6 +180,7 @@ export default function ReporteHorarios({ onVolver }) {
               <h2>Horarios de {departamento.nombre}</h2>
               <p>
                 {etiquetaSemestre(semestre)} · {renglones.length} {renglones.length === 1 ? 'grupo' : 'grupos'}
+                {filtroTxt.map((t) => ` · ${t}`).join('')}
               </p>
             </div>
             <p className="horarios-generado">

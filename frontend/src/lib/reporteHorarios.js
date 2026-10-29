@@ -15,7 +15,8 @@ export { nombreCompleto };
  * entrada.departamentos, solo los del alcance y solo los que tienen grupos.
  *
  * renglón: { key, grupo, materia, semestre, horario: [{ dias, horas }],
- *            salon, cupo, profesores, compartido, publicado, pendiente }
+ *            salon, cupo, profesores, contratos, compartido, publicado, pendiente }
+ * contratos: los tipo_contrato de sus profesores, para filtrar por contrato.
  */
 export function armarReporte(datos) {
   const ent = datos.entrada;
@@ -64,7 +65,9 @@ export function armarReporte(datos) {
   ];
   for (const { g, publicado } of todos) {
     const sesiones = g.sesiones || [];
-    const nombres = (g.profesores || []).filter((id) => profs[id]).map((id) => nombreCompleto(profs[id].nombre));
+    const conCuenta = (g.profesores || []).filter((id) => profs[id]);
+    const nombres = conCuenta.map((id) => nombreCompleto(profs[id].nombre));
+    const contratos = [...new Set(conCuenta.map((id) => profs[id].tipo_contrato).filter(Boolean))];
     for (const x of g.materias) {
       const m = mats[x.materia_id];
       const dep = m ? m.departamento_id : null;
@@ -90,6 +93,7 @@ export function armarReporte(datos) {
         salon: sesiones.length ? salonDe(g) : '',
         cupo: g.cupo_maximo ?? null,
         profesores,
+        contratos,
         sinProfesor: sinProfesor && !publicado,
         compartido: g.materias.filter((y) => y !== x).map(etiqueta),
         publicado,
