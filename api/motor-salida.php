@@ -29,6 +29,10 @@
 // vista de malla. Nunca se toca un grupo publicado ni uno conservado (los que
 // la jefatura tocó en la malla, 2026-10-27): para el motor los dos son fijos.
 // resumen.reemplaza y resumen.conserva dicen cuántos grupos hay de cada uno.
+// En la misma transacción se guarda, por departamento, la malla que queda
+// (malla_version, D60, 2026-10-29), para que la jefatura pueda volver a verla
+// cuando la siguiente subida la borre. En el GET, cada corrida trae
+// igual_a_la_anterior: si dejó la misma malla que la subida anterior.
 //
 // Autorización: solo admin por ahora (D43), igual que motor-entrada.php.
 // =============================================================================
@@ -60,8 +64,25 @@ if (metodo_http() === 'GET') {
           LIMIT 20'
     );
     $st->execute([$semestreId]);
+    $filas = $st->fetchAll();
+
+    // ¿La malla que dejó cada subida es la misma que dejó la anterior en sus
+    // departamentos? (D60, por huella de malla_version). null = subida de antes
+    // de que se guardaran versiones.
+    $st = $pdo->prepare('SELECT corrida_id, departamento_id, huella FROM malla_version WHERE semestre_id = ? ORDER BY corrida_id');
+    $st->execute([$semestreId]);
+    $ultima = [];
+    $igual = [];
+    foreach ($st->fetchAll() as $v) {
+        $cid = (int) $v['corrida_id'];
+        $d = (int) $v['departamento_id'];
+        $mismo = isset($ultima[$d]) && $ultima[$d] === $v['huella'];
+        $igual[$cid] = ($igual[$cid] ?? true) && $mismo;
+        $ultima[$d] = $v['huella'];
+    }
+
     $corridas = [];
-    foreach ($st->fetchAll() as $c) {
+    foreach ($filas as $c) {
         $motor = json_decode((string) $c['motor'], true);
         $sinAsignar = json_decode((string) $c['sin_asignar'], true);
         $avisos = json_decode((string) $c['avisos'], true);
@@ -86,6 +107,7 @@ if (metodo_http() === 'GET') {
             'avisos_sistema'      => $avisosSistema,
             'subido_por'          => $c['subido_por'],
             'subido_at'           => motor_hora_local($c['subido_at']),
+            'igual_a_la_anterior' => $igual[(int) $c['id']] ?? null,
         ];
     }
 
@@ -268,6 +290,8 @@ try {
         ahora_utc(),
     ]);
     $corridaId = (int) $pdo->lastInsertId();
+    // La malla que deja esta subida, por departamento (D60): la siguiente la borra.
+    motor_guardar_versiones($pdo, $rej, $entrada, $semestreId, $deptos, $corridaId);
     $pdo->commit();
 } catch (PDOException $e) {
     // Va antes que RuntimeException, de la que hereda: su mensaje es de MySQL

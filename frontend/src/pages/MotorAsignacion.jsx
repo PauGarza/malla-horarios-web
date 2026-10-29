@@ -4,7 +4,9 @@ import {
   aplicarSalidaMotor,
   contarSalonesMotor,
   descargarEntradaMotor,
+  descargarReferenciaMalla,
   leerCorridasMotor,
+  leerVersionesMalla,
   validarSalidaMotor,
 } from '../lib/api';
 import { etiquetaSemestre } from '../lib/semestre';
@@ -16,6 +18,10 @@ import { etiquetaSemestre } from '../lib/semestre';
 // grupo / imparte, sin publicar. La vista de malla leerá de ahí.
 //
 // Solo admin por ahora. Formato: malla-horarios/docs/convencion-datos-motor.md.
+//
+// Versiones (2026-10-29, D60): cada subida guarda la malla que deja. Aquí se ve
+// si una subida dejó la misma malla que la anterior y qué versión prefiere cada
+// jefatura, para bajarla y usarla de referencia en la siguiente corrida.
 
 const TODOS = 'todos';
 
@@ -168,6 +174,7 @@ export default function MotorAsignacion({ onVolver }) {
 
   // --- Estado ---
   const [corridas, setCorridas] = useState(null);
+  const [preferidas, setPreferidas] = useState([]); // [{ departamento_id, corrida_id, subido_at, preferida }]
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
 
@@ -190,7 +197,34 @@ export default function MotorAsignacion({ onVolver }) {
     } catch (err) {
       setError(err.message);
     }
-  }, [token, semestre]);
+    // Sin la tabla de versiones (antes de su migración) la página sigue igual, sin esa sección.
+    try {
+      const { versiones } = await leerVersionesMalla(token, semestre.id, departamentos.map((d) => d.id));
+      setPreferidas(
+        versiones.flatMap((v) =>
+          v.departamentos
+            .filter((d) => d.preferida)
+            .map((d) => ({ departamento_id: d.departamento_id, corrida_id: v.corrida_id, subido_at: v.subido_at, preferida: d.preferida })),
+        ),
+      );
+    } catch {
+      setPreferidas([]);
+    }
+  }, [token, semestre, departamentos]);
+
+  async function bajarReferencia(p) {
+    setError('');
+    try {
+      const ref = await descargarReferenciaMalla(token, semestre.id, [p.departamento_id], p.corrida_id);
+      const depto = nombreDepto(p.departamento_id)
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, '-');
+      bajarArchivo(`referencia_${semestre.tipo}-${semestre.anio}_${depto}_${sello(p.subido_at)}.json`, ref);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   useEffect(() => {
     cargarCorridas();
@@ -538,6 +572,11 @@ export default function MotorAsignacion({ onVolver }) {
                         <td>
                           {fechaLegible(c.subido_at)}
                           {c.desfasada && <span className="badge badge-borrador">desfasado</span>}
+                          {c.igual_a_la_anterior && (
+                            <span className="badge" title="Dejó en la malla exactamente lo mismo que la subida anterior">
+                              igual a la anterior
+                            </span>
+                          )}
                         </td>
                         <td>{nombreAlcance(c.departamentos)}</td>
                         <td>{c.motor ? `${c.motor.nombre ?? ''} ${c.motor.version ?? ''}`.trim() : '—'}</td>
@@ -553,6 +592,50 @@ export default function MotorAsignacion({ onVolver }) {
               </div>
             )}
           </>
+        )}
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      <section className="formulario-seccion">
+        <h2>Versiones que prefiere la jefatura</h2>
+        <p className="formulario-nota">
+          Cada resultado aplicado queda guardado y la jefatura puede volver a verlo desde la malla. Si marca uno
+          como el que prefiere, aparece aquí: se descarga y se le pasa al motor como referencia, para que la
+          siguiente corrida se le parezca lo más posible con los datos de hoy.
+        </p>
+        {preferidas.length === 0 ? (
+          <p className="formulario-nota">Ninguna jefatura ha marcado una versión.</p>
+        ) : (
+          <div className="disponibilidad-grid-wrap">
+            <table className="panel-tabla">
+              <thead>
+                <tr>
+                  <th>Departamento</th>
+                  <th>Versión del</th>
+                  <th>La marcó</th>
+                  <th>Nota</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {preferidas.map((p) => (
+                  <tr key={`${p.departamento_id}-${p.corrida_id}`}>
+                    <td>{nombreDepto(p.departamento_id)}</td>
+                    <td>{fechaLegible(p.subido_at)}</td>
+                    <td>
+                      {p.preferida.por} ({fechaLegible(p.preferida.at)})
+                    </td>
+                    <td>{p.preferida.nota ?? '—'}</td>
+                    <td>
+                      <button type="button" className="btn-link" onClick={() => bajarReferencia(p)}>
+                        Descargar como referencia
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

@@ -111,6 +111,15 @@ const ESQUELETO = `
  *   alcances   [{ valor, etiqueta }] para el selector de departamento (admin), o null
  *   alcance    el valor elegido
  *   onAlcance  (valor) => void
+ *   versiones  [{ valor, etiqueta }] para el selector de versión (D60, 2026-10-29): '' es la
+ *              actual y las demás, la malla que dejó una subida anterior; null = sin selector
+ *   version    el valor elegido
+ *   onVersion  (valor) => void
+ *   vistaVersion  con una versión anterior, lo que dice el aviso de arriba:
+ *              { etiqueta, comparativo (versionesMalla.js compararMallas) | null,
+ *                preferida: [{ por, at, nota }], onPreferir (nota) => Promise<preferida>,
+ *                onQuitar () => Promise }. La versión se pinta sin onMover, onProfesor,
+ *              onSoltar ni onDescartar: solo se ve.
  */
 export function montarMalla(raiz, datos, opciones = {}) {
   const ED = typeof opciones.onMover === 'function';
@@ -820,9 +829,13 @@ export function montarMalla(raiz, datos, opciones = {}) {
     if (opciones.alcances) {
       h += `<label class="alcance">Departamento <select data-m="alcance">${opciones.alcances.map((a) => `<option value="${esc(a.valor)}" ${a.valor === opciones.alcance ? 'selected' : ''}>${esc(a.etiqueta)}</option>`).join('')}</select></label>`;
     }
+    if (opciones.versiones && opciones.versiones.length > 1) {
+      h += `<label class="alcance">Versión <select data-m="version">${opciones.versiones.map((a) => `<option value="${esc(a.valor)}" ${a.valor === opciones.version ? 'selected' : ''}>${esc(a.etiqueta)}</option>`).join('')}</select></label>`;
+    }
     if (opciones.onVolver) h += `<button class="btn" data-m="volver">← Inicio</button>`;
     $m('acciones').innerHTML = h;
     const sel = $m('alcance'); if (sel) sel.onchange = (e) => opciones.onAlcance && opciones.onAlcance(e.target.value);
+    const ver = $m('version'); if (ver) ver.onchange = (e) => opciones.onVersion && opciones.onVersion(e.target.value);
     const v = $m('volver'); if (v) v.onclick = opciones.onVolver;
   }
 
@@ -844,11 +857,51 @@ export function montarMalla(raiz, datos, opciones = {}) {
     }[ui.view];
     let b = '';
     const c = M.corrida;
+    const vv = opciones.vistaVersion;
+    if (vv) b += bannerVersion(vv);
     if (!groups.some((g) => !g.locked) && !c) b += `<div class="banner warn">Todavía no hay grupos de este semestre: falta correr el motor y subir su resultado en «Datos para el motor». Mientras, aquí solo se ven los publicados y la demanda por asignar.</div>`;
     else if (!ROOMS.length) b += `<div class="banner info"><b>Modo sin salones.</b> El motor asignó profesor y horario, pero no salones: los grupos quedan «en asignación» hasta cargar los salones del semestre y volver a correrlo.</div>`;
-    if (c && c.desfasada) b += `<div class="banner warn">La última corrida se aplicó aunque algo había cambiado desde la descarga. La revisión de abajo ya es contra los datos de hoy.</div>`;
+    if (c && c.desfasada) b += `<div class="banner warn">${vv ? 'Este resultado' : 'La última corrida'} se aplicó aunque algo había cambiado desde la descarga. La revisión de abajo ya es contra los datos de hoy.</div>`;
     if (M.avisosCarga.length) b += `<div class="banner bad">Al cargar: ${esc([...new Set(M.avisosCarga)].slice(0, 4).join('; '))}${M.avisosCarga.length > 4 ? '…' : ''}</div>`;
     $m('banners').innerHTML = b;
+    if (vv) escucharVersion(vv);
+  }
+
+  // Una versión anterior (D60): qué se está viendo, cómo se compara con la actual y la marca
+  // de «la que prefiero». Solo se ve: no hay arrastre ni cambios desde la tarjeta.
+  function bannerVersion(vv) {
+    const k = vv.comparativo;
+    let h = `<div class="banner info"><b>Estás viendo la malla del ${esc(vv.etiqueta)}.</b> Es una versión anterior: no se puede editar, y los choques y avisos se revisan con los datos de hoy.`;
+    if (k) {
+      h += `<br>Contra la malla actual: <b>${k.pares.iguales} de ${k.pares.total}</b> profesores siguen con la misma materia y <b>${k.identicos.iguales} de ${k.identicos.total}</b> grupos son idénticos (además, el mismo horario).`;
+      if (k.cambios.length) {
+        h += `<details><summary>${k.cambios.length} ${k.cambios.length === 1 ? 'profesor cambia' : 'profesores cambian'} de materias</summary><ul>` +
+          k.cambios.map((x) => `<li>${esc(x.profesor)}: ${esc(x.antes.join(', ') || 'sin clases')} → ahora ${esc(x.ahora.join(', ') || 'sin clases')}</li>`).join('') +
+          '</ul></details>';
+      }
+    }
+    if (vv.preferida.length) {
+      h += '<br>' + vv.preferida.map((p) => `La marcó como preferida ${esc(p.por)} (${esc(new Date(p.at).toLocaleDateString('es-MX', { dateStyle: 'medium' }))})${p.nota ? `: «${esc(p.nota)}»` : '.'}`).join('<br>');
+      if (vv.onQuitar) h += ` <button class="btn" data-m="verQuitar">Ya no es la preferida</button>`;
+    } else if (vv.onPreferir) {
+      h += `<br><input data-m="verNota" maxlength="300" placeholder="Por qué la prefieres (opcional)"> <button class="btn" data-m="verPreferir">Prefiero esta versión</button>`;
+    }
+    return h + '</div>';
+  }
+
+  function escucharVersion(vv) {
+    const pref = $m('banners').querySelector('[data-m="verPreferir"]');
+    const quitar = $m('banners').querySelector('[data-m="verQuitar"]');
+    const fallo = (err) => { if (vivo) avisar(`No se guardó: ${err.message}`); };
+    if (pref) pref.onclick = () => {
+      pref.disabled = true;
+      const nota = $m('banners').querySelector('[data-m="verNota"]').value;
+      vv.onPreferir(nota).then((preferida) => { if (!vivo) return; vv.preferida = preferida; renderToolbar(); }, (err) => { pref.disabled = false; fallo(err); });
+    };
+    if (quitar) quitar.onclick = () => {
+      quitar.disabled = true;
+      vv.onQuitar().then(() => { if (!vivo) return; vv.preferida = []; renderToolbar(); }, (err) => { quitar.disabled = false; fallo(err); });
+    };
   }
 
   function renderGrid() {

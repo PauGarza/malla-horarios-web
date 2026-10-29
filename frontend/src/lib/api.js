@@ -283,14 +283,37 @@ export const leerCorridasMotor = (token, semestreId) =>
 // --- Vista de malla (jefatura) -----------------------------------------------
 
 /**
- * { entrada, grupos, corrida } de api/malla.php. `departamentos` solo cuenta
- * para quien ve todos los departamentos; a los demás el servidor les da el suyo.
+ * { entrada, grupos, corrida, descartados, version } de api/malla.php. `departamentos` solo cuenta
+ * para quien ve todos los departamentos; a los demás el servidor les da el suyo. Con corridaId,
+ * la malla que dejó esa subida (una versión anterior, D60), para verla en solo lectura.
  */
-export const leerMalla = (token, semestreId, departamentos) =>
+export const leerMalla = (token, semestreId, departamentos, corridaId = null) =>
   pedir(
-    `malla.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : ''),
+    `malla.php?semestre_id=${semestreId}` +
+      (departamentos ? `&departamentos=${departamentos.join(',')}` : '') +
+      (corridaId ? `&corrida_id=${corridaId}` : ''),
     token,
   );
+
+// --- Versiones anteriores de la malla (D60) ------------------------------------
+
+const alcanceVersiones = (semestreId, departamentos) =>
+  `malla-versiones.php?semestre_id=${semestreId}` + (departamentos ? `&departamentos=${departamentos.join(',')}` : '');
+
+/** { versiones: [{ corrida_id, subido_at, subido_por, departamentos: [{ departamento_id, n_grupos, huella, preferida }] }] } */
+export const leerVersionesMalla = (token, semestreId, departamentos) =>
+  pedir(alcanceVersiones(semestreId, departamentos), token);
+
+/** Marca la versión de esa subida como la que prefiere la jefatura del alcance. Responde { preferida }. */
+export const preferirVersionMalla = (token, semestreId, departamentos, corridaId, nota) =>
+  post(alcanceVersiones(semestreId, departamentos), token, { accion: 'preferir', corrida_id: corridaId, nota });
+
+export const quitarVersionPreferida = (token, semestreId, departamentos, corridaId) =>
+  post(alcanceVersiones(semestreId, departamentos), token, { accion: 'quitar_preferida', corrida_id: corridaId });
+
+/** Solo admin: la versión como salida autoplanear-salida/2, para usarla de referencia en el motor. */
+export const descargarReferenciaMalla = (token, semestreId, departamentos, corridaId) =>
+  pedir(`${alcanceVersiones(semestreId, departamentos)}&referencia=${corridaId}`, token);
 
 /** profesorId null deja la clase sin profesor. Responde { grupo_id, profesores, conservado }. */
 export const cambiarProfesorMalla = (token, semestreId, departamentos, grupoId, profesorId) =>

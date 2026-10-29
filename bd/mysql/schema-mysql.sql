@@ -678,6 +678,27 @@ CREATE TABLE malla_aviso_descartado (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Avisos de la malla que la jefatura descarto (api/malla.php, 2026-10-27).';
 
+CREATE TABLE malla_version (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id     INT NOT NULL,
+    departamento_id INT NOT NULL,
+    corrida_id      INT NOT NULL COMMENT 'La subida que dejó esta malla.',
+    huella          CHAR(64) NOT NULL COMMENT 'SHA-256 sin ids (motor_huella_malla): igual = la misma malla.',
+    grupos          LONGTEXT NOT NULL COMMENT 'JSON: los grupos del departamento, formato §4.2 de la salida.',
+    n_grupos        INT NOT NULL,
+    creado_at       DATETIME NOT NULL COMMENT 'UTC.',
+    preferida_por   INT NULL COMMENT 'Quién de la jefatura la marcó como la que prefiere.',
+    preferida_at    DATETIME NULL COMMENT 'UTC.',
+    nota            VARCHAR(300) NULL COMMENT 'Lo que escribió la jefatura al marcarla.',
+    UNIQUE KEY uq_mv_corrida (corrida_id, departamento_id),
+    KEY idx_mv_semestre (semestre_id, departamento_id),
+    CONSTRAINT fk_mv_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
+    CONSTRAINT fk_mv_depto    FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_mv_corrida  FOREIGN KEY (corrida_id)      REFERENCES motor_corrida(id),
+    CONSTRAINT fk_mv_pref     FOREIGN KEY (preferida_por)   REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='La malla que dejó cada subida del motor, por departamento (api/malla-versiones.php, 2026-10-29, D60).';
+
 -- -----------------------------------------------------------------------------
 -- Infraestructura del API (no existe en el esquema de Postgres)
 -- -----------------------------------------------------------------------------

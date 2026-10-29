@@ -19,6 +19,15 @@
 //          motor, cuándo y quién la subió, sus métricas y lo sin asignar del
 //          alcance con su motivo. null si todavía no hay ninguna.
 //
+//   GET ?semestre_id=N[&departamentos=1,2,3]&corrida_id=C
+//     -> { entrada, grupos, corrida, descartados, version }
+//
+// Una versión anterior (2026-10-29, D60): los grupos que dejó la subida C en
+// el alcance (malla_version), con la entrada de HOY, así que los avisos se
+// revisan contra los datos de hoy. corrida es la C. version trae cuándo y
+// quién la subió y qué departamentos la marcaron como preferida. La vista la
+// pinta en solo lectura; la lista de versiones es de api/malla-versiones.php.
+//
 // Las convenciones citadas (§3.7, §4.2...) son de
 // malla-horarios/docs/convencion-datos-motor.md.
 //
@@ -237,17 +246,6 @@ function malla_clase_editable(PDO $pdo, int $semestreId, array $deptos, int $gru
     return null;
 }
 
-/** Quién y cuándo conservó la clase: el de cualquiera de sus claves (todas llevan el mismo). */
-function malla_conservado_de(array $clase): ?array
-{
-    foreach ($clase['grupos'] as $g) {
-        if ($g['conservado'] !== null) {
-            return $g['conservado'];
-        }
-    }
-    return null;
-}
-
 /**
  * Conserva una clase con todas sus claves espejo (2026-10-27): la siguiente
  * subida del motor ya no la borra. Si ya estaba conservada se queda el primero
@@ -257,7 +255,7 @@ function malla_conservado_de(array $clase): ?array
  */
 function malla_conservar(PDO $pdo, array $clase): array
 {
-    $antes = malla_conservado_de($clase);
+    $antes = motor_conservado_de($clase);
     if ($antes !== null) {
         return $antes;
     }
@@ -541,6 +539,60 @@ function malla_descartar(PDO $pdo, int $semestreId, array $deptos, array $body):
     ]);
 }
 
+/**
+ * Los grupos que dejó una subida en los departamentos del alcance (malla_version,
+ * D60), y lo que la vista dice de esa versión. Una clase espejo entre dos
+ * departamentos viene en los dos: se cuenta una vez. 404 si la subida no dejó
+ * nada en el alcance.
+ *
+ * @return array [grupos, {corrida_id, subido_at, subido_por, preferida: [{departamento_id, por, at, nota}]}]
+ */
+function malla_grupos_de_version(PDO $pdo, int $semestreId, array $deptos, int $corridaId): array
+{
+    $st = $pdo->prepare(
+        'SELECT v.departamento_id, v.grupos, v.preferida_at, v.nota, pp.nombre AS preferida_por,
+                c.subido_at, p.nombre AS subido_por
+           FROM malla_version v
+           JOIN motor_corrida c ON c.id = v.corrida_id
+           JOIN profesor p      ON p.id = c.subido_por
+           LEFT JOIN profesor pp ON pp.id = v.preferida_por
+          WHERE v.semestre_id = ? AND v.corrida_id = ? AND v.departamento_id IN (' . motor_marcas($deptos) . ')
+          ORDER BY v.departamento_id'
+    );
+    $st->execute(array_merge([$semestreId, $corridaId], $deptos));
+    $filas = $st->fetchAll();
+    if ($filas === []) {
+        error_json('Esa versión de la malla no existe en este alcance', 404);
+    }
+    $grupos = [];
+    $preferida = [];
+    foreach ($filas as $f) {
+        foreach (json_decode((string) $f['grupos'], true) ?: [] as $g) {
+            $grupos[$g['grupo_id']] = $g;
+        }
+        if ($f['preferida_at'] !== null) {
+            $preferida[] = [
+                'departamento_id' => (int) $f['departamento_id'],
+                'por'             => $f['preferida_por'],
+                'at'              => motor_hora_local($f['preferida_at']),
+                'nota'            => $f['nota'],
+            ];
+        }
+    }
+    return [array_values($grupos), [
+        'corrida_id' => $corridaId,
+        'subido_at'  => motor_hora_local($filas[0]['subido_at']),
+        'subido_por' => $filas[0]['subido_por'],
+        'preferida'  => $preferida,
+    ]];
+}
+
+// GET ?corrida_id=N: la malla que dejó esa subida, en solo lectura (D60).
+$corridaVista = null;
+if (filter_input(INPUT_GET, 'corrida_id') !== null) {
+    $corridaVista = param_id('corrida_id');
+}
+
 $yo = mi_perfil();
 try {
     $rej = motor_rejilla($pdo);
@@ -549,35 +601,14 @@ try {
         ['id' => (int) $yo['id'], 'nombre' => $yo['nombre']],
         false
     );
-    $todas = motor_clases($pdo, $semestreId);
-    $clases = motor_clasificar($todas, $deptos);
-
     // --- los grupos sin publicar (los conservados también), como los publicados de grupos_fijos (§3.7) ---
-    // En el orden de motor_clases (por clave), que es el que decide el emparejamiento de abajo.
-    $enPaquete = [];
-    foreach ($entrada['profesores'] as $p) {
-        $enPaquete[$p['id']] = true;
-    }
-    $editable = [];
-    foreach (array_merge($clases['reemplazo'], $clases['conservados']) as $c) {
-        $editable[$c['grupos'][0]['id']] = true;
-    }
-    $grupos = [];
-    foreach ($todas as $c) {
-        if (!isset($editable[$c['grupos'][0]['id']])) {
-            continue;
-        }
-        $g = motor_grupo_de_clase($rej, $c);
-        $g['ref'] = 'g-' . $g['grupo_id'];
-        $g['profesores'] = array_values(array_filter($g['profesores'], function ($pid) use ($enPaquete) {
-            return isset($enPaquete[$pid]);
-        }));
-        $g['grupo_ids'] = array_map(function ($x) {
-            return $x['id'];
-        }, $c['grupos']);
-        $g['estado'] = $c['grupos'][0]['estado'];
-        $g['conservado'] = malla_conservado_de($c);
-        $grupos[] = $g;
+    // O, con ?corrida_id=, los que dejó esa subida (malla_version, D60).
+    $version = null;
+    if ($corridaVista === null) {
+        $grupos = motor_grupos_sin_publicar($rej, $entrada, motor_clases($pdo, $semestreId), $deptos);
+    } else {
+        list($grupos, $version) = malla_grupos_de_version($pdo, $semestreId, $deptos, $corridaVista);
+        $grupos = motor_solo_profesores_del_paquete($grupos, $entrada);
     }
 
     // --- qué grupo cumple cada asignación directa (motor_emparejar_asignaciones) ---
@@ -590,16 +621,16 @@ try {
         }
     }
 
-    // --- la última corrida que toca el alcance ---
+    // --- la última corrida que toca el alcance (o la de la versión que se ve) ---
     $st = $pdo->prepare(
         'SELECT c.departamentos, c.desfasada, c.motor, c.sin_asignar, c.metricas,
                 c.grupos_creados, c.subido_at, p.nombre AS subido_por
            FROM motor_corrida c JOIN profesor p ON p.id = c.subido_por
-          WHERE c.semestre_id = ?
+          WHERE c.semestre_id = ?' . ($corridaVista === null ? '' : ' AND c.id = ?') . '
           ORDER BY c.id DESC
           LIMIT 20'
     );
-    $st->execute([$semestreId]);
+    $st->execute($corridaVista === null ? [$semestreId] : [$semestreId, $corridaVista]);
     $deptoDe = [];
     foreach ($entrada['materias'] as $m) {
         $deptoDe[$m['id']] = $m['departamento_id'];
@@ -659,4 +690,5 @@ responder([
     'grupos'      => $grupos,
     'corrida'     => $corrida,
     'descartados' => $descartados,
+    'version'     => $version,
 ]);
