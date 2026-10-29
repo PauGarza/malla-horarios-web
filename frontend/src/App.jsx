@@ -9,6 +9,8 @@ import ProbarFormulario from './pages/ProbarFormulario';
 import RespuestasCuestionario from './pages/RespuestasCuestionario';
 import ReportePreferencias from './pages/ReportePreferencias';
 import ReporteHoras from './pages/ReporteHoras';
+import ReporteHorarios from './pages/ReporteHorarios';
+import ReporteSatisfaccion from './pages/ReporteSatisfaccion';
 import AsignacionesDirectas from './pages/AsignacionesDirectas';
 import CatalogoMaterias from './pages/CatalogoMaterias';
 import PerfilUsuario from './pages/PerfilUsuario';
@@ -153,6 +155,12 @@ function Vista({ vista, setVista }) {
   if (vista.nombre === 'reporte-horas') {
     return <ReporteHoras onVolver={() => setVista({ nombre: 'home' })} />;
   }
+  if (vista.nombre === 'reporte-horarios') {
+    return <ReporteHorarios onVolver={() => setVista({ nombre: 'home' })} />;
+  }
+  if (vista.nombre === 'reporte-satisfaccion') {
+    return <ReporteSatisfaccion onVolver={() => setVista({ nombre: 'home' })} />;
+  }
   if (vista.nombre === 'asignaciones-directas') {
     return <AsignacionesDirectas onVolver={() => setVista({ nombre: 'home' })} />;
   }
@@ -186,6 +194,8 @@ function Vista({ vista, setVista }) {
       onAbrirSemestres={() => setVista({ nombre: 'semestres' })}
       onAbrirMotor={() => setVista({ nombre: 'motor' })}
       onAbrirMalla={() => setVista({ nombre: 'malla' })}
+      onAbrirReporteHorarios={() => setVista({ nombre: 'reporte-horarios' })}
+      onAbrirReporteSatisfaccion={() => setVista({ nombre: 'reporte-satisfaccion' })}
     />
   );
 }

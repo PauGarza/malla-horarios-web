@@ -32,6 +32,8 @@ export default function HomePage({
   onAbrirSemestres,
   onAbrirMotor,
   onAbrirMalla,
+  onAbrirReporteHorarios,
+  onAbrirReporteSatisfaccion,
 }) {
   const { profesor, nombreDepartamento, formularioPublicado, semestre } = useAuth();
 
@@ -202,6 +204,22 @@ export default function HomePage({
                 <span>
                   Mapa de calor de la semana: entre más profesores pidieron un horario, más oscuro se
                   ve, y en blanco los que nadie pidió.
+                </span>
+              </button>
+
+              <button className="opcion-card opcion-activa" onClick={onAbrirReporteHorarios}>
+                <strong>Horarios del departamento</strong>
+                <span>
+                  La lista de grupos con su profesor, días, horario y salón, como la de Servicios
+                  Escolares, para descargar en PDF.
+                </span>
+              </button>
+
+              <button className="opcion-card opcion-activa" onClick={onAbrirReporteSatisfaccion}>
+                <strong>Satisfacción de los profesores</strong>
+                <span>
+                  Qué tanto se parece el horario y la materia que le tocó a cada profesor a lo que pidió,
+                  del peor al mejor.
                 </span>
               </button>
             </div>
