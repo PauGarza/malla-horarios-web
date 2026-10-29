@@ -1935,3 +1935,132 @@ function motor_aplicar(PDO $pdo, array $rej, array $ent, array $plan, array $ree
 
     return [$creados, count($grupoIds)];
 }
+
+// -----------------------------------------------------------------------------
+// Versiones de la malla (2026-10-29, D60)
+//
+// Cada subida borra los grupos sin publicar de la anterior. Para que la
+// jefatura pueda volver a ver una malla que le gustó más, la subida guarda por
+// departamento los grupos que dejó (malla_version). La jefatura la ve en solo
+// lectura y marca la que prefiere; el admin la descarga como referencia para la
+// siguiente corrida (api/malla-versiones.php). No se restaura directo.
+// -----------------------------------------------------------------------------
+
+/** Quién y cuándo conservó la clase: el de cualquiera de sus claves (todas llevan el mismo). */
+function motor_conservado_de(array $clase): ?array
+{
+    foreach ($clase['grupos'] as $g) {
+        if ($g['conservado'] !== null) {
+            return $g['conservado'];
+        }
+    }
+    return null;
+}
+
+/** Quita de cada grupo los profesores que no vienen en el paquete (la malla solo pinta esos). */
+function motor_solo_profesores_del_paquete(array $grupos, array $entrada): array
+{
+    $enPaquete = [];
+    foreach ($entrada['profesores'] as $p) {
+        $enPaquete[$p['id']] = true;
+    }
+    foreach ($grupos as &$g) {
+        $g['profesores'] = array_values(array_filter($g['profesores'], function ($pid) use ($enPaquete) {
+            return isset($enPaquete[$pid]);
+        }));
+    }
+    unset($g);
+    return $grupos;
+}
+
+/**
+ * Los grupos sin publicar del alcance (los conservados también) como los pinta
+ * la malla: el formato de un grupo de la salida (§4.2) con su grupo_id, más
+ * ref, grupo_ids (todas sus claves espejo), estado y conservado. En el orden de
+ * motor_clases (por clave), que es el que decide el emparejamiento de las
+ * asignaciones directas en api/malla.php.
+ */
+function motor_grupos_sin_publicar(array $rej, array $entrada, array $todas, array $deptos): array
+{
+    $clases = motor_clasificar($todas, $deptos);
+    $editable = [];
+    foreach (array_merge($clases['reemplazo'], $clases['conservados']) as $c) {
+        $editable[$c['grupos'][0]['id']] = true;
+    }
+    $grupos = [];
+    foreach ($todas as $c) {
+        if (!isset($editable[$c['grupos'][0]['id']])) {
+            continue;
+        }
+        $g = motor_grupo_de_clase($rej, $c);
+        $g['ref'] = 'g-' . $g['grupo_id'];
+        $g['grupo_ids'] = array_map(function ($x) {
+            return $x['id'];
+        }, $c['grupos']);
+        $g['estado'] = $c['grupos'][0]['estado'];
+        $g['conservado'] = motor_conservado_de($c);
+        $grupos[] = $g;
+    }
+    return motor_solo_profesores_del_paquete($grupos, $entrada);
+}
+
+/**
+ * SHA-256 de una malla sin lo que cambia en cada subida aunque la malla sea la
+ * misma (grupo_id, ref, estado, conservado): por grupo, sus materias, sus
+ * profesores, sus sesiones con su salón y el cupo. Dos subidas del mismo
+ * archivo dan la misma huella.
+ */
+function motor_huella_malla(array $grupos): string
+{
+    $partes = [];
+    foreach ($grupos as $g) {
+        $materias = array_column($g['materias'], 'materia_id');
+        sort($materias);
+        $profesores = $g['profesores'];
+        sort($profesores);
+        $sesiones = [];
+        foreach ($g['sesiones'] as $s) {
+            $sesiones[] = [$s['dia'], $s['inicio'], (int) $s['bloques'], $s['salon_id'] ?? $g['salon_id'] ?? null];
+        }
+        sort($sesiones);
+        $partes[] = json_encode([$materias, $profesores, $sesiones, $g['cupo_maximo'] ?? null]);
+    }
+    sort($partes);
+    return hash('sha256', implode("\n", $partes));
+}
+
+/**
+ * Guarda la malla que dejó una subida: una fila de malla_version por
+ * departamento del alcance que tenga grupos. Corre DENTRO de la transacción de
+ * la subida, después de motor_aplicar(), así que lee lo que se acaba de
+ * escribir (y lo que la jefatura conservó, que también se queda en la malla).
+ * Una clase espejo entre dos departamentos va en los dos.
+ *
+ * @return int cuántas versiones guardó
+ */
+function motor_guardar_versiones(PDO $pdo, array $rej, array $entrada, int $semestreId, array $deptos, int $corridaId): int
+{
+    $todas = motor_clases($pdo, $semestreId);
+    $ins = $pdo->prepare(
+        'INSERT INTO malla_version (semestre_id, departamento_id, corrida_id, huella, grupos, n_grupos, creado_at)
+         VALUES (?,?,?,?,?,?,?)'
+    );
+    $n = 0;
+    foreach ($deptos as $d) {
+        $grupos = motor_grupos_sin_publicar($rej, $entrada, $todas, [$d]);
+        if ($grupos === []) {
+            continue;
+        }
+        $ins->execute([
+            $semestreId,
+            $d,
+            $corridaId,
+            motor_huella_malla($grupos),
+            json_encode($grupos, JSON_UNESCAPED_UNICODE),
+            count($grupos),
+            ahora_utc(),
+        ]);
+        $n++;
+    }
+    return $n;
+}

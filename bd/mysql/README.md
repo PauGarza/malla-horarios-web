@@ -132,6 +132,17 @@ migracion-2026-10-27b-grupo-conservado.sql     grupo.conservado_por / conservado
                                                el API nuevo (la malla, la descarga y la subida
                                                del motor la leen; sin ella dan 500). Una sola
                                                vez (ADD COLUMN).
+migracion-2026-10-29-versiones-malla.sql       tabla malla_version: la malla que deja cada
+                                               subida del motor, por departamento, para que la
+                                               jefatura la vuelva a ver y marque la que prefiere
+                                               (D60). ADITIVA: correr ANTES de desplegar el API
+                                               nuevo (sin ella, aplicar un resultado del motor
+                                               da 500). Se puede repetir.
+datos-2026-10-29-versiones-anteriores.sql      las 12 subidas del motor del 21 al 29 de octubre
+                                               en malla_version, armadas de las salidas que se
+                                               subieron (sin los salones de prueba). Correr
+                                               DESPUÉS de la migración anterior. Se puede
+                                               repetir (INSERT IGNORE).
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por

@@ -140,6 +140,11 @@ const gestion = [
   ['motor-salida.php GET', 'GET', `motor-salida.php?semestre_id=${s}`],
   ['motor-salida.php validar', 'POST', 'motor-salida.php?accion=validar', {}],
   ['motor-salida.php aplicar', 'POST', 'motor-salida.php?accion=aplicar', { salida: {} }],
+  ['malla.php GET', 'GET', `malla.php?semestre_id=${s}`],
+  ['malla.php versión', 'GET', `malla.php?semestre_id=${s}&corrida_id=1`],
+  ['malla-versiones.php GET', 'GET', `malla-versiones.php?semestre_id=${s}`],
+  ['malla-versiones.php referencia', 'GET', `malla-versiones.php?semestre_id=${s}&referencia=1`],
+  ['malla-versiones.php preferir', 'POST', `malla-versiones.php?semestre_id=${s}`, { accion: 'preferir', corrida_id: 1 }],
 ];
 for (const [nombre, metodo, ruta, cuerpo] of gestion) {
   const r = await pedir(ruta, { token: tokProf, metodo, cuerpo });
@@ -203,6 +208,17 @@ if (process.env.AP_JEFE_CU && semestreId) {
       const r2 = await pedir(ruta, { token: tokJefe });
       revisar(`${ruta.split('?')[0]} (solo admin) -> 403`, r2.status === 403, `status ${r2.status}`);
     }
+    // Versiones de la malla (D60): ?departamentos= de otro no cuenta para un jefe de departamento,
+    // y la descarga como referencia es del admin.
+    const lista = await pedir(`malla-versiones.php?semestre_id=${semestreId}&departamentos=${ajeno.id}`, { token: tokJefe });
+    revisar(
+      'malla-versiones.php con departamentos ajeno -> solo las suyas',
+      lista.status === 200 &&
+        lista.datos.versiones.every((v) => v.departamentos.every((d) => d.departamento_id === jefe.perfil.departamento_id)),
+      `status ${lista.status}`,
+    );
+    const ref = await pedir(`malla-versiones.php?semestre_id=${semestreId}&referencia=1`, { token: tokJefe });
+    revisar('malla-versiones.php referencia (solo admin) -> 403', ref.status === 403, `status ${ref.status}`);
   }
 } else {
   console.log('(omitida: jefe fuera de su departamento — requiere AP_JEFE_CU/AP_JEFE_PASS)');
