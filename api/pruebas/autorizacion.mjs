@@ -145,6 +145,9 @@ const gestion = [
   ['malla-versiones.php GET', 'GET', `malla-versiones.php?semestre_id=${s}`],
   ['malla-versiones.php referencia', 'GET', `malla-versiones.php?semestre_id=${s}&referencia=1`],
   ['malla-versiones.php preferir', 'POST', `malla-versiones.php?semestre_id=${s}`, { accion: 'preferir', corrida_id: 1 }],
+  ['programadas.php GET', 'GET', `programadas.php?semestre_id=${s}`],
+  ['programadas.php ajuste', 'POST', `programadas.php?semestre_id=${s}&recurso=ajustes`, { materia_id: 1, numero: '001', accion: 'confirmado' }],
+  ['programadas.php quitar ajuste', 'DELETE', `programadas.php?semestre_id=${s}&recurso=ajustes&id=1`],
 ];
 for (const [nombre, metodo, ruta, cuerpo] of gestion) {
   const r = await pedir(ruta, { token: tokProf, metodo, cuerpo });
@@ -219,6 +222,12 @@ if (process.env.AP_JEFE_CU && semestreId) {
     );
     const ref = await pedir(`malla-versiones.php?semestre_id=${semestreId}&referencia=1`, { token: tokJefe });
     revisar('malla-versiones.php referencia (solo admin) -> 403', ref.status === 403, `status ${ref.status}`);
+    // Archivos de Matemáticas (2026-11-03): solo la jefatura de Matemáticas y el admin.
+    const mat = jefe.departamentos.find((d) => d.clave_prefijo === 'MAT');
+    const prog = await pedir(`programadas.php?semestre_id=${semestreId}`, { token: tokJefe });
+    const esperado = mat && jefe.perfil.departamento_id === mat.id ? 200 : 403;
+    revisar(`programadas.php (jefe de ${esperado === 200 ? 'MAT' : 'otro departamento'}) -> ${esperado}`,
+      prog.status === esperado, `status ${prog.status}`);
   }
 } else {
   console.log('(omitida: jefe fuera de su departamento — requiere AP_JEFE_CU/AP_JEFE_PASS)');

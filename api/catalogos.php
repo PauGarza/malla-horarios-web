@@ -31,7 +31,9 @@ exigir_metodo('GET');
 $pdo = db();
 $perfil = mi_perfil();
 
-$departamentos = $pdo->query('SELECT id, nombre FROM departamento ORDER BY id')->fetchAll();
+// clave_prefijo (2026-11-03): con él el frontend reconoce Matemáticas
+// (MAT) sin comparar contra un id o un nombre.
+$departamentos = $pdo->query('SELECT id, nombre, clave_prefijo FROM departamento ORDER BY id')->fetchAll();
 
 // `dias`: null = todos los días; si no, la lista de días en que la franja
 // existe (2026-10-02: 14:00-14:30 solo martes y jueves). En la base es un SET

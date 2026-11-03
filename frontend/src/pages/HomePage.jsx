@@ -3,6 +3,7 @@ import {
   administraSemestres,
   etiquetaRol,
   gestionaDepartamento as esGestion,
+  veArchivosMatematicas,
   veMallaDeTodaLaDivision,
   veTodosLosDepartamentos,
 } from '../lib/roles';
@@ -34,8 +35,9 @@ export default function HomePage({
   onAbrirMalla,
   onAbrirReporteHorarios,
   onAbrirReporteSatisfaccion,
+  onAbrirArchivosMate,
 }) {
-  const { profesor, nombreDepartamento, formularioPublicado, semestre } = useAuth();
+  const { profesor, departamentos, nombreDepartamento, formularioPublicado, semestre } = useAuth();
 
   const daClases = Boolean(profesor.tipo_contrato);
   const gestionaDepartamento = esGestion(profesor.rol);
@@ -222,6 +224,16 @@ export default function HomePage({
                   del peor al mejor.
                 </span>
               </button>
+
+              {veArchivosMatematicas(profesor, departamentos) && (
+                <button className="opcion-card opcion-activa" onClick={onAbrirArchivosMate}>
+                  <strong>Archivos de Matemáticas</strong>
+                  <span>
+                    El Excel de Materias programadas para Servicios Escolares y los horarios de cada división
+                    en PDF.
+                  </span>
+                </button>
+              )}
             </div>
           </section>
         )}

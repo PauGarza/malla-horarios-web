@@ -42,6 +42,15 @@ export const veMallaDeTodaLaDivision = (rol) => rol === 'admin' || rol === 'jefe
 // que la jefatura de división lo conserva aunque vea un solo departamento.
 export const administraSemestres = (rol) => rol === 'admin' || rol === 'jefe_division';
 
+// Archivos de Matemáticas (2026-11-03): Excel de Materias programadas y PDF por
+// división, un formato que solo usa Matemáticas. Espejo de la guardia de
+// api/programadas.php (ROLES_GESTION + exigir_jefe_de(MAT)): admin, o jefatura
+// cuyo departamento es Matemáticas.
+export const veArchivosMatematicas = (profesor, departamentos) =>
+  ROLES_GESTION.includes(profesor.rol) &&
+  (veTodosLosDepartamentos(profesor.rol) ||
+    departamentos.find((d) => d.id === profesor.departamento_id)?.clave_prefijo === 'MAT');
+
 export const etiquetaRol = (rol) => ROL_LABELS[rol] ?? rol;
 
 /** El departamento con el que arranca una vista de jefatura. */

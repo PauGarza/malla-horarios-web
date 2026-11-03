@@ -11,6 +11,7 @@ import ReportePreferencias from './pages/ReportePreferencias';
 import ReporteHoras from './pages/ReporteHoras';
 import ReporteHorarios from './pages/ReporteHorarios';
 import ReporteSatisfaccion from './pages/ReporteSatisfaccion';
+import ArchivosMatematicas from './pages/ArchivosMatematicas';
 import AsignacionesDirectas from './pages/AsignacionesDirectas';
 import CatalogoMaterias from './pages/CatalogoMaterias';
 import PerfilUsuario from './pages/PerfilUsuario';
@@ -161,6 +162,9 @@ function Vista({ vista, setVista }) {
   if (vista.nombre === 'reporte-satisfaccion') {
     return <ReporteSatisfaccion onVolver={() => setVista({ nombre: 'home' })} />;
   }
+  if (vista.nombre === 'archivos-mate') {
+    return <ArchivosMatematicas onVolver={() => setVista({ nombre: 'home' })} />;
+  }
   if (vista.nombre === 'asignaciones-directas') {
     return <AsignacionesDirectas onVolver={() => setVista({ nombre: 'home' })} />;
   }
@@ -196,6 +200,7 @@ function Vista({ vista, setVista }) {
       onAbrirMalla={() => setVista({ nombre: 'malla' })}
       onAbrirReporteHorarios={() => setVista({ nombre: 'reporte-horarios' })}
       onAbrirReporteSatisfaccion={() => setVista({ nombre: 'reporte-satisfaccion' })}
+      onAbrirArchivosMate={() => setVista({ nombre: 'archivos-mate' })}
     />
   );
 }

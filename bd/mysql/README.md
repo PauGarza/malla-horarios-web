@@ -143,6 +143,18 @@ datos-2026-10-29-versiones-anteriores.sql      las 12 subidas del motor del 21 a
                                                subieron (sin los salones de prueba). Correr
                                                DESPUÉS de la migración anterior. Se puede
                                                repetir (INSERT IGNORE).
+migracion-2026-11-03-ajustes-programadas.sql   tabla ajuste_programadas: lo que la jefatura de
+                                               Matemáticas cambia solo en los archivos de
+                                               Materias programadas (separar, vaciar,
+                                               porcentaje, confirmado). ADITIVA: correr ANTES
+                                               de desplegar el API nuevo (sin ella, la vista
+                                               "Archivos de Matemáticas" da 500). Se puede
+                                               repetir.
+datos-2026-11-03-ajustes-programadas-          los 6 ajustes de Materias programadas de
+  primavera-2027.sql                           Primavera 2027 (MAT-14400-001 sola, MAT-24407-001
+                                               vacía, 24431 al 0% y 24435 al 100%, dos
+                                               confirmados). Correr DESPUÉS de la migración
+                                               anterior. Se puede repetir.
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por

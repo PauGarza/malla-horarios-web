@@ -349,3 +349,15 @@ export const moverClaseMalla = (token, semestreId, departamentos, grupoId, { sal
     token,
     { grupo_id: grupoId, salon_id, sesiones },
   );
+
+// --- Archivos de Matemáticas (2026-11-03) -------------------------------------
+
+/** { departamento_id, grupos, ajustes } de api/programadas.php; solo jefatura de Matemáticas y admin. */
+export const leerProgramadas = (token, semestreId) => pedir(`programadas.php?semestre_id=${semestreId}`, token);
+
+/** { materia_id, numero, accion, valor, motivo }: guarda o reemplaza un ajuste. Responde { ajustes }. */
+export const guardarAjusteProgramadas = (token, semestreId, ajuste) =>
+  post(`programadas.php?semestre_id=${semestreId}&recurso=ajustes`, token, ajuste);
+
+export const quitarAjusteProgramadas = (token, semestreId, id) =>
+  borrar(`programadas.php?semestre_id=${semestreId}&recurso=ajustes&id=${id}`, token);

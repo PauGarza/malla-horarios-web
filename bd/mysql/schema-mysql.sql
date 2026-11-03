@@ -699,6 +699,27 @@ CREATE TABLE malla_version (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='La malla que dejó cada subida del motor, por departamento (api/malla-versiones.php, 2026-10-29, D60).';
 
+-- 2026-11-03: lo que la jefatura de Matemáticas quiere que digan los archivos
+-- de Materias programadas aunque la malla diga otra cosa (separar, vaciar,
+-- porcentaje, confirmado). Solo cambia los archivos. El grupo va por materia +
+-- número porque cada subida del motor rehace los grupos sin publicar.
+CREATE TABLE ajuste_programadas (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id INT NOT NULL,
+    materia_id  INT NOT NULL,
+    numero      VARCHAR(3) NOT NULL COMMENT 'Número de grupo (grupo.numero), ej. 001.',
+    accion      ENUM('separar','vaciar','porcentaje','confirmado') NOT NULL,
+    valor       DECIMAL(5,2) NULL COMMENT 'Solo porcentaje: 0 a 100 (se valida en PHP).',
+    motivo      VARCHAR(300) NULL,
+    creado_por  INT NOT NULL,
+    creado_at   DATETIME NOT NULL COMMENT 'UTC.',
+    UNIQUE KEY uq_ap_grupo_accion (semestre_id, materia_id, numero, accion),
+    CONSTRAINT fk_ap_semestre FOREIGN KEY (semestre_id) REFERENCES semestre(id),
+    CONSTRAINT fk_ap_materia  FOREIGN KEY (materia_id)  REFERENCES materia(id),
+    CONSTRAINT fk_ap_creado   FOREIGN KEY (creado_por)  REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Ajustes que solo van en los archivos de Materias programadas (api/programadas.php, 2026-11-03).';
+
 -- -----------------------------------------------------------------------------
 -- Infraestructura del API (no existe en el esquema de Postgres)
 -- -----------------------------------------------------------------------------

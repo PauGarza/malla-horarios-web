@@ -2588,6 +2588,144 @@ select.editor-mini {
   }
 }
 
+/* --- Archivos de Matemáticas (Excel de Materias programadas, PDF por división) */
+
+.archivos-seccion {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.archivos-seccion h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--itam);
+}
+.archivos-seccion h3 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.archivos-lista {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+.archivos-tabla th,
+.archivos-tabla td {
+  padding: 6px 8px;
+  font-size: 13px;
+  vertical-align: top;
+}
+.archivos-nowrap {
+  white-space: nowrap;
+}
+.archivos-quien {
+  color: var(--gray-text);
+  font-size: 12px;
+}
+.archivos-subir {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-text);
+}
+.archivos-pdf-titulo {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+.archivos-pdf-sub {
+  margin: 0;
+  color: var(--gray-text);
+  font-size: 13px;
+}
+.archivos-pdf-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.archivos-pdf-tabla th,
+.archivos-pdf-tabla td {
+  border: 1px solid var(--gray-border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.archivos-pdf-tabla th {
+  background: #f2f2f2;
+}
+.archivos-pdf-tabla .archivos-col-grupo {
+  text-align: center;
+}
+.archivos-col-clave {
+  width: 27%;
+}
+.archivos-col-grupo {
+  width: 9%;
+}
+.archivos-col-dias {
+  width: 11%;
+}
+.archivos-col-horario {
+  width: 13%;
+}
+@media (max-width: 700px) {
+  .archivos-pdf {
+    overflow-x: auto;
+  }
+}
+
+/* El PDF de una división: carta vertical (las demás hojas de la app van
+   horizontales), letra de 10 pt y el encabezado de la tabla en cada página. */
+@media print {
+  @page archivos-vertical {
+    size: letter;
+    margin: 12mm;
+  }
+  .archivos-mate {
+    max-width: none;
+    padding: 0;
+    gap: 0;
+  }
+  .archivos-pdf {
+    page: archivos-vertical;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    gap: 4px;
+    overflow: visible;
+  }
+  .archivos-pdf-titulo {
+    font-size: 15pt;
+  }
+  .archivos-pdf-sub {
+    font-size: 10.5pt;
+    margin-bottom: 4mm;
+  }
+  .archivos-pdf-tabla {
+    font-size: 10pt;
+  }
+  .archivos-pdf-tabla thead {
+    display: table-header-group;
+  }
+  .archivos-pdf-tabla tr {
+    break-inside: avoid;
+  }
+  .archivos-pdf-tabla th,
+  .archivos-pdf-tabla td {
+    padding: 1.2mm 2mm;
+    border-color: #999;
+  }
+  .archivos-pdf-tabla th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 /* --- Satisfacción de los profesores ------------------------------------- */
 
 .satisf-tabla th,
