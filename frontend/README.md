@@ -22,7 +22,7 @@ npm install
 npm run dev          # localhost; /api se reenvía a horariosdace.itam.mx (proxy en vite.config.js)
 npm run build        # dist/
 npm run lint         # oxlint
-npm run deploy:itam  # build + sube dist/ al servidor del ITAM por SFTP
+npm run deploy:itam  # sube dist/ al servidor del ITAM por SFTP (no compila: antes, npm run build)
 npm run deploy:api   # sube ../api/*.php (nunca sobrescribe api/lib/config.php)
 ```
 
@@ -30,6 +30,10 @@ El build **no necesita variables de entorno**: el API está en `/api` del mismo 
 `VITE_API_URL` (ver `.env.example`) solo sirve para apuntar a otro origen, y eso volvería a
 necesitar CORS en el PHP. Los dos scripts de despliegue leen las credenciales de SFTP de
 `.env.deploy` (plantilla en `.env.deploy.example`), que **nunca se commitea**.
+
+El HTML lo sirve `public/index.php` con `Cache-Control: no-cache` (desde el 2026-11-03): el
+navegador pregunta siempre por él, así que tras un despliegue carga el bundle nuevo sin recargar a la
+fuerza. Los assets llevan hash en el nombre y sí se cachean.
 
 GitHub Pages ya no se usa (su workflow se eliminó el 2026-09-28): la app necesita el API en PHP, que
 Pages no puede servir.
@@ -42,7 +46,7 @@ navegador. Úsalo cuando llegue un reporte nuevo, para saber si cambió el forma
 | Carpeta | Qué hay |
 |---|---|
 | `src/pages/` | Una pantalla por archivo (ver abajo) |
-| `src/components/` | `BarraSuperior` (menú de usuario y semestre activo), `SelectorDepartamento` (jefa de división / admin), `FormularioPiezas` (TriToggle, rejilla de disponibilidad: las comparten el formulario del profesor y el editor), `EtiquetaFlotante` (el detalle que se abre al hacer clic en un número de los reportes), `NumCursos` (número de cursos con el marcador **J** cuando la jefatura lo ajustó) |
+| `src/components/` | `BarraSuperior` (menú de usuario y semestre activo), `SelectorDepartamento` (jefa de división / admin), `FormularioPiezas` (TriToggle, rejilla de disponibilidad: las comparten el formulario del profesor y el editor), `EtiquetaFlotante` (el detalle que se abre al hacer clic en un número de los reportes), `EncabezadoOrdenable` (encabezados que ordenan la tabla al hacer clic; reportes de preferencias y de satisfacción), `NumCursos` (número de cursos con el marcador **J** cuando la jefatura lo ajustó) |
 | `src/lib/api.js` | Un wrapper por endpoint. `PUT`/`PATCH`/`DELETE` van tunelados sobre `POST` con `X-HTTP-Method-Override` y el token va en `X-Autoplanear-Token`: el proxy del ITAM bloquea esos métodos y descarta `Authorization` (ver `../api/README.md`) |
 | `src/lib/roles.js` | Etiquetas de rol y contrato, `ROLES_GESTION` y `veTodosLosDepartamentos()`, espejo de `api/lib/auth.php` |
 | `src/lib/formulario.js` | Reglas del formulario compartidas: audiencia por contrato, mínimos para enviar (incluido `horasMinimasVerde`, el mínimo de horas en verde calculado con los cursos y el ratio), vista previa por contrato. Espejo de `api/lib/catalogo.php` |
@@ -58,7 +62,7 @@ El inicio (`HomePage`) se organiza en cuatro secciones:
 |---|---|---|
 | **Mi formulario** | quien da clases | `FormularioPreferencias` — el formulario del profesor, armado por el servidor según su contrato |
 | **Proceso del semestre** | jefatura | agrupado por fases del procedimiento: `CatalogoMaterias` → `EditorCuestionario` (editar y publicar) → `CargaDemanda` → `RespuestasCuestionario` (bloqueos y ajuste del número de cursos) → `AsignacionesDirectas` (fijar profesor, materia y horario antes del algoritmo; incluye la Materia de Maestría) → pasos en construcción (asignar y revisar la malla, cartas, inscripciones) |
-| **Reportes** | jefatura | `PanelPreferencias` (quién contestó, reabrir), `ReportePreferencias` (por profesor: contrato, cursos, materias y horas por color; CSV), `ReporteHoras` (mapa de calor de las horas pedidas) |
+| **Reportes** | jefatura | `PanelPreferencias` (quién contestó, reabrir), `ReportePreferencias` (por profesor: contrato, cursos, materias y horas por color; CSV), `ReporteHoras` (mapa de calor de las horas pedidas), `ReporteSatisfaccion` (qué tanto se parece lo que le tocó a cada profesor a lo que pidió; cálculo en `lib/satisfaccion.js`, fórmula en `DISENO-REPORTES.md` §2; filtro por contrato, días con clase, detalle de horas y materias al hacer clic, columnas ordenables); solo Matemáticas (jefatura MAT y admin): `ArchivosMatematicas` (Excel de Materias programadas para Servicios Escolares con ExcelJS, y PDF de horarios por división; reglas en `lib/archivosMate.js`, carreras y divisiones en `lib/carrerasDivisiones.js`, ajustes que solo cambian los archivos en `api/programadas.php`) |
 | **Administración** | admin y jefa de división | `Semestres` — abrir el siguiente semestre, consultar y reactivar los anteriores |
 | **Probar el formulario** | solo admin | `ProbarFormulario` — elige departamento y contrato y monta `FormularioPreferencias` con `prueba`: el formulario sale del editor (`configuracion.php`) recortado con `cuestionarioParaContrato()`, se llena y se valida como el real, y ni el borrador ni el envío llegan al servidor (2026-10-13) |
 

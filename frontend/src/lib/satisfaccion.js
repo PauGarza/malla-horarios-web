@@ -6,18 +6,21 @@
 //
 //   S = 0.625 · promedio por bloque del horario + 0.375 · promedio por grupo de la materia
 //
-// Los cursos (tiene / pidió) y las horas que no están en verde por una
-// asignación directa de la jefatura se informan aparte y no mueven S. Cuando
+// Las horas de una asignación directa de la jefatura cuentan como cualquier
+// otra (si caen en amarillo o rojo del profesor, bajan S) y además se informa
+// cuántas fueron. Los cursos (tiene / pidió) se informan aparte y no mueven S. Cuando
 // el historial por semestre (§3) se guarde en la base, el servidor tiene que
 // calcular lo mismo: si cambia algo aquí, cambia VERSION.
 
-export const VERSION = 'v1-2026-10-28';
+export const VERSION = 'v2-2026-11-03';
 export const PESOS = { horario: 0.625, materia: 0.375 };
 const VALOR = { verde: 1, amarillo: 0, rojo: -1 };
 const NIVELES = ['verde', 'amarillo', 'rojo'];
 const ORDEN = { verde: 3, amarillo: 2, rojo: 1 };
 
 const conteo = () => ({ verde: 0, amarillo: 0, rojo: 0 });
+const listas = () => ({ verde: [], amarillo: [], rojo: [] });
+const ORDEN_DIA = { lunes: 0, martes: 1, miercoles: 2, jueves: 3, viernes: 4 };
 const promedio = (c) => {
   const n = c.verde + c.amarillo + c.rojo;
   return n ? NIVELES.reduce((t, k) => t + VALOR[k] * c[k], 0) / n : null;
@@ -27,10 +30,13 @@ const promedio = (c) => {
  * [{ departamento, profesores }] en el orden de entrada.departamentos, solo
  * los del alcance. Cada profesor:
  *   { id, nombre, contrato, s, horario (horas verde/amarillo/rojo),
- *     materia (grupos verde/amarillo/rojo), porAsignacion (horas que no están
- *     en verde por una asignación directa),
+ *     materia (grupos verde/amarillo/rojo), porAsignacion (de las horas del
+ *     horario, las que no están en verde por una asignación directa),
  *     cursos, pidio, sinFormulario, borrador, materiasNoVerdes: [clave nivel],
- *     otroDepto: [claves de lo que da en la programación de otro departamento] }
+ *     otroDepto: [claves de lo que da en la programación de otro departamento],
+ *     dias: [días con clase, de lunes a viernes, contando también otroDepto],
+ *     tramosHorario: { nivel: [{ dia, inicio, fin, horas, clases, porAsignacion, maestria }] },
+ *     gruposMateria: { nivel: [{ clave, nombre, clases, sinMarcar }] } }
  * s es null si no tiene cursos. Ordenados del peor al mejor; sin cursos al
  * principio (salvo quien pidió 0).
  */
@@ -58,9 +64,13 @@ export function calcularSatisfaccion(datos) {
       pidio,
       materiasNoVerdes: [],
       otroDepto: [],
+      dias: new Set(),
+      tramosHorario: listas(),
+      gruposMateria: listas(),
     };
   }
   const deptoDe = Object.fromEntries(ent.materias.map((m) => [m.id, m.departamento_id]));
+  const nombreDe = Object.fromEntries(ent.materias.map((m) => [m.id, m.nombre]));
   const nivelHora = (p, dia, inicio) => {
     if (((p.maestria || {})[dia] || []).includes(inicio)) return 'rojo';
     return ((p.disponibilidad || {})[dia] || {})[inicio] || sinComo;
@@ -72,36 +82,56 @@ export function calcularSatisfaccion(datos) {
   ];
   for (const { g, publicado } of todos) {
     const a = g.asignacion_fija_id != null ? asignaciones[g.asignacion_fija_id] : null;
+    const clases = g.materias.map((m) => m.clave).join(' / ');
     for (const pid of g.profesores || []) {
       const x = P[pid];
       if (!x) continue;
+      // Los días cuentan todo lo que da, aunque sea de otro departamento: es
+      // cuántos días a la semana tiene que venir a dar clase
+      for (const se of g.sesiones || []) x.dias.add(se.dia);
       // Un publicado sin ninguna clave de su departamento es la programación
       // de otro (Actuaría, D45): no lo decidió este proceso ni cuenta como
       // curso suyo (como en motor.php). Se informa y ya.
       if (publicado && !g.materias.some((m) => deptoDe[m.materia_id] === x.p.departamento_id)) {
-        x.otroDepto.push(g.materias.map((m) => m.clave).join(' / '));
+        x.otroDepto.push(clases);
         continue;
       }
       x.cursos++;
       // Lo que la jefatura le fijó a este profesor manda sobre su
-      // disponibilidad (salvo la maestría): se informa, no baja S
+      // disponibilidad (salvo la maestría), pero si cae en su amarillo o rojo
+      // sí baja S; además se informa cuántas horas fueron
       const fijado = a && a.profesor_id === pid;
       for (const se of g.sesiones || []) {
+        // Bloques seguidos del mismo color se juntan en un tramo (9:00-10:30)
+        let tramo = null;
         for (let k = 0; k < se.bloques; k++) {
           const f = franjas[pos[se.inicio] + k];
           if (!f) continue;
           const maestria = ((x.p.maestria || {})[se.dia] || []).includes(f.inicio);
           const n = nivelHora(x.p, se.dia, f.inicio);
-          if (fijado && n !== 'verde' && !maestria) x.porAsignacion[n]++;
-          else x.horario[n]++;
+          const porAsignacion = fijado && n !== 'verde' && !maestria;
+          x.horario[n]++;
+          if (porAsignacion) x.porAsignacion[n]++;
+          if (tramo && tramo.nivel === n && tramo.porAsignacion === porAsignacion && tramo.maestria === maestria) {
+            tramo.fin = f.fin;
+            tramo.bloques++;
+          } else {
+            tramo = { nivel: n, dia: se.dia, inicio: f.inicio, fin: f.fin, bloques: 1, clases, porAsignacion, maestria };
+            x.tramosHorario[n].push(tramo);
+          }
         }
       }
       // Una clase compartida cuenta con la mejor de sus claves: si marcó una
       // de las equivalentes, es la clase que pidió
-      const niveles = g.materias.map((m) => ({ clave: m.clave, n: (x.p.materias || {})[String(m.materia_id)] || null }));
+      const niveles = g.materias.map((m) => ({
+        clave: m.clave,
+        nombre: nombreDe[m.materia_id] || '',
+        n: (x.p.materias || {})[String(m.materia_id)] || null,
+      }));
       const mejor = niveles.reduce((b, c) => ((ORDEN[c.n] || 0) > (ORDEN[b.n] || 0) ? c : b), niveles[0]);
       const n = mejor.n || 'amarillo'; // sin marcar: ni la pidió ni la rechazó
       x.materia[n]++;
+      x.gruposMateria[n].push({ clave: mejor.clave, nombre: mejor.nombre, clases, sinMarcar: !mejor.n });
       if (n !== 'verde') x.materiasNoVerdes.push(`${mejor.clave} ${mejor.n ? 'en ' + mejor.n : 'sin marcar'}`);
     }
   }
@@ -128,6 +158,16 @@ export function calcularSatisfaccion(datos) {
       borrador: !!(x.p.preferencia && x.p.preferencia.estado === 'borrador'),
       materiasNoVerdes: x.materiasNoVerdes,
       otroDepto: x.otroDepto,
+      dias: [...x.dias].sort((a, b) => ORDEN_DIA[a] - ORDEN_DIA[b]),
+      tramosHorario: Object.fromEntries(
+        NIVELES.map((k) => [
+          k,
+          x.tramosHorario[k]
+            .map(({ bloques, ...t }) => ({ ...t, horas: (bloques * mins) / 60 }))
+            .sort((a, b) => ORDEN_DIA[a.dia] - ORDEN_DIA[b.dia] || pos[a.inicio] - pos[b.inicio]),
+        ]),
+      ),
+      gruposMateria: x.gruposMateria,
     };
   });
 

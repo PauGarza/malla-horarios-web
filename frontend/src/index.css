@@ -2761,3 +2761,13 @@ select.editor-mini {
   color: var(--gray-text);
   font-size: 12px;
 }
+.satisf-dias {
+  white-space: nowrap;
+  color: var(--gray-text);
+  font-size: 12px;
+}
+.satisf-dias strong {
+  color: var(--text, #1c2733);
+  font-size: 14px;
+  margin-right: 4px;
+}

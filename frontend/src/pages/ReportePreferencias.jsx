@@ -5,6 +5,7 @@ import { etiquetaSemestre } from '../lib/semestre';
 import { TIPO_CONTRATO_LABELS, departamentoInicial } from '../lib/roles';
 import SelectorDepartamento from '../components/SelectorDepartamento';
 import EtiquetaFlotante from '../components/EtiquetaFlotante';
+import EncabezadoOrdenable from '../components/EncabezadoOrdenable';
 import { ValorNumCursos } from '../components/NumCursos';
 import { numCursosEfectivo } from '../lib/numCursos';
 
@@ -64,24 +65,6 @@ const formatoHoras = (h) => (Number.isInteger(h) ? String(h) : h.toFixed(1));
 function comparar(a, b) {
   if (typeof a === 'number' && typeof b === 'number') return a - b;
   return String(a).localeCompare(String(b), 'es', { sensitivity: 'base' });
-}
-
-function EncabezadoOrdenable({ columna, orden, onOrdenar, children, className = '', ...resto }) {
-  const activo = orden.columna === columna;
-  return (
-    <th
-      className={`th-ordenable ${className}`}
-      aria-sort={activo ? (orden.asc ? 'ascending' : 'descending') : 'none'}
-      {...resto}
-    >
-      <button type="button" onClick={() => onOrdenar(columna)}>
-        {children}
-        <span className="orden-flecha" aria-hidden="true">
-          {activo ? (orden.asc ? '▲' : '▼') : ''}
-        </span>
-      </button>
-    </th>
-  );
 }
 
 function descargarCsv(filas, nombreArchivo) {

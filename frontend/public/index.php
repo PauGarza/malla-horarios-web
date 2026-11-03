@@ -14,4 +14,8 @@
 // index.html a la directiva `index` del server block. Si algún día pasa, este
 // archivo se puede borrar sin tocar nada más.
 header('Content-Type: text/html; charset=UTF-8');
+// Que el navegador pregunte siempre por el HTML: es el que dice qué bundle
+// cargar, y si se queda con uno viejo, tras un despliegue se sigue viendo la
+// versión anterior. Los assets llevan hash en el nombre y esos sí se cachean.
+header('Cache-Control: no-cache');
 readfile(__DIR__ . '/index.html');
