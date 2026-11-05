@@ -155,6 +155,29 @@ datos-2026-11-03-ajustes-programadas-          los 6 ajustes de Materias program
                                                vacía, 24431 al 0% y 24435 al 100%, dos
                                                confirmados). Correr DESPUÉS de la migración
                                                anterior. Se puede repetir.
+migracion-2026-11-03-aviso-horario.sql         tablas semestre_fechas, aviso_horario y
+                                               aviso_horario_envio: el aviso de horarios a los
+                                               profesores y Mi horario en el perfil. ADITIVA:
+                                               correr ANTES de desplegar el API nuevo. Se puede
+                                               repetir.
+migracion-2026-11-03b-perfil-excluidos.sql     aviso_horario.perfil_excluidos: quién no ve Mi
+                                               horario aunque esté activa. ADITIVA: correr
+                                               ANTES de desplegar el API nuevo. No se puede
+                                               repetir (la columna ya existiría).
+datos-2026-11-03-ligar-profesores-actuaria.sql pasa los grupos de Actuaría de dos profesores
+                                               a su cuenta de Estadística y borra sus filas
+                                               sin cuenta. Lleva datos personales: se queda
+                                               fuera del repositorio. Después, volver a
+                                               descargar los datos para el motor. Se puede
+                                               repetir.
+datos-2026-11-05-salon-mat05-estadistica.sql   MAT 05 también para Estadística, lunes y
+                                               miércoles de 19:00 a 21:00 (8 filas). Correr
+                                               ANTES de descargar los datos de Estadística. Se
+                                               puede repetir.
+datos-2026-11-05-cupos-metodos-cuantitativos   cupo de MAT-10101 en sus salones nuevos: 001 a
+  .sql                                         30 y 002 a 33. Correr DESPUÉS de mover las
+                                               clases en la malla: si no están en su salón
+                                               nuevo, no cambia nada. Se puede repetir.
 ```
 
 **Cambio aplicado a mano el 2026-10-09:** `fn_validar_creditos_imparte` contaba media hora por

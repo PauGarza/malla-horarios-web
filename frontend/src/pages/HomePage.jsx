@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { leerResumenAviso } from '../lib/api';
 import {
   administraSemestres,
   etiquetaRol,
   gestionaDepartamento as esGestion,
+  soloConsultaAvisos,
   veArchivosMatematicas,
   veMallaDeTodaLaDivision,
   veTodosLosDepartamentos,
@@ -36,8 +39,10 @@ export default function HomePage({
   onAbrirReporteHorarios,
   onAbrirReporteSatisfaccion,
   onAbrirArchivosMate,
+  onAbrirAvisoHorarios,
+  onAbrirVistaPreviaHorario,
 }) {
-  const { profesor, departamentos, nombreDepartamento, formularioPublicado, semestre } = useAuth();
+  const { token, profesor, departamentos, nombreDepartamento, formularioPublicado, semestre } = useAuth();
 
   const daClases = Boolean(profesor.tipo_contrato);
   const gestionaDepartamento = esGestion(profesor.rol);
@@ -46,6 +51,23 @@ export default function HomePage({
   // solo formulario cuyo estado poner en la tarjeta.
   const veTodos = veTodosLosDepartamentos(profesor.rol);
   const pendientes = VISTAS_PENDIENTES_POR_ROL[profesor.rol] ?? [];
+
+  // Cuántos profesores ya avisados cambiaron de horario. Si falla no se muestra
+  // nada: es un distintivo, y no debe estorbar el inicio.
+  const semestreId = semestre?.id;
+  const [cambiosSinAvisar, setCambiosSinAvisar] = useState(0);
+  useEffect(() => {
+    if (!gestionaDepartamento || !semestreId) return undefined;
+    let cancelado = false;
+    leerResumenAviso(token, semestreId)
+      .then((d) => {
+        if (!cancelado) setCambiosSinAvisar(d.cambios);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [token, semestreId, gestionaDepartamento]);
 
   return (
     <div className="home-screen">
@@ -185,6 +207,36 @@ export default function HomePage({
                   día, hora, profesor y salón, con los choques y avisos que hay que resolver.
                 </span>
               </button>
+            </div>
+          </section>
+        )}
+
+        {gestionaDepartamento && (
+          <section className="home-seccion">
+            <h2>Avisos a los profesores</h2>
+            <div className="opciones-grid">
+              <button className="opcion-card opcion-activa" onClick={onAbrirAvisoHorarios}>
+                <strong>
+                  Avisar horarios a los profesores
+                  {cambiosSinAvisar > 0 && (
+                    <span className="badge badge-borrador">
+                      {cambiosSinAvisar} {cambiosSinAvisar === 1 ? 'cambio' : 'cambios'} sin avisar
+                    </span>
+                  )}
+                </strong>
+                <span>
+                  {soloConsultaAvisos(profesor.rol)
+                    ? 'Consultar el correo de cada departamento, a quién se le ha avisado y quién tiene cambios sin avisar.'
+                    : 'Mandarle a cada profesor un correo con sus materias y horarios, y activar la vista en su perfil.'}
+                </span>
+              </button>
+
+              {profesor.rol === 'admin' && (
+                <button className="opcion-card opcion-activa" onClick={onAbrirVistaPreviaHorario}>
+                  <strong>Vista previa del horario en el perfil</strong>
+                  <span>Cómo vería un profesor su horario en Mi perfil. Solo la ve el admin.</span>
+                </button>
+              )}
             </div>
           </section>
         )}

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { cambiarPassword, guardarCorreo } from '../lib/api';
+import { cambiarPassword, guardarCorreo, leerMiHorario } from '../lib/api';
 import { TIPO_CONTRATO_LABELS, etiquetaRol } from '../lib/roles';
+import HorarioProfesor from '../components/HorarioProfesor';
 
 // Mismas reglas que api/cambiar-password.php, repetidas aquí solo para avisar
 // antes de mandar. Quien decide es el servidor.
@@ -22,6 +23,21 @@ export default function PerfilUsuario({ onVolver }) {
   const [guardandoCorreo, setGuardandoCorreo] = useState(false);
   const [errorCorreo, setErrorCorreo] = useState('');
   const [mensajeCorreo, setMensajeCorreo] = useState('');
+
+  // Mi horario: solo si la jefatura activó la vista (api/mi-horario.php). Si falla,
+  // la sección no aparece: no es razón para estorbar el resto del perfil.
+  const [miHorario, setMiHorario] = useState(null);
+  useEffect(() => {
+    let cancelado = false;
+    leerMiHorario(token)
+      .then((d) => {
+        if (!cancelado) setMiHorario(d);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [token]);
 
   async function enviarCorreo(e) {
     e.preventDefault();
@@ -112,6 +128,19 @@ export default function PerfilUsuario({ onVolver }) {
           Si algún dato está mal, pídele a tu Jefe de Departamento que lo corrija.
         </p>
       </section>
+
+      {miHorario?.activa && (
+        <section className="formulario-seccion">
+          <h2>Mi horario</h2>
+          {!miHorario.clases ? (
+            <p className="formulario-nota">Tu horario todavía no está disponible.</p>
+          ) : miHorario.clases.length === 0 ? (
+            <p className="formulario-nota">Por el momento no tienes clases asignadas.</p>
+          ) : (
+            <HorarioProfesor clases={miHorario.clases} />
+          )}
+        </section>
+      )}
 
       <section className="formulario-seccion">
         <h2>Correo</h2>

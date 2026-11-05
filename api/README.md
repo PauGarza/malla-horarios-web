@@ -80,6 +80,8 @@ Todo endpoint que necesite saber el método debe usar `metodo_http()`, **nunca**
 | `olvide-password.php` | POST | `{correo}` → `{ok}` **siempre**, exista o no la cuenta. Sin sesión. Si es de una cuenta activa, manda un enlace `/#restablecer=<token>` que vale 1 hora y una vez (2026-10-02) |
 | `restablecer-password.php` | POST | `{token, password_nueva}` → `{ok, cu}`. Sin sesión; canjea el enlace. 400 `token_invalido` si venció, ya se usó o no existe |
 | `catalogos.php` | GET | Perfil propio (con `correo`), departamentos, franjas, semestre actual y si el formulario propio está publicado. Manda **todas** las franjas con `dias` (null = todos los días, D31) y `departamento_id` (null = todos los departamentos, D32); el frontend filtra según el formulario que dibuja |
+| `aviso-horario.php` | GET / POST | Aviso de horarios a los profesores (2026-11-03), `ROLES_GESTION` en su departamento. GET → fechas, borrador, plantillas, campos y profesores con su estado; `?recurso=resumen`, `horario` o `envio`. POST `{accion}`: `guardar_fechas`, `guardar`, `vista_previa`, `prueba`, `enviar`, `marcar_avisado`, `perfil_activo`. `enviar` manda un profesor por petición: el navegador recorre la lista |
+| `mi-horario.php` | GET | `{activa, clases, avisado_at}`: el último aviso de quien llama, solo si la jefatura de su departamento activó la vista y no lo desmarcó. Nunca lee la malla ni el salón |
 | `cuestionario.php` | GET | El formulario del profesor que llama, ya resuelto por audiencia. Vacío si no está publicado. Trae `ratio_horas_verde` ya resuelto para su contrato (asignatura = 1) y los `creditos` de cada materia, para calcular el mínimo de horas en verde (2026-10-13) |
 | `preferencia.php` | GET, PUT | La propia preferencia. El PUT es una transacción, exige formulario publicado y revalida los mínimos. `num_cursos_max` se exige siempre (1-6): la pregunta es fija desde 2026-10-13. Al enviar, el mínimo de horas en verde se calcula con `horas_minimas_verde()` (`lib/catalogo.php`): 3 h por curso pedido, +1 h si hay una de 8 créditos en verde, × el ratio del contrato, hacia arriba a la media hora. Las celdas de disponibilidad en un día o un departamento en que su franja no existe se descartan en silencio; una franja inexistente es 400 |
 | `panel.php` | GET | Roster + preferencia de cada quien (jefatura) |
@@ -149,6 +151,15 @@ este servidor (probado el 2026-10-02), pero Outlook del ITAM lo manda a correo n
 marca como remitente externo. Pendiente con la DSTI: autorizar `horariosdace.itam.mx` como
 remitente (SPF/lista segura) o dar una cuenta SMTP institucional. Si un enlace no llega, revisar
 el log de PHP (`correo.php: …`).
+
+**Aviso de horarios (desde 2026-11-03).** `lib/aviso.php` arma cada correo en un solo lugar: vista
+previa, prueba y envío real pasan por `aviso_armar_correo()`. Sale por `enviar_correo_html()`, con
+las mismas dos rutas que arriba. Desde 2026-11-05 sale de la dirección del jefe de cada departamento
+(`aviso_jefes` de `config.php`: Matemáticas y Estadística); otro departamento y la recuperación de contraseña usan
+`correo_remitente` de `config.php`. El servidor no está autorizado en el SPF de `itam.mx`. En la prueba de la usuaria del 2026-11-03 no cayó en correo no
+deseado, a diferencia de lo visto el 2026-10-02. Los horarios salen de la malla actual, sin el salón. Cada aviso guarda en
+`aviso_horario_envio` la copia del correo y la huella del horario: con ella se detecta quién cambió
+desde el aviso, y de ahí lee el perfil del profesor, que nunca ve la malla en vivo.
 
 ## Reglas que se respetan en todos
 

@@ -5,16 +5,18 @@ import { veTodosLosDepartamentos } from '../lib/roles';
  * Para jefe_division y admin, que trabajan sobre los 3 departamentos. A un
  * jefe_departamento no se le muestra: solo tiene el suyo, y el servidor
  * rechazaría cualquier otro de todas formas (departamento_objetivo()).
+ *
+ * Una vista con otro alcance lo indica con `visible` y `opciones`.
  */
-export default function SelectorDepartamento({ valor, onCambiar, disabled }) {
+export default function SelectorDepartamento({ valor, onCambiar, disabled, visible, opciones }) {
   const { profesor, departamentos } = useAuth();
-  if (!veTodosLosDepartamentos(profesor.rol)) return null;
+  if (!(visible ?? veTodosLosDepartamentos(profesor.rol))) return null;
 
   return (
     <label className="selector-depto">
       Departamento
       <select value={valor ?? ''} disabled={disabled} onChange={(e) => onCambiar(Number(e.target.value))}>
-        {departamentos.map((d) => (
+        {(opciones ?? departamentos).map((d) => (
           <option key={d.id} value={d.id}>
             {d.nombre}
           </option>

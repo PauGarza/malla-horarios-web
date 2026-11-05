@@ -6,3 +6,6 @@ dist/
 # Credenciales de MySQL y el secreto del JWT. La plantilla commiteada es
 # api/lib/config.example.php — mismo patrón que frontend/.env.deploy.
 api/lib/config.php
+
+# Datos personales (nombres y CU): nunca van a GitHub.
+bd/mysql/datos-2026-11-03-ligar-profesores-actuaria.sql

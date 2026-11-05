@@ -61,6 +61,9 @@ return [
     // DSTI qué remitente puede usar este servidor.
     'correo_remitente' => 'no-responder@horariosdace.itam.mx',
     'correo_nombre'    => 'Malla Horarios DACE',
+    // Aviso de horarios: de quién sale y a quién le llegan las respuestas, por
+    // clave_prefijo del departamento. Sin esta lista salen de correo_remitente.
+    'aviso_jefes'      => ['MAT' => 'jefatura-mat@ejemplo.mx', 'EST' => 'jefatura-est@ejemplo.mx'],
     // Vacío = mail() de PHP (el sendmail local del servidor). Llenar host solo
     // si mail() no entrega; ej. con una cuenta institucional:
     //   'smtp' => ['host' => 'smtp.office365.com', 'puerto' => 587,

@@ -65,12 +65,88 @@ function enviar_correo(string $para, string $asunto, string $texto): bool
 }
 
 /**
- * Cliente SMTP mínimo: un mensaje, un destinatario.
+ * Encabezado con acentos en RFC 2047. Una palabra codificada no debe pasar de 75
+ * caracteres, así que un texto largo se parte en varias sin cortar un carácter.
+ */
+function correo_codificar_encabezado(string $s): string
+{
+    $partes = [];
+    $actual = '';
+    foreach (preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $c) {
+        if (strlen($actual) + strlen($c) > 45) {
+            $partes[] = $actual;
+            $actual = '';
+        }
+        $actual .= $c;
+    }
+    if ($actual !== '' || $partes === []) {
+        $partes[] = $actual;
+    }
+    return implode(' ', array_map(function (string $p): string {
+        return '=?UTF-8?B?' . base64_encode($p) . '?=';
+    }, $partes));
+}
+
+/**
+ * Manda un correo con HTML y su alternativa en texto (aviso de horarios,
+ * 2026-11-03). enviar_correo() se queda como está: de ella depende recuperar la
+ * contraseña.
+ *
+ * $opciones: 'copias' (lista de correos en Cc), 'responder_a' (Reply-To),
+ * 'nombre' (el nombre del remitente), 'remitente' (su dirección; sin ella, la de
+ * config.php). Todos los correos ya deben venir validados
+ * (normalizar_correo): van tal cual en las cabeceras. Las partes van en base64
+ * porque SMTP limita el largo de línea y el HTML puede pasarse de ese límite.
+ */
+function enviar_correo_html(string $para, string $asunto, string $html, string $texto, array $opciones = []): bool
+{
+    $remitente = (string) ($opciones['remitente'] ?? config_o('correo_remitente', 'no-responder@horariosdace.itam.mx'));
+    $nombre    = (string) ($opciones['nombre'] ?? config_o('correo_nombre', 'Malla Horarios DACE'));
+    $copias    = $opciones['copias'] ?? [];
+    $frontera  = 'aviso-' . bin2hex(random_bytes(12));
+
+    $cabeceras = [
+        'From'         => correo_codificar_encabezado($nombre) . ' <' . $remitente . '>',
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'multipart/alternative; boundary="' . $frontera . '"',
+    ];
+    if ($copias !== []) {
+        $cabeceras['Cc'] = implode(', ', $copias);
+    }
+    if (!empty($opciones['responder_a'])) {
+        $cabeceras['Reply-To'] = (string) $opciones['responder_a'];
+    }
+
+    $parte = function (string $tipo, string $contenido) use ($frontera): string {
+        return "--$frontera\r\n"
+            . "Content-Type: $tipo; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($contenido)) . "\r\n";
+    };
+    $cuerpo = $parte('text/plain', $texto) . $parte('text/html', $html) . "--$frontera--\r\n";
+
+    $asuntoCodificado = correo_codificar_encabezado($asunto);
+
+    $smtp = config_o('smtp', []);
+    if (is_array($smtp) && !empty($smtp['host'])) {
+        return smtp_enviar($smtp, $remitente, $para, $asuntoCodificado, $cabeceras, $cuerpo, $copias);
+    }
+
+    $ok = mail($para, $asuntoCodificado, $cuerpo, $cabeceras, '-f' . $remitente);
+    if (!$ok) {
+        error_log('correo.php: mail() devolvió false enviando a ' . $para);
+    }
+    return $ok;
+}
+
+/**
+ * Cliente SMTP mínimo: un mensaje, un destinatario y sus copias.
  *
  * $smtp = ['host', 'puerto' => 587, 'seguridad' => 'tls'|'ssl'|'', 'usuario', 'password'].
  * 'tls' = STARTTLS sobre el puerto 587; 'ssl' = TLS desde el inicio (465).
+ * $copias solo agrega destinatarios al sobre: el encabezado Cc lo pone quien llama.
  */
-function smtp_enviar(array $smtp, string $de, string $para, string $asunto, array $cabeceras, string $texto): bool
+function smtp_enviar(array $smtp, string $de, string $para, string $asunto, array $cabeceras, string $texto, array $copias = []): bool
 {
     $host      = (string) $smtp['host'];
     $puerto    = isset($smtp['puerto']) ? (int) $smtp['puerto'] : 587;
@@ -144,7 +220,11 @@ function smtp_enviar(array $smtp, string $de, string $para, string $asunto, arra
         $cuerpo = preg_replace('/^\./m', '..', $cuerpo);
 
         $ok = $paso("MAIL FROM:<$de>", [250], 'MAIL FROM')
-            && $paso("RCPT TO:<$para>", [250, 251], 'RCPT TO')
+            && $paso("RCPT TO:<$para>", [250, 251], 'RCPT TO');
+        foreach ($copias as $copia) {
+            $ok = $ok && $paso("RCPT TO:<$copia>", [250, 251], 'RCPT TO copia');
+        }
+        $ok = $ok
             && $paso('DATA', [354], 'DATA')
             && $paso($mensaje . "\r\n" . $cuerpo . "\r\n.", [250], 'fin de DATA');
     }

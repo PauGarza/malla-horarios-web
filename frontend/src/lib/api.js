@@ -350,6 +350,34 @@ export const moverClaseMalla = (token, semestreId, departamentos, grupoId, { sal
     { grupo_id: grupoId, salon_id, sesiones },
   );
 
+// --- Aviso de horarios a los profesores (2026-11-03) --------------------------
+
+/** Fechas, borrador, plantillas, campos y profesores con su estado; ver api/aviso-horario.php. */
+export const leerAviso = (token, semestreId, departamentoId) =>
+  pedir(conDepto('aviso-horario.php', semestreId, departamentoId), token);
+
+/** { cambios }: los cambios sin avisar, para el distintivo del inicio. */
+export const leerResumenAviso = (token, semestreId) =>
+  pedir(`aviso-horario.php?recurso=resumen&semestre_id=${semestreId}`, token);
+
+/** { nombre, clases, origen: 'aviso' | 'malla', avisado_at }: lo que vería en su perfil. */
+export const leerHorarioProfesor = (token, semestreId, departamentoId, profesorId) =>
+  pedir(conDepto(`aviso-horario.php?recurso=horario&profesor_id=${profesorId}`, semestreId, departamentoId), token);
+
+/** La copia exacta de un correo enviado. */
+export const leerEnvioAviso = (token, semestreId, departamentoId, envioId) =>
+  pedir(conDepto(`aviso-horario.php?recurso=envio&envio_id=${envioId}`, semestreId, departamentoId), token);
+
+/**
+ * { accion, ... }: guardar_fechas, guardar, vista_previa, prueba, enviar, marcar_avisado o
+ * perfil_activo. El correo se arma siempre en el servidor.
+ */
+export const accionAviso = (token, semestreId, departamentoId, cuerpo) =>
+  post(conDepto('aviso-horario.php', semestreId, departamentoId), token, cuerpo);
+
+/** { activa, clases, avisado_at }: el horario propio, si la jefatura activó la vista. */
+export const leerMiHorario = (token) => pedir('mi-horario.php', token);
+
 // --- Archivos de Matemáticas (2026-11-03) -------------------------------------
 
 /** { departamento_id, grupos, ajustes } de api/programadas.php; solo jefatura de Matemáticas y admin. */

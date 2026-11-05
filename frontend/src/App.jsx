@@ -19,6 +19,8 @@ import CargaDemanda from './pages/CargaDemanda';
 import Semestres from './pages/Semestres';
 import MotorAsignacion from './pages/MotorAsignacion';
 import MallaHorarios from './pages/MallaHorarios';
+import AvisoHorarios from './pages/AvisoHorarios';
+import VistaPreviaHorario from './pages/VistaPreviaHorario';
 import RestablecerPasswordPage from './pages/RestablecerPasswordPage';
 import CapturarCorreoPage from './pages/CapturarCorreoPage';
 import BarraSuperior from './components/BarraSuperior';
@@ -183,6 +185,12 @@ function Vista({ vista, setVista }) {
   if (vista.nombre === 'malla') {
     return <MallaHorarios onVolver={() => setVista({ nombre: 'home' })} />;
   }
+  if (vista.nombre === 'aviso-horarios') {
+    return <AvisoHorarios onVolver={() => setVista({ nombre: 'home' })} />;
+  }
+  if (vista.nombre === 'vista-previa-horario') {
+    return <VistaPreviaHorario onVolver={() => setVista({ nombre: 'home' })} />;
+  }
   return (
     <HomePage
       onAbrirFormulario={() => setVista({ nombre: 'formulario' })}
@@ -201,6 +209,8 @@ function Vista({ vista, setVista }) {
       onAbrirReporteHorarios={() => setVista({ nombre: 'reporte-horarios' })}
       onAbrirReporteSatisfaccion={() => setVista({ nombre: 'reporte-satisfaccion' })}
       onAbrirArchivosMate={() => setVista({ nombre: 'archivos-mate' })}
+      onAbrirAvisoHorarios={() => setVista({ nombre: 'aviso-horarios' })}
+      onAbrirVistaPreviaHorario={() => setVista({ nombre: 'vista-previa-horario' })}
     />
   );
 }

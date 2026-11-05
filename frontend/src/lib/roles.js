@@ -42,6 +42,11 @@ export const veMallaDeTodaLaDivision = (rol) => rol === 'admin' || rol === 'jefe
 // que la jefatura de división lo conserva aunque vea un solo departamento.
 export const administraSemestres = (rol) => rol === 'admin' || rol === 'jefe_division';
 
+// Avisar horarios (2026-11-03): la jefatura de división revisa la información de
+// cada departamento, pero las acciones las hacen los jefes. Espejo de la guardia de
+// api/aviso-horario.php, que es quien autoriza.
+export const soloConsultaAvisos = (rol) => rol === 'jefe_division';
+
 // Archivos de Matemáticas (2026-11-03): Excel de Materias programadas y PDF por
 // división, un formato que solo usa Matemáticas. Espejo de la guardia de
 // api/programadas.php (ROLES_GESTION + exigir_jefe_de(MAT)): admin, o jefatura

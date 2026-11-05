@@ -750,3 +750,65 @@ CREATE TABLE recuperacion_password (
     CONSTRAINT fk_recuperacion_profesor FOREIGN KEY (profesor_id) REFERENCES profesor(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Enlaces de "olvide mi contrasena". Se limpia sola: cada solicitud borra los vencidos.';
+
+-- Aviso de horarios a los profesores (2026-11-03). Ver
+-- migracion-2026-11-03-aviso-horario.sql, api/aviso-horario.php y api/mi-horario.php.
+CREATE TABLE semestre_fechas (
+    semestre_id     INT NOT NULL PRIMARY KEY,
+    inicio          DATE NULL,
+    bajas           DATE NULL,
+    fin             DATE NULL,
+    examenes_inicio DATE NULL,
+    examenes_fin    DATE NULL,
+    actualizado_por INT NULL,
+    actualizado_at  DATETIME NULL COMMENT 'UTC.',
+    CONSTRAINT fk_sf_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
+    CONSTRAINT fk_sf_por      FOREIGN KEY (actualizado_por) REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Calendario del semestre, compartido por todos los departamentos (api/aviso-horario.php).';
+
+CREATE TABLE aviso_horario (
+    semestre_id     INT NOT NULL,
+    departamento_id INT NOT NULL,
+    datos           LONGTEXT NULL COMMENT 'JSON: periodo, meses, copias, respuestas_a, excluidos, versiones. NULL = sin borrador.',
+    guardado_por    INT NULL,
+    guardado_at     DATETIME NULL COMMENT 'UTC.',
+    perfil_activo   TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = sus profesores ven Mi horario en su perfil.',
+    perfil_excluidos TEXT NULL COMMENT 'JSON: ids de los profesores que no ven Mi horario aunque esté activa. NULL = ninguno.',
+    perfil_por      INT NULL,
+    perfil_at       DATETIME NULL COMMENT 'UTC.',
+    PRIMARY KEY (semestre_id, departamento_id),
+    KEY idx_ah_depto (departamento_id),
+    CONSTRAINT fk_ah_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
+    CONSTRAINT fk_ah_depto    FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_ah_guardado FOREIGN KEY (guardado_por)    REFERENCES profesor(id),
+    CONSTRAINT fk_ah_perfil   FOREIGN KEY (perfil_por)      REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='El aviso de horarios de cada departamento en un semestre.';
+
+CREATE TABLE aviso_horario_envio (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    semestre_id      INT NOT NULL,
+    departamento_id  INT NOT NULL,
+    profesor_id      INT NOT NULL,
+    estado           ENUM('enviado','error','marcado') NOT NULL COMMENT 'marcado = la jefatura lo dio por avisado, sin correo.',
+    es_actualizacion TINYINT(1) NOT NULL DEFAULT 0,
+    version_nombre   VARCHAR(80) NULL,
+    correo           VARCHAR(191) NULL,
+    copias           TEXT NULL COMMENT 'Direcciones en Cc, separadas por coma.',
+    responder_a      VARCHAR(191) NULL,
+    asunto           VARCHAR(300) NULL,
+    html             LONGTEXT NULL COMMENT 'Copia exacta del correo. NULL si estado = marcado.',
+    clases           LONGTEXT NOT NULL COMMENT 'JSON: las clases que se le avisaron (aviso_clases).',
+    huella           CHAR(64) NOT NULL COMMENT 'SHA-256 de claves, grupo, días y horas (aviso_huella): igual = mismo horario.',
+    error            VARCHAR(300) NULL,
+    creado_por       INT NOT NULL,
+    creado_at        DATETIME NOT NULL COMMENT 'UTC.',
+    KEY idx_ahe_profesor (semestre_id, profesor_id, id),
+    KEY idx_ahe_depto (departamento_id),
+    CONSTRAINT fk_ahe_semestre FOREIGN KEY (semestre_id)     REFERENCES semestre(id),
+    CONSTRAINT fk_ahe_depto    FOREIGN KEY (departamento_id) REFERENCES departamento(id),
+    CONSTRAINT fk_ahe_profesor FOREIGN KEY (profesor_id)     REFERENCES profesor(id),
+    CONSTRAINT fk_ahe_por      FOREIGN KEY (creado_por)      REFERENCES profesor(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Lo que se le avisó a cada profesor. Solo se agrega: el último enviado o marcado es el vigente.';

@@ -2771,3 +2771,619 @@ select.editor-mini {
   font-size: 14px;
   margin-right: 4px;
 }
+
+/* --- Aviso de horarios a los profesores (2026-11-03) ----------------- */
+
+.aviso-screen {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.aviso-fechas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.aviso-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aviso-fecha-dia {
+  font-weight: 400;
+  color: var(--gray-text);
+}
+
+.aviso-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px 16px;
+}
+
+.aviso-datos > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aviso-pestanas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  border-bottom: 1px solid var(--gray-border);
+}
+
+.aviso-pestana {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 8px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-text);
+}
+
+.aviso-pestana span {
+  font-weight: 400;
+}
+
+.aviso-pestana-activa {
+  color: var(--itam);
+  border-bottom-color: var(--itam);
+}
+
+.aviso-tipos {
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.aviso-tipos legend {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-text);
+  padding: 0 4px;
+}
+
+.aviso-subtitulo {
+  margin: 12px 0 0;
+  font-size: 16px;
+}
+
+.aviso-cambios {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.aviso-ddl {
+  position: relative;
+}
+
+.aviso-ddl-boton {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-size: 14px;
+  text-align: left;
+  color: inherit;
+}
+
+.aviso-ddl-boton[aria-expanded='true'] {
+  border-color: var(--itam);
+}
+
+.aviso-ddl-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 6;
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(28, 39, 51, 0.18);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aviso-perfil-fila {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--gray-border);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.aviso-perfil-fila:last-child {
+  border-bottom: none;
+}
+
+.aviso-lista-herramientas {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.aviso-lista-herramientas input {
+  max-width: 340px;
+}
+
+.aviso-lista {
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.aviso-fila {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 2fr) minmax(170px, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--gray-border);
+  font-size: 14px;
+}
+
+.aviso-fila:last-child {
+  border-bottom: none;
+}
+
+.aviso-fila-ejemplo {
+  background: var(--gray-bg);
+}
+
+.aviso-fila-datos,
+.aviso-fila-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aviso-fila-datos span {
+  color: var(--gray-text);
+  font-size: 13px;
+}
+
+.aviso-fila-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
+}
+
+.aviso-fila-acciones .btn-link {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.aviso-comparacion {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 20px;
+  background: var(--gray-bg);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.aviso-comparacion ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.aviso-pestanas-redaccion {
+  margin-top: 12px;
+}
+
+.aviso-columna {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editor-correo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-paleta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.campo-cajita {
+  display: inline-block;
+  background: var(--amarillo-bg);
+  border: 1px solid var(--amarillo);
+  border-radius: 5px;
+  color: #6b5300;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 0 6px;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+}
+
+.correo-herramientas {
+  display: flex;
+  gap: 6px;
+}
+
+.correo-herramientas .btn-secondary {
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.editor-cuerpo {
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-height: 360px;
+  max-height: 640px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.editor-cuerpo:focus {
+  outline: 2px solid var(--itam);
+  outline-offset: 1px;
+}
+
+.editor-cuerpo p {
+  margin: 0 0 10px;
+}
+
+/* En el cuerpo, un clic quita la cajita. La × es de CSS: no entra en lo que se guarda. */
+.editor-cuerpo .campo-cajita {
+  cursor: pointer;
+}
+
+.editor-cuerpo .campo-cajita::after {
+  content: ' ×';
+}
+
+.editor-cuerpo .campo-cajita:hover {
+  background: var(--rojo-bg);
+  border-color: var(--rojo);
+  color: var(--rojo);
+}
+
+.editor-solo-lectura {
+  min-height: 0;
+  background: var(--gray-bg);
+}
+
+.editor-solo-lectura .campo-cajita,
+.editor-solo-lectura .campo-cajita:hover {
+  cursor: default;
+  background: var(--amarillo-bg);
+  border-color: var(--amarillo);
+  color: #6b5300;
+}
+
+.editor-solo-lectura .campo-cajita::after {
+  content: none;
+}
+
+.aviso-sin-marco {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.aviso-ejemplo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aviso-encabezados {
+  margin: 0;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--gray-bg);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.aviso-encabezados div {
+  display: flex;
+  gap: 8px;
+}
+
+.aviso-encabezados dt {
+  flex: none;
+  width: 92px;
+  color: var(--gray-text);
+  font-weight: 600;
+}
+
+.aviso-encabezados dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aviso-cuerpo-correo {
+  width: 100%;
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  background: white;
+}
+
+.aviso-prueba {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.aviso-prueba > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.aviso-prueba .btn-secondary {
+  flex: none;
+}
+
+.aviso-perfil {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.aviso-progreso {
+  width: 100%;
+}
+
+.aviso-errores {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--rojo);
+  font-size: 13px;
+}
+
+.aviso-barra {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--gray-bg);
+  border-top: 1px solid var(--gray-border);
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aviso-barra-avisos p {
+  margin: 0;
+}
+
+.aviso-barra-botones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.aviso-modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(28, 39, 51, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+  overflow-y: auto;
+}
+
+.aviso-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 16px 20px;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.aviso-modal-ancho {
+  max-width: 860px;
+}
+
+.aviso-modal header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.aviso-modal p,
+.aviso-modal ul {
+  margin: 0;
+}
+
+.aviso-confirmar-perfil {
+  font-weight: 600;
+}
+
+.aviso-modal-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .aviso-fila {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .aviso-fila-estado,
+  .aviso-fila-acciones,
+  .aviso-comparacion {
+    grid-column: 2;
+  }
+
+  .aviso-fila-acciones {
+    justify-content: flex-start;
+  }
+
+  .aviso-prueba {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* El horario del profesor: Mi perfil y las vistas previas. */
+
+.horario-profesor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.horario-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.horario-lista li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gray-border);
+}
+
+.horario-lista li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.horario-clave {
+  color: var(--gray-text);
+  font-size: 13px;
+}
+
+.horario-cuadricula-marco {
+  overflow-x: auto;
+}
+
+.horario-cuadricula {
+  display: grid;
+  grid-template-columns: 48px repeat(5, minmax(96px, 1fr));
+  min-width: 540px;
+  font-size: 12px;
+}
+
+.horario-dia {
+  text-align: center;
+  font-weight: 600;
+  color: var(--gray-text);
+  padding: 4px;
+}
+
+.horario-hora {
+  color: var(--gray-text);
+  padding-right: 6px;
+  text-align: right;
+}
+
+.horario-celda {
+  border-top: 1px solid var(--gray-border);
+  border-left: 1px solid var(--gray-border);
+}
+
+.horario-sesion {
+  z-index: 1;
+  margin: 1px 2px;
+  border-radius: 4px;
+  padding: 3px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  line-height: 1.2;
+  background: var(--verde-bg);
+  border-left: 3px solid var(--itam);
+}
+
+.horario-sesion strong {
+  font-weight: 600;
+}
+
+.horario-sesion-1 {
+  background: #e4edf8;
+  border-left-color: #2c6db5;
+}
+
+.horario-sesion-2 {
+  background: var(--amarillo-bg);
+  border-left-color: var(--amarillo);
+}
+
+.horario-sesion-3 {
+  background: #efe7f7;
+  border-left-color: #7248a8;
+}
+
+.horario-sesion-4 {
+  background: #fbe9e0;
+  border-left-color: #bd5a24;
+}
+
+.horario-sesion-5 {
+  background: #e2f2f4;
+  border-left-color: #1f7f8c;
+}
