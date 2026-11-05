@@ -22,7 +22,7 @@ archivos son material nuevo y se editan aquí.
 
 No hay paso de profesores: desde el 2026-10-02 **cada profesor crea su propia cuenta** en "Crear
 cuenta" (con correo, para poder recuperar la contraseña). El roster precargado de Matemáticas
-(`cargar-profesores.php`) se borró de la base ese día y el archivo quedó vacío (ver "Por qué los
+(`cargar-profesores.php`) se borró de la base ese día y el archivo salió del repositorio (ver "Por qué los
 profesores no son SQL", abajo). Las jefaturas y la cuenta admin se dan de alta a mano.
 
 `schema-mysql.sql` ya describe el estado final. Las **migraciones** son solo para una base que ya
@@ -200,7 +200,8 @@ reinicio-2026-10-02-formulario-estadistica.sql
                                  había sembrado con la plantilla de Matemáticas, para que el editor
                                  lo vuelva a sembrar con la plantilla genérica. DESPUÉS del deploy.
                                  No borra nada si algún profesor de EST ya tiene preferencia.
-limpieza-2026-10-02-prueba.sql   borra el formulario/cuenta de prueba que salía arriba de la jefatura de división
+limpieza-2026-10-02-prueba.sql   (solo copia local: lleva datos personales)
+                                 borra el formulario/cuenta de prueba que salía arriba de la jefatura de división
                                  en "Preferencias recibidas". En DOS pasos: primero identifica el
                                  CU, luego borra solo ese.
 limpieza-2026-10-02-roster-matematicas.sql
@@ -219,6 +220,7 @@ limpieza-2026-10-13-salones-ejemplo.sql
                                  salón que ya use algún imparte_horario. Idempotente; no depende
                                  del deploy. Desde ese día el seed tampoco los trae.
 datos-actuaria-primavera-2027-mysql.sql
+                                 (solo copia local: lleva datos personales)
                                  la programación FIJA de Actuaría para Primavera 2027 (D45), de
                                  DACE/Actuaria/PROGRAMACIÓNPRIM2027.pdf: 15 materias ACT, 3 pares
                                  de co-oferta (uno con MAT-22600), 13 profesores sin cuenta y 23
@@ -280,7 +282,7 @@ los datos reales de Matemáticas, traducidos de los originales de PostgreSQL que
 ```
 5. datos-matematicas-mysql.sql               51 materias + 54 pares de co-oferta
 6. datos-matematicas-cuestionario-mysql.sql  51 filas de configuracion del cuestionario
-7. cargar-profesores.php                     VACÍO desde 2026-10-02 (ver abajo)
+7. cargar-profesores.php                     ya no existe en el repositorio (ver abajo)
 ```
 
 **Los originales son los de `DACE/BD/`.** Si cambian los datos, se cambian allá y se vuelve a
@@ -336,10 +338,14 @@ desde la aplicación, y conviene que sea con `password_hash()` de PHP — la mis
 `password_verify()` los lee después en `api/login.php`.
 
 `cargar-profesores.php` era de **un solo uso**: se subía a la raíz del sitio, se abría una vez y
-se borraba. Cargó los 45 profesores de Matemáticas el 2026-09-25. **Desde el 2026-10-02 está
-vacío**: ese día se decidió que cada profesor cree su propia cuenta, se borró el roster de la base
-(`limpieza-2026-10-02-roster-matematicas.sql`) y se sacaron del archivo los CU, que no deben estar
-en un repo público.
+se borraba. Cargó los 45 profesores de Matemáticas el 2026-09-25. Desde el 2026-10-02 no se usa:
+ese día se decidió que cada profesor cree su propia cuenta y se borró el roster de la base
+(`limpieza-2026-10-02-roster-matematicas.sql`).
+
+**Nada de datos personales en el repositorio** (nombres, CU, correos, decisiones sobre personas),
+ni en comentarios ni en mensajes de commit. Un SQL que necesita datos reales se queda como copia
+local y se agrega a `.gitignore`. El 2026-11-05 se limpió también el historial. En
+`migracion-2026-10-02-correo-y-roles.sql` los nombres son marcadores: ya se corrió en el servidor.
 
 ### La trampa del semestre
 

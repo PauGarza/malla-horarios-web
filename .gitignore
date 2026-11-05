@@ -8,4 +8,8 @@ dist/
 api/lib/config.php
 
 # Datos personales (nombres y CU): nunca van a GitHub.
+bd/mysql/datos-actuaria-primavera-2027-mysql.sql
+bd/mysql/ajuste-2026-10-13-profesor-actuaria-a-estadistica.sql
+bd/mysql/limpieza-2026-10-02-prueba.sql
+docs/mockup/mockup-vista-malla.html
 bd/mysql/datos-2026-11-03-ligar-profesores-actuaria.sql

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { olvidePassword } from '../lib/api';
+import { CORREO_CONTACTO } from '../lib/contacto';
 
 // "Olvidé mi contraseña": pide el correo y el servidor manda un enlace de un
 // solo uso (api/olvide-password.php). El enlace vuelve a la app con
@@ -66,10 +67,12 @@ export default function RecuperarPasswordPage({ onVolver }) {
         <button type="button" className="btn-link" onClick={onVolver}>
           Volver a iniciar sesión
         </button>
-        <p className="login-hint">
-          ¿No registraste correo o ya no tienes acceso a él? Escribe a{' '}
-          <a href="mailto:contacto@ejemplo.mx">contacto@ejemplo.mx</a>.
-        </p>
+        {CORREO_CONTACTO && (
+          <p className="login-hint">
+            ¿No registraste correo o ya no tienes acceso a él? Escribe a{' '}
+            <a href={`mailto:${CORREO_CONTACTO}`}>{CORREO_CONTACTO}</a>.
+          </p>
+        )}
       </form>
     </div>
   );

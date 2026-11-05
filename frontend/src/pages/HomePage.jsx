@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { leerResumenAviso } from '../lib/api';
+import { CORREO_CONTACTO } from '../lib/contacto';
 import {
   administraSemestres,
   etiquetaRol,
@@ -310,10 +311,12 @@ export default function HomePage({
           </p>
         )}
 
-        <p className="home-contacto">
-          ¿Dudas o comentarios? Escríbeme a{' '}
-          <a href="mailto:contacto@ejemplo.mx">contacto@ejemplo.mx</a>
-        </p>
+        {CORREO_CONTACTO && (
+          <p className="home-contacto">
+            ¿Dudas o comentarios? Escríbeme a{' '}
+            <a href={`mailto:${CORREO_CONTACTO}`}>{CORREO_CONTACTO}</a>
+          </p>
+        )}
       </main>
     </div>
   );

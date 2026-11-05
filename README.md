@@ -53,7 +53,7 @@ malla-horarios-web/
 │       ├── mockup-cuestionario.html     — mockup del cuestionario (login simulado, borrador en el
 │       │                                   navegador) — ya reemplazado por `frontend/`; se conserva
 │       │                                   como referencia de contenido
-│       └── mockup-vista-malla.html      — mockup de la vista de la malla para la jefatura (Otoño 2026):
+│       └── mockup-vista-malla.html      — (solo copia local: trae datos reales) mockup de la malla (Otoño 2026):
 │                                           grupos por día y franja, choques, avisos y grupos por asignar
 ├── frontend/                            — app real (React), servida desde horariosdace.itam.mx
 ├── api/                                 — API en PHP 7.4: login, formulario, respuestas, demanda,
